@@ -96,16 +96,26 @@ List<Profile> buildSampleProfiles({DateTime? now}) {
       if (rnd.nextBool()) looking[rnd.nextInt(looking.length)],
     };
     final online = rnd.nextDouble() < 0.45;
-    final subjects = (List.of(PhotoSubject.values)..shuffle(rnd))
-        .take(3 + rnd.nextInt(6))
-        .toList();
     final baseHue = rnd.nextDouble() * 360;
-    final album = [
-      for (var k = 0; k < subjects.length; k++)
-        AlbumPhoto(
-            id: 'p$i-a$k',
-            hue: (baseHue + k * 37 + rnd.nextDouble() * 30) % 360,
-            subject: subjects[k]),
+    AlbumPhoto photo(String id, PhotoSubject s) => AlbumPhoto(
+        id: id, hue: (baseHue + rnd.nextDouble() * 120) % 360, subject: s);
+    // public profile pictures
+    final pics = <AlbumPhoto>[
+      photo('p$i-pic0', PhotoSubject.selfie),
+      for (final s in (List.of(PhotoSubject.values.skip(1))..shuffle(rnd))
+          .take(1 + rnd.nextInt(3)))
+        photo('p$i-pic${s.index}', s),
+    ];
+    // private albums
+    final titles =
+        (List.of(albumNames)..shuffle(rnd)).take(1 + rnd.nextInt(3)).toList();
+    final albums = [
+      for (var a = 0; a < titles.length; a++)
+        Album(id: 'p$i-al$a', name: titles[a], photos: [
+          for (var k = 0; k < 3 + rnd.nextInt(6); k++)
+            photo('p$i-al$a-$k',
+                PhotoSubject.values[rnd.nextInt(PhotoSubject.values.length)]),
+        ]),
     ];
     profiles.add(Profile(
       id: 'p$i',
@@ -124,7 +134,8 @@ List<Profile> buildSampleProfiles({DateTime? now}) {
       pronouns: pronouns[rnd.nextInt(pronouns.length)],
       heightCm: 160 + rnd.nextInt(30),
       verified: rnd.nextDouble() < 0.35,
-      album: album,
+      photos: pics,
+      albums: albums,
     ));
   }
   profiles.sort((a, b) => a.distanceKm.compareTo(b.distanceKm));
@@ -141,6 +152,16 @@ const sampleReplies = [
   'Just got home from work, finally free',
   'Same here honestly',
   'Where are you from originally?',
+];
+
+const albumNames = [
+  'Private',
+  'Weekend',
+  'Travel',
+  'Gym',
+  'Just for you',
+  'Beach',
+  'Night out'
 ];
 
 /// Starter notes offered when sending a chat request.

@@ -4,7 +4,7 @@ import '../models/models.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/photo.dart';
-import 'album_screen.dart';
+import 'my_album_screen.dart';
 
 class MeScreen extends StatelessWidget {
   const MeScreen({super.key});
@@ -45,18 +45,11 @@ class MeScreen extends StatelessWidget {
                   color: HuntrColors.surface,
                   borderRadius: BorderRadius.circular(22)),
               child: Row(children: [
-                Container(
+                SizedBox(
                   width: 72,
                   height: 72,
-                  decoration: const BoxDecoration(
-                      gradient: HuntrColors.accentGradient,
-                      shape: BoxShape.circle),
-                  alignment: Alignment.center,
-                  child: Text(me.initials,
-                      style: const TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.black)),
+                  child: PhotoArt(
+                      photo: app.myPhotos.first, radius: 36, iconSize: 30),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
@@ -92,71 +85,133 @@ class MeScreen extends StatelessWidget {
                     label: Text(l.label)),
             ]),
             const SizedBox(height: 24),
-            Text('MY ALBUM · ${app.myAlbum.length}',
+            // ---- public profile pictures ----
+            Text(
+                'PROFILE PHOTOS · ${app.myPhotos.length}/${AppState.maxProfilePhotos}',
                 style: text.labelMedium
                     ?.copyWith(color: HuntrColors.muted, letterSpacing: 1.2)),
             const SizedBox(height: 4),
             const Text(
-              'Private. Shared automatically with someone when you accept their chat request.',
-              style: TextStyle(color: HuntrColors.muted, fontSize: 13),
-            ),
+                'Everyone can see these on your profile. Tap one to make it your main photo.',
+                style: TextStyle(color: HuntrColors.muted, fontSize: 13)),
             const SizedBox(height: 12),
             GridView.count(
-              crossAxisCount: 4,
+              crossAxisCount: 3,
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               mainAxisSpacing: 8,
               crossAxisSpacing: 8,
+              childAspectRatio: 0.8,
               children: [
-                for (final ph in app.myAlbum)
+                for (var i = 0; i < app.myPhotos.length; i++)
                   Stack(fit: StackFit.expand, children: [
                     GestureDetector(
-                      onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                          builder: (_) => AlbumScreen(
-                              title: 'My album', photos: app.myAlbum))),
-                      child: PhotoArt(photo: ph, iconSize: 24),
+                      onTap: () => app.makeMainPhoto(app.myPhotos[i].id),
+                      child: PhotoArt(photo: app.myPhotos[i], iconSize: 28),
                     ),
-                    Positioned(
-                      top: 2,
-                      right: 2,
-                      child: InkWell(
-                        customBorder: const CircleBorder(),
-                        onTap: () => app.removeMyPhoto(ph.id),
+                    if (i == 0)
+                      Positioned(
+                        left: 6,
+                        bottom: 6,
                         child: Container(
-                          padding: const EdgeInsets.all(3),
-                          decoration: const BoxDecoration(
-                              color: Colors.black54, shape: BoxShape.circle),
-                          child: const Icon(Icons.close,
-                              size: 14, semanticLabel: 'Remove photo'),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                              color: HuntrColors.amber,
+                              borderRadius: BorderRadius.circular(10)),
+                          child: const Text('Main',
+                              style: TextStyle(
+                                  color: Colors.black,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700)),
                         ),
                       ),
-                    ),
+                    if (app.myPhotos.length > 1)
+                      Positioned(
+                        top: 4,
+                        right: 4,
+                        child: InkWell(
+                          customBorder: const CircleBorder(),
+                          onTap: () =>
+                              app.removeProfilePhoto(app.myPhotos[i].id),
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: const BoxDecoration(
+                                color: Colors.black54, shape: BoxShape.circle),
+                            child: const Icon(Icons.close,
+                                size: 15, semanticLabel: 'Remove photo'),
+                          ),
+                        ),
+                      ),
                   ]),
-                InkWell(
-                  key: const Key('addPhoto'),
-                  borderRadius: BorderRadius.circular(12),
-                  onTap: () => _addPhoto(context, app),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                          color: HuntrColors.amber.withValues(alpha: 0.6),
-                          width: 1.5),
-                    ),
-                    child: const Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.add_photo_alternate_outlined,
-                              color: HuntrColors.amber),
-                          SizedBox(height: 2),
-                          Text('Add',
-                              style: TextStyle(
-                                  fontSize: 12, color: HuntrColors.amber)),
-                        ]),
+                if (app.myPhotos.length < AppState.maxProfilePhotos)
+                  AddPhotoTile(
+                    key: const Key('addProfilePhoto'),
+                    onTap: () async {
+                      final s = await pickSamplePhoto(context);
+                      if (s != null) app.addProfilePhoto(s);
+                    },
                   ),
-                ),
               ],
             ),
+            const SizedBox(height: 24),
+
+            // ---- private albums ----
+            Row(children: [
+              Expanded(
+                child: Text('MY ALBUMS · ${app.myAlbums.length}',
+                    style: text.labelMedium?.copyWith(
+                        color: HuntrColors.muted, letterSpacing: 1.2)),
+              ),
+              TextButton.icon(
+                key: const Key('newAlbum'),
+                icon: const Icon(Icons.add, size: 18),
+                label: const Text('New album'),
+                onPressed: () async {
+                  final name = await promptAlbumName(context);
+                  if (name == null || !context.mounted) return;
+                  final a = app.createAlbum(name);
+                  Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) => MyAlbumScreen(albumId: a.id)));
+                },
+              ),
+            ]),
+            const Text(
+              'Private and separate from your profile. You choose one to send when you send or accept a chat request.',
+              style: TextStyle(color: HuntrColors.muted, fontSize: 13),
+            ),
+            const SizedBox(height: 10),
+            if (app.myAlbums.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 12),
+                child: Text('No albums yet.'),
+              ),
+            for (final a in app.myAlbums)
+              Card(
+                color: HuntrColors.surface,
+                margin: const EdgeInsets.only(bottom: 8),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16)),
+                child: ListTile(
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  leading: SizedBox(
+                    width: 52,
+                    height: 52,
+                    child: a.photos.isEmpty
+                        ? const Icon(Icons.photo_library_outlined,
+                            color: HuntrColors.muted)
+                        : PhotoArt(photo: a.photos.first, iconSize: 20),
+                  ),
+                  title: Text(a.name,
+                      style: const TextStyle(fontWeight: FontWeight.w700)),
+                  subtitle: Text('${a.photos.length} photos · Private',
+                      style: const TextStyle(color: HuntrColors.muted)),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) => MyAlbumScreen(albumId: a.id))),
+                ),
+              ),
             const SizedBox(height: 24),
             Text('PRIVACY',
                 style: text.labelMedium
@@ -187,40 +242,6 @@ class MeScreen extends StatelessWidget {
                   'Meet in public places and tell a friend where you are going'),
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  /// Until camera/gallery upload is wired up, "adding" a photo picks a sample subject.
-  void _addPhoto(BuildContext context, AppState app) {
-    showModalBottomSheet<void>(
-      context: context,
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-          child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Add a photo', style: Theme.of(ctx).textTheme.titleLarge),
-                const SizedBox(height: 4),
-                const Text(
-                    'Sample photos for now. Camera and gallery upload come with the backend.',
-                    style: TextStyle(color: HuntrColors.muted)),
-                const SizedBox(height: 14),
-                Wrap(spacing: 8, runSpacing: 8, children: [
-                  for (final s in PhotoSubject.values)
-                    ActionChip(
-                      avatar: Icon(s.icon, size: 18),
-                      label: Text(s.label),
-                      onPressed: () {
-                        app.addMyPhoto(s);
-                        Navigator.pop(ctx);
-                      },
-                    ),
-                ]),
-              ]),
         ),
       ),
     );

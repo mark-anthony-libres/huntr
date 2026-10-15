@@ -3,10 +3,9 @@ import 'package:flutter/material.dart';
 import '../models/models.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
-import '../data/sample_data.dart';
 import '../widgets/avatar.dart';
 import '../widgets/photo.dart';
-import 'album_screen.dart';
+import '../widgets/share_sheet.dart';
 import 'chat_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
@@ -67,10 +66,9 @@ class ProfileScreen extends StatelessWidget {
               background: Stack(
                 fit: StackFit.expand,
                 children: [
-                  Hero(
-                      tag: 'art-${p.id}',
-                      child: ProfileArt(profile: p, fontSize: 110)),
-                  const DecoratedBox(
+                  _PhotoGallery(profile: p),
+                  const IgnorePointer(
+                      child: DecoratedBox(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         begin: Alignment.topCenter,
@@ -84,7 +82,7 @@ class ProfileScreen extends StatelessWidget {
                         ],
                       ),
                     ),
-                  ),
+                  )),
                 ],
               ),
             ),
@@ -149,41 +147,16 @@ class ProfileScreen extends StatelessWidget {
                         const SizedBox(width: 12),
                         Expanded(
                           child: Text(
-                            request?.note == null
-                                ? '${p.name} wants to chat with you'
-                                : '${p.name} wants to chat: "${request!.note}"',
+                            (request?.note == null
+                                    ? '${p.name} wants to chat with you.'
+                                    : '${p.name} wants to chat: "${request!.note}"') +
+                                (p.albumById(request?.albumId) == null
+                                    ? ''
+                                    : '\nAccept to receive their "${p.albumById(request?.albumId)!.name}" album.'),
                           ),
                         ),
                       ]),
                     ),
-                  _Section(
-                    title: 'Album · ${p.album.length} photos',
-                    child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          AlbumPreview(
-                            photos: p.album,
-                            locked: conn != Connection.connected,
-                            onTap: conn == Connection.connected
-                                ? () => Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                        builder: (_) => AlbumScreen(
-                                            title: '${p.name}\'s album',
-                                            photos: p.album)))
-                                : null,
-                          ),
-                          if (conn != Connection.connected) ...[
-                            const SizedBox(height: 8),
-                            Text(
-                              conn == Connection.incoming
-                                  ? 'Accept to start chatting. Your album will be shared with ${p.name}.'
-                                  : 'Shared with you when ${p.name} accepts your chat request.',
-                              style: const TextStyle(
-                                  color: HuntrColors.muted, fontSize: 13),
-                            ),
-                          ],
-                        ]),
-                  ),
                   _Section(
                       title: 'About',
                       child: Text(p.bio,
@@ -261,92 +234,38 @@ class ProfileScreen extends StatelessWidget {
                   child: _GradientButton(
                     key: const Key('acceptRequest'),
                     icon: Icons.check_rounded,
-                    label: 'Accept & share album',
-                    onPressed: () {
-                      app.acceptRequest(p);
-                      _openChat(context, p);
-                    },
+                    label: 'Accept',
+                    onPressed: () => acceptWithAlbum(context, p),
                   ),
                 ),
               ]),
-            Connection.connected => Row(children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                        minimumSize: const Size(48, 52),
-                        shape: const StadiumBorder()),
-                    icon: const Icon(Icons.photo_library_outlined),
-                    label: const Text('Album'),
-                    onPressed: () => Navigator.of(context).push(
-                        MaterialPageRoute(
-                            builder: (_) => AlbumScreen(
-                                title: '${p.name}\'s album', photos: p.album))),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  flex: 2,
-                  child: _GradientButton(
-                    icon: Icons.chat_bubble_rounded,
-                    label: 'Message',
-                    onPressed: () => _openChat(context, p),
-                  ),
-                ),
-              ]),
+            Connection.connected => _GradientButton(
+                icon: Icons.chat_bubble_rounded,
+                label: 'Message',
+                onPressed: () => _openChat(context, p),
+              ),
           },
         ),
       ),
     );
   }
 
-  void _requestSheet(BuildContext context, Profile p) {
-    final note = TextEditingController();
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.fromLTRB(
-            24, 0, 24, 20 + MediaQuery.viewInsetsOf(ctx).bottom),
-        child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text('Chat request to ${p.name}',
-                  style: Theme.of(ctx).textTheme.titleLarge),
-              const SizedBox(height: 6),
-              const Text(
-                'Once they accept, their album is shared with you and you can message each other.',
-                style: TextStyle(color: HuntrColors.muted),
-              ),
-              const SizedBox(height: 16),
-              Wrap(spacing: 8, runSpacing: 8, children: [
-                for (final n in requestNotes)
-                  ActionChip(label: Text(n), onPressed: () => note.text = n),
-              ]),
-              const SizedBox(height: 12),
-              TextField(
-                key: const Key('requestNote'),
-                controller: note,
-                maxLength: 120,
-                decoration: const InputDecoration(
-                    hintText: 'Add a short note (optional)'),
-              ),
-              const SizedBox(height: 4),
-              _GradientButton(
-                key: const Key('confirmRequest'),
-                icon: Icons.send_rounded,
-                label: 'Send request',
-                onPressed: () {
-                  AppScope.read(context).sendRequest(p, note: note.text);
-                  Navigator.pop(ctx);
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                      content: Text(
-                          'Request sent to ${p.name}. We\'ll let you know when they reply.')));
-                },
-              ),
-            ]),
-      ),
+  Future<void> _requestSheet(BuildContext context, Profile p) async {
+    final choice = await showShareSheet(
+      context,
+      title: 'Chat request to ${p.name}',
+      subtitle:
+          'Pick an album to send. If ${p.name} approves, you both receive each other\'s chosen album and can start chatting.',
+      actionLabel: 'Send request',
+      actionIcon: Icons.send_rounded,
+      withNote: true,
     );
+    if (choice == null || !context.mounted) return;
+    AppScope.read(context)
+        .sendRequest(p, note: choice.note, albumId: choice.albumId);
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(
+            'Request sent to ${p.name}. We\'ll let you know when they reply.')));
   }
 
   void _openChat(BuildContext context, Profile p) {
@@ -505,5 +424,103 @@ class _Section extends StatelessWidget {
         child,
       ]),
     );
+  }
+}
+
+/// Approve [p]'s request after picking which of my albums to send back. Shared with the Chats screen.
+Future<void> acceptWithAlbum(BuildContext context, Profile p) async {
+  final choice = await showShareSheet(
+    context,
+    title: 'Accept ${p.name}\'s request',
+    subtitle:
+        'Pick an album to send to ${p.name}. Their chosen album is sent to you, and the chat opens.',
+    actionLabel: 'Accept & share',
+    actionIcon: Icons.check_rounded,
+  );
+  if (choice == null || !context.mounted) return;
+  AppScope.read(context).acceptRequest(p, albumId: choice.albumId);
+  Navigator.of(context)
+      .push(MaterialPageRoute(builder: (_) => ChatScreen(profileId: p.id)));
+}
+
+/// Swipeable public profile pictures with a page indicator.
+class _PhotoGallery extends StatefulWidget {
+  const _PhotoGallery({required this.profile});
+  final Profile profile;
+
+  @override
+  State<_PhotoGallery> createState() => _PhotoGalleryState();
+}
+
+class _PhotoGalleryState extends State<_PhotoGallery> {
+  int _page = 0;
+  final _pages = PageController();
+
+  @override
+  void dispose() {
+    _pages.dispose();
+    super.dispose();
+  }
+
+  void _go(int delta, int count) {
+    final next = (_page + delta).clamp(0, count - 1);
+    if (next != _page) {
+      _pages.animateToPage(next,
+          duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = widget.profile;
+    final count = p.photos.isEmpty ? 1 : p.photos.length;
+    return Stack(fit: StackFit.expand, children: [
+      PageView.builder(
+        controller: _pages,
+        itemCount: count,
+        onPageChanged: (i) => setState(() => _page = i),
+        itemBuilder: (_, i) => i == 0
+            ? Hero(
+                tag: 'art-${p.id}',
+                child: ProfileArt(profile: p, fontSize: 110))
+            : PhotoArt(photo: p.photos[i], radius: 0, iconSize: 96),
+      ),
+      // tap the left or right side to move between photos
+      if (count > 1)
+        Positioned.fill(
+          child: Row(children: [
+            Expanded(
+                child: GestureDetector(
+                    behavior: HitTestBehavior.translucent,
+                    onTap: () => _go(-1, count))),
+            Expanded(
+                child: GestureDetector(
+                    behavior: HitTestBehavior.translucent,
+                    onTap: () => _go(1, count))),
+          ]),
+        ),
+      if (count > 1)
+        Positioned(
+          left: 16,
+          right: 16,
+          top: MediaQuery.paddingOf(context).top + 6,
+          child: IgnorePointer(
+            child: Row(children: [
+              for (var i = 0; i < count; i++)
+                Expanded(
+                  child: Container(
+                    height: 3,
+                    margin: const EdgeInsets.symmetric(horizontal: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.white
+                          .withValues(alpha: i == _page ? 0.95 : 0.35),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+            ]),
+          ),
+        ),
+    ]);
   }
 }

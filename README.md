@@ -9,16 +9,20 @@ Meet people right around you. A Flutter app with **Explore** (who's nearby) and 
   - One-tap quick filters: *Online now*, *Within 5 km*, *Chat*, *Friends*, *Dates*.
   - A full filter sheet (distance, age range, looking for), search by name, bio or interest, and pull to refresh.
   - A favorites row, plus a friendly empty state when no one matches.
-- **Profiles:** a large portrait, status, distance, pronouns, height, album, about, looking for and interests.
+- **Profiles:** a photo gallery, status, distance, pronouns, height, about, looking for and interests.
   - A thumb-reach action button that changes with the connection: **Send chat request** → **Request sent** → **Message**, or **Accept / Decline** for requests you received.
   - Favorite, report (with reasons) and block (with confirmation).
-- **Chat requests and albums:** you can't message someone until they accept your chat request.
-  - Send a request from their profile, with an optional note.
-  - Their private album is blurred until then.
-  - When they accept, their album is sent into the chat automatically, and you can both start messaging.
-  - Requests you receive appear under **Chats → Requests**. Accepting sends *your* album to them.
-  - You can decline a request you received, or cancel one you sent.
-  - Manage your own album under **Me** (sample photos until uploads exist).
+- **Profile photos:** several public pictures per person.
+  - Shown unblurred on the profile as a gallery: swipe, or tap left/right, with a page indicator at the top.
+  - Manage your own under **Me**: add, remove, and tap one to make it your main photo (up to 6).
+- **Private albums:** separate from the profile and never shown on it.
+  - Create as many named albums as you like under **Me → My albums** ("Weekend", "Gym", …).
+  - Add or remove photos, rename, or delete an album.
+- **Chat requests:** you can't message someone until they approve your request.
+  - When sending, pick which of your albums to send, and add an optional note.
+  - When accepting (from the profile or **Chats → Requests**), pick which of your albums to send back.
+  - **On approval, both chosen albums are sent to each other automatically**, and the chat opens.
+  - You can decline a request you received, cancel one you sent, or choose not to share an album.
 - **Chats:** an inbox with unread badges, an online-now row, search, an *Unread* filter, swipe to delete, and a typing indicator.
 - **Chat screen:** message bubbles with grouping, timestamps, sent/read status, large emoji, an animated typing indicator, and quick-reply chips so the first message is easy.
 - **Me:** edit name and bio, privacy switches (show distance, show online status), safety tips.

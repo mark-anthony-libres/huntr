@@ -51,11 +51,25 @@ enum Connection {
   connected,
 }
 
+/// A named, private collection of photos. Never shown on a profile; only sent into a chat when
+/// its owner picks it while sending or accepting a chat request.
+class Album {
+  Album({required this.id, required this.name, List<AlbumPhoto>? photos})
+      : photos = photos ?? [];
+  final String id;
+  String name;
+  final List<AlbumPhoto> photos;
+}
+
 class ChatRequest {
-  const ChatRequest({required this.profileId, required this.sentAt, this.note});
+  const ChatRequest(
+      {required this.profileId, required this.sentAt, this.note, this.albumId});
   final String profileId;
   final DateTime sentAt;
   final String? note;
+
+  /// The album the sender chose to share. Both people's chosen albums are sent on approval.
+  final String? albumId;
 }
 
 class Profile {
@@ -73,7 +87,8 @@ class Profile {
     this.pronouns,
     this.heightCm,
     this.verified = false,
-    this.album = const [],
+    this.photos = const [],
+    this.albums = const [],
   });
 
   final String id;
@@ -92,8 +107,18 @@ class Profile {
   final int? heightCm;
   final bool verified;
 
-  /// Private album. Shared with someone automatically when this person accepts their chat request.
-  final List<AlbumPhoto> album;
+  /// Public profile pictures, shown on the profile. The first one is the main picture.
+  final List<AlbumPhoto> photos;
+
+  /// Private albums, separate from the profile.
+  final List<Album> albums;
+
+  Album? albumById(String? id) {
+    for (final a in albums) {
+      if (a.id == id) return a;
+    }
+    return null;
+  }
 
   String get initials {
     final parts = name.trim().split(RegExp(r'\s+'));
@@ -137,6 +162,7 @@ class Message {
     this.status = MessageStatus.sent,
     this.kind = MessageKind.text,
     this.album = const [],
+    this.albumName,
   });
 
   final String id;
@@ -145,6 +171,7 @@ class Message {
   final DateTime sentAt;
   final MessageKind kind;
   final List<AlbumPhoto> album;
+  final String? albumName;
   MessageStatus status;
 }
 

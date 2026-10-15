@@ -341,15 +341,15 @@ class _ChatsScreenState extends State<ChatsScreen> {
                           key: Key('accept-${p.id}'),
                           icon: const Icon(Icons.check_rounded),
                           label: const Text('Accept'),
-                          onPressed: () {
-                            app.acceptRequest(p);
-                            _open(context, p);
-                          },
+                          onPressed: () => acceptWithAlbum(context, p),
                         ),
                       ),
                     ]),
                     const SizedBox(height: 8),
-                    const Text('Accepting shares your album with them.',
+                    Text(
+                        p.albumById(r.albumId) == null
+                            ? 'You choose which album to send when you accept.'
+                            : 'Sends you "${p.albumById(r.albumId)!.name}". You choose which album to send back.',
                         style:
                             TextStyle(color: HuntrColors.muted, fontSize: 12)),
                   ]),

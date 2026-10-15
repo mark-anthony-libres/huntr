@@ -38,24 +38,93 @@ class AppState extends ChangeNotifier {
   bool showDistance = true;
   bool showOnline = true;
 
-  /// My private album. Sent automatically to anyone whose chat request I accept.
-  final List<AlbumPhoto> myAlbum = [
-    const AlbumPhoto(id: 'me-0', hue: 28, subject: PhotoSubject.selfie),
-    const AlbumPhoto(id: 'me-1', hue: 200, subject: PhotoSubject.beach),
-    const AlbumPhoto(id: 'me-2', hue: 330, subject: PhotoSubject.nightOut),
+  // ---- my photos and albums ----
+  /// My public profile pictures. The first one is the main picture.
+  final List<AlbumPhoto> myPhotos = [
+    const AlbumPhoto(id: 'me-pic0', hue: 28, subject: PhotoSubject.selfie),
+    const AlbumPhoto(id: 'me-pic1', hue: 190, subject: PhotoSubject.travel),
   ];
-  int _photoSeq = 3;
 
-  void addMyPhoto(PhotoSubject subject) {
-    myAlbum.add(AlbumPhoto(
-        id: 'me-${_photoSeq++}',
-        hue: _rnd.nextDouble() * 360,
-        subject: subject));
+  /// My private albums. One of them is sent when I send or accept a chat request.
+  final List<Album> myAlbums = [
+    Album(
+        id: 'me-al0',
+        name: 'Private',
+        photos: const [
+          AlbumPhoto(id: 'me-al0-0', hue: 330, subject: PhotoSubject.selfie),
+          AlbumPhoto(id: 'me-al0-1', hue: 300, subject: PhotoSubject.nightOut),
+          AlbumPhoto(id: 'me-al0-2', hue: 20, subject: PhotoSubject.gym),
+        ].toList()),
+    Album(
+        id: 'me-al1',
+        name: 'Weekend',
+        photos: const [
+          AlbumPhoto(id: 'me-al1-0', hue: 200, subject: PhotoSubject.beach),
+          AlbumPhoto(id: 'me-al1-1', hue: 120, subject: PhotoSubject.hike),
+        ].toList()),
+  ];
+  int _photoSeq = 0;
+  int _albumSeq = 0;
+
+  static const maxProfilePhotos = 6;
+
+  AlbumPhoto _newPhoto(PhotoSubject s) => AlbumPhoto(
+      id: 'me-new${_photoSeq++}', hue: _rnd.nextDouble() * 360, subject: s);
+
+  void addProfilePhoto(PhotoSubject s) {
+    if (myPhotos.length >= maxProfilePhotos) return;
+    myPhotos.add(_newPhoto(s));
     notifyListeners();
   }
 
-  void removeMyPhoto(String id) {
-    myAlbum.removeWhere((p) => p.id == id);
+  void removeProfilePhoto(String id) {
+    if (myPhotos.length <= 1) return; // always keep a main picture
+    myPhotos.removeWhere((p) => p.id == id);
+    notifyListeners();
+  }
+
+  void makeMainPhoto(String id) {
+    final i = myPhotos.indexWhere((p) => p.id == id);
+    if (i <= 0) return;
+    myPhotos.insert(0, myPhotos.removeAt(i));
+    notifyListeners();
+  }
+
+  Album? myAlbumById(String? id) {
+    for (final a in myAlbums) {
+      if (a.id == id) return a;
+    }
+    return null;
+  }
+
+  Album createAlbum(String name) {
+    final a = Album(
+        id: 'me-album-${_albumSeq++}',
+        name: name.trim().isEmpty ? 'New album' : name.trim());
+    myAlbums.add(a);
+    notifyListeners();
+    return a;
+  }
+
+  void renameAlbum(String id, String name) {
+    final a = myAlbumById(id);
+    if (a == null || name.trim().isEmpty) return;
+    a.name = name.trim();
+    notifyListeners();
+  }
+
+  void deleteAlbum(String id) {
+    myAlbums.removeWhere((a) => a.id == id);
+    notifyListeners();
+  }
+
+  void addPhotoToAlbum(String albumId, PhotoSubject s) {
+    myAlbumById(albumId)?.photos.add(_newPhoto(s));
+    notifyListeners();
+  }
+
+  void removePhotoFromAlbum(String albumId, String photoId) {
+    myAlbumById(albumId)?.photos.removeWhere((p) => p.id == photoId);
     notifyListeners();
   }
 
@@ -152,20 +221,26 @@ class AppState extends ChangeNotifier {
     return list;
   }
 
-  void sendRequest(Profile p, {String? note}) {
+  /// Sends a chat request with the album I want to share. Nothing is shared until they approve;
+  /// then both chosen albums are sent to each other and the chat opens.
+  void sendRequest(Profile p, {String? note, String? albumId}) {
     if (connectionWith(p.id) != Connection.none) return;
     final n = note?.trim();
     _connections[p.id] = Connection.outgoing;
     _requests[p.id] = ChatRequest(
         profileId: p.id,
         sentAt: DateTime.now(),
-        note: n == null || n.isEmpty ? null : n);
+        note: n == null || n.isEmpty ? null : n,
+        albumId: albumId);
     notifyListeners();
-    // Simulated: the other person accepts after a moment.
+    // Simulated: the other person approves after a moment and picks one of their albums.
     Timer(acceptDelay, () {
       if (connectionWith(p.id) != Connection.outgoing) return;
-      _connect(p, iAccepted: false);
-      _events.add('${p.name} accepted your request and shared their album 📸');
+      final theirs =
+          p.albums.isEmpty ? null : p.albums[_rnd.nextInt(p.albums.length)];
+      _connect(p,
+          iAccepted: false, myAlbum: myAlbumById(albumId), theirAlbum: theirs);
+      _events.add('${p.name} accepted your request. Albums shared 📸');
     });
   }
 
@@ -176,9 +251,14 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  void acceptRequest(Profile p) {
+  /// Approves their request, sharing [albumId] from my albums. Their chosen album comes to me.
+  void acceptRequest(Profile p, {String? albumId}) {
     if (connectionWith(p.id) != Connection.incoming) return;
-    _connect(p, iAccepted: true);
+    final req = _requests[p.id];
+    _connect(p,
+        iAccepted: true,
+        myAlbum: myAlbumById(albumId),
+        theirAlbum: p.albumById(req?.albumId));
   }
 
   void declineRequest(String id) {
@@ -188,7 +268,8 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  void _connect(Profile p, {required bool iAccepted}) {
+  void _connect(Profile p,
+      {required bool iAccepted, Album? myAlbum, Album? theirAlbum}) {
     final req = _requests.remove(p.id);
     _connections[p.id] = Connection.connected;
     final c = conversationWith(p);
@@ -197,7 +278,7 @@ class AppState extends ChangeNotifier {
       // the request note becomes the first message, from whoever asked
       c.messages.add(Message(
           id: 'm${_msgSeq++}',
-          fromMe: iAccepted ? false : true,
+          fromMe: !iAccepted,
           text: req!.note!,
           sentAt: req.sentAt));
     }
@@ -210,18 +291,35 @@ class AppState extends ChangeNotifier {
           : '${p.name} accepted your request',
       sentAt: now,
     ));
-    c.messages.add(Message(
-      id: 'm${_msgSeq++}',
-      fromMe: iAccepted,
-      kind: MessageKind.album,
-      text:
-          iAccepted ? 'You shared your album' : '${p.name} shared their album',
-      album: iAccepted ? List.of(myAlbum) : p.album,
-      sentAt: now,
-    ));
+    // both chosen albums are sent automatically: the requester's first, then the approver's
+    final mine = myAlbum == null
+        ? null
+        : _albumMessage(fromMe: true, album: myAlbum, who: 'You', now: now);
+    final theirs = theirAlbum == null
+        ? null
+        : _albumMessage(
+            fromMe: false, album: theirAlbum, who: p.name, now: now);
+    for (final m in iAccepted ? [theirs, mine] : [mine, theirs]) {
+      if (m != null) c.messages.add(m);
+    }
     if (!iAccepted && _openChat != p.id) c.unread++;
     notifyListeners();
   }
+
+  Message _albumMessage(
+          {required bool fromMe,
+          required Album album,
+          required String who,
+          required DateTime now}) =>
+      Message(
+        id: 'm${_msgSeq++}',
+        fromMe: fromMe,
+        kind: MessageKind.album,
+        text: '$who shared "${album.name}"',
+        album: List.of(album.photos),
+        albumName: album.name,
+        sentAt: now,
+      );
 
   Future<void> refresh() async {
     await Future<void>.delayed(const Duration(milliseconds: 600));
@@ -308,12 +406,14 @@ class AppState extends ChangeNotifier {
     for (var i = 0; i < seeds.length; i++) {
       _connections[seeds[i].id] = Connection.connected;
       final c = conversationWith(seeds[i]);
+      final a = seeds[i].albums.first;
       c.messages.add(Message(
         id: 'm${_msgSeq++}',
         fromMe: false,
         kind: MessageKind.album,
-        text: '${seeds[i].name} shared their album',
-        album: seeds[i].album,
+        text: '${seeds[i].name} shared "${a.name}"',
+        album: List.of(a.photos),
+        albumName: a.name,
         sentAt: now.subtract(Duration(minutes: 9 + i * 41)),
       ));
       final lines = openers[i];
@@ -342,7 +442,8 @@ class AppState extends ChangeNotifier {
       _requests[from[i].id] = ChatRequest(
           profileId: from[i].id,
           sentAt: now.subtract(Duration(minutes: 3 + i * 25)),
-          note: notes[i]);
+          note: notes[i],
+          albumId: from[i].albums.first.id);
     }
   }
 }

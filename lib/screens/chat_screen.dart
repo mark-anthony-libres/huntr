@@ -366,8 +366,9 @@ class _AlbumBubble extends StatelessWidget {
     final me = message.fromMe;
     final width = MediaQuery.sizeOf(context).width * 0.72;
     void open() => Navigator.of(context).push(MaterialPageRoute(
-          builder: (_) =>
-              AlbumScreen(title: '$ownerName album', photos: message.album),
+          builder: (_) => AlbumScreen(
+              title: '$ownerName "${message.albumName ?? 'album'}"',
+              photos: message.album),
         ));
     return Align(
       alignment: me ? Alignment.centerRight : Alignment.centerLeft,
