@@ -5,6 +5,7 @@ import '../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/avatar.dart';
 import 'chat_screen.dart';
+import 'profile_screen.dart';
 
 String timeLabel(DateTime t, DateTime now) {
   final d = now.difference(t);
@@ -28,6 +29,7 @@ class ChatsScreen extends StatefulWidget {
 class _ChatsScreenState extends State<ChatsScreen> {
   String _query = '';
   bool _unreadOnly = false;
+  bool _showRequests = false;
 
   @override
   Widget build(BuildContext context) {
@@ -39,9 +41,13 @@ class _ChatsScreenState extends State<ChatsScreen> {
       if (_unreadOnly && c.unread == 0) return false;
       if (_query.isEmpty) return true;
       final q = _query.toLowerCase();
-      return c.profile.name.toLowerCase().contains(q) || c.messages.any((m) => m.text.toLowerCase().contains(q));
+      return c.profile.name.toLowerCase().contains(q) ||
+          c.messages.any((m) => m.text.toLowerCase().contains(q));
     }).toList();
-    final online = all.where((c) => c.profile.online).map((c) => c.profile).toList();
+    final online =
+        all.where((c) => c.profile.online).map((c) => c.profile).toList();
+    final incoming = app.incomingRequests;
+    final outgoing = app.outgoingRequests;
 
     return Scaffold(
       body: SafeArea(
@@ -54,135 +60,188 @@ class _ChatsScreenState extends State<ChatsScreen> {
                 child: ShaderMask(
                   shaderCallback: HuntrColors.accentGradient.createShader,
                   child: Text('Chats',
-                      style: text.headlineMedium?.copyWith(fontWeight: FontWeight.w800, color: Colors.white)),
+                      style: text.headlineMedium?.copyWith(
+                          fontWeight: FontWeight.w800, color: Colors.white)),
                 ),
               ),
             ),
-            if (all.isNotEmpty) ...[
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: TextField(
-                    key: const Key('chatSearch'),
-                    decoration: const InputDecoration(hintText: 'Search chats', prefixIcon: Icon(Icons.search)),
-                    onChanged: (v) => setState(() => _query = v),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                child: Wrap(spacing: 8, runSpacing: 8, children: [
+                  ChoiceChip(
+                    label: const Text('All'),
+                    selected: !_unreadOnly && !_showRequests,
+                    showCheckmark: false,
+                    onSelected: (_) => setState(() {
+                      _unreadOnly = false;
+                      _showRequests = false;
+                    }),
                   ),
-                ),
+                  ChoiceChip(
+                    label: Text(
+                        'Unread${app.totalUnread > 0 ? ' (${app.totalUnread})' : ''}'),
+                    selected: _unreadOnly && !_showRequests,
+                    showCheckmark: false,
+                    onSelected: (_) => setState(() {
+                      _unreadOnly = true;
+                      _showRequests = false;
+                    }),
+                  ),
+                  ChoiceChip(
+                    key: const Key('requestsTab'),
+                    avatar: incoming.isEmpty
+                        ? null
+                        : const Icon(Icons.circle,
+                            size: 10, color: HuntrColors.amber),
+                    label: Text(
+                        'Requests${incoming.isNotEmpty ? ' (${incoming.length})' : ''}'),
+                    selected: _showRequests,
+                    showCheckmark: false,
+                    onSelected: (_) => setState(() => _showRequests = true),
+                  ),
+                ]),
               ),
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-                  child: Row(children: [
-                    ChoiceChip(
-                      label: const Text('All'),
-                      selected: !_unreadOnly,
-                      showCheckmark: false,
-                      onSelected: (_) => setState(() => _unreadOnly = false),
-                    ),
-                    const SizedBox(width: 8),
-                    ChoiceChip(
-                      label: Text('Unread${app.totalUnread > 0 ? ' (${app.totalUnread})' : ''}'),
-                      selected: _unreadOnly,
-                      showCheckmark: false,
-                      onSelected: (_) => setState(() => _unreadOnly = true),
-                    ),
-                  ]),
-                ),
-              ),
-              if (online.isNotEmpty && _query.isEmpty)
+            ),
+            if (_showRequests)
+              ..._requestSlivers(context, app, incoming, outgoing, now)
+            else ...[
+              if (all.isNotEmpty) ...[
                 SliverToBoxAdapter(
-                  child: SizedBox(
-                    height: 96,
-                    child: ListView.separated(
-                      scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
-                      itemCount: online.length,
-                      separatorBuilder: (_, __) => const SizedBox(width: 14),
-                      itemBuilder: (_, i) => InkWell(
-                        borderRadius: BorderRadius.circular(40),
-                        onTap: () => _open(context, online[i]),
-                        child: Column(children: [
-                          Avatar(profile: online[i], size: 54),
-                          const SizedBox(height: 4),
-                          Text(online[i].name, style: text.labelSmall),
-                        ]),
-                      ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: TextField(
+                      key: const Key('chatSearch'),
+                      decoration: const InputDecoration(
+                          hintText: 'Search chats',
+                          prefixIcon: Icon(Icons.search)),
+                      onChanged: (v) => setState(() => _query = v),
                     ),
                   ),
                 ),
-            ],
-            if (all.isEmpty)
-              SliverFillRemaining(
-                hasScrollBody: false,
-                child: _EmptyChats(onExplore: widget.onExplore),
-              )
-            else if (list.isEmpty)
-              const SliverFillRemaining(
-                hasScrollBody: false,
-                child: Center(child: Text('No chats match', style: TextStyle(color: HuntrColors.muted))),
-              )
-            else
-              SliverList.builder(
-                itemCount: list.length,
-                itemBuilder: (_, i) {
-                  final c = list[i];
-                  final last = c.last!;
-                  final unread = c.unread > 0;
-                  return Dismissible(
-                    key: ValueKey('conv-${c.profile.id}'),
-                    direction: DismissDirection.endToStart,
-                    background: Container(
-                      alignment: Alignment.centerRight,
-                      padding: const EdgeInsets.only(right: 24),
-                      color: const Color(0xFF5A1D1D),
-                      child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                        Icon(Icons.delete_outline),
-                        SizedBox(width: 6),
-                        Text('Delete'),
-                      ]),
-                    ),
-                    onDismissed: (_) {
-                      app.deleteConversation(c.profile.id);
-                      ScaffoldMessenger.of(context)
-                          .showSnackBar(SnackBar(content: Text('Chat with ${c.profile.name} deleted')));
-                    },
-                    child: ListTile(
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                      leading: Avatar(profile: c.profile, size: 52),
-                      title: Text(c.profile.name,
-                          style: TextStyle(fontWeight: unread ? FontWeight.w800 : FontWeight.w600)),
-                      subtitle: Text(
-                        c.typing ? 'typing…' : '${last.fromMe ? 'You: ' : ''}${last.text}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: c.typing ? HuntrColors.amber : (unread ? Colors.white : HuntrColors.muted),
-                          fontWeight: unread ? FontWeight.w600 : FontWeight.w400,
+                if (online.isNotEmpty && _query.isEmpty)
+                  SliverToBoxAdapter(
+                    child: SizedBox(
+                      height: 96,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+                        itemCount: online.length,
+                        separatorBuilder: (_, __) => const SizedBox(width: 14),
+                        itemBuilder: (_, i) => InkWell(
+                          borderRadius: BorderRadius.circular(40),
+                          onTap: () => _open(context, online[i]),
+                          child: Column(children: [
+                            Avatar(profile: online[i], size: 54),
+                            const SizedBox(height: 4),
+                            Text(online[i].name, style: text.labelSmall),
+                          ]),
                         ),
                       ),
-                      trailing: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(timeLabel(last.sentAt, now),
-                              style: text.labelSmall?.copyWith(color: unread ? HuntrColors.amber : HuntrColors.muted)),
-                          const SizedBox(height: 6),
-                          if (unread)
-                            Badge(
-                              label: Text('${c.unread}'),
-                              backgroundColor: HuntrColors.amber,
-                              textColor: Colors.black,
-                            )
-                          else if (last.fromMe)
-                            Icon(last.status == MessageStatus.read ? Icons.done_all : Icons.done,
-                                size: 16, color: last.status == MessageStatus.read ? HuntrColors.amber : HuntrColors.muted),
-                        ],
-                      ),
-                      onTap: () => _open(context, c.profile),
                     ),
-                  );
-                },
-              ),
+                  ),
+              ],
+              if (all.isEmpty)
+                SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: _EmptyChats(onExplore: widget.onExplore),
+                )
+              else if (list.isEmpty)
+                const SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: Center(
+                      child: Text('No chats match',
+                          style: TextStyle(color: HuntrColors.muted))),
+                )
+              else
+                SliverList.builder(
+                  itemCount: list.length,
+                  itemBuilder: (_, i) {
+                    final c = list[i];
+                    final last = c.last!;
+                    final unread = c.unread > 0;
+                    return Dismissible(
+                      key: ValueKey('conv-${c.profile.id}'),
+                      direction: DismissDirection.endToStart,
+                      background: Container(
+                        alignment: Alignment.centerRight,
+                        padding: const EdgeInsets.only(right: 24),
+                        color: const Color(0xFF5A1D1D),
+                        child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.delete_outline),
+                              SizedBox(width: 6),
+                              Text('Delete'),
+                            ]),
+                      ),
+                      onDismissed: (_) {
+                        app.deleteConversation(c.profile.id);
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                            content:
+                                Text('Chat with ${c.profile.name} deleted')));
+                      },
+                      child: ListTile(
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 4),
+                        leading: Avatar(profile: c.profile, size: 52),
+                        title: Text(c.profile.name,
+                            style: TextStyle(
+                                fontWeight: unread
+                                    ? FontWeight.w800
+                                    : FontWeight.w600)),
+                        subtitle: Text(
+                          c.typing
+                              ? 'typing…'
+                              : switch (last.kind) {
+                                  MessageKind.album => '📷 ${last.text}',
+                                  MessageKind.notice => last.text,
+                                  MessageKind.text =>
+                                    '${last.fromMe ? 'You: ' : ''}${last.text}',
+                                },
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: c.typing
+                                ? HuntrColors.amber
+                                : (unread ? Colors.white : HuntrColors.muted),
+                            fontWeight:
+                                unread ? FontWeight.w600 : FontWeight.w400,
+                          ),
+                        ),
+                        trailing: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(timeLabel(last.sentAt, now),
+                                style: text.labelSmall?.copyWith(
+                                    color: unread
+                                        ? HuntrColors.amber
+                                        : HuntrColors.muted)),
+                            const SizedBox(height: 6),
+                            if (unread)
+                              Badge(
+                                label: Text('${c.unread}'),
+                                backgroundColor: HuntrColors.amber,
+                                textColor: Colors.black,
+                              )
+                            else if (last.fromMe)
+                              Icon(
+                                  last.status == MessageStatus.read
+                                      ? Icons.done_all
+                                      : Icons.done,
+                                  size: 16,
+                                  color: last.status == MessageStatus.read
+                                      ? HuntrColors.amber
+                                      : HuntrColors.muted),
+                          ],
+                        ),
+                        onTap: () => _open(context, c.profile),
+                      ),
+                    );
+                  },
+                ),
+            ],
             const SliverToBoxAdapter(child: SizedBox(height: 24)),
           ],
         ),
@@ -190,8 +249,144 @@ class _ChatsScreenState extends State<ChatsScreen> {
     );
   }
 
+  List<Widget> _requestSlivers(BuildContext context, AppState app,
+      List<ChatRequest> incoming, List<ChatRequest> outgoing, DateTime now) {
+    final text = Theme.of(context).textTheme;
+    Widget header(String s) => SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 6),
+            child: Text(s.toUpperCase(),
+                style: text.labelMedium
+                    ?.copyWith(color: HuntrColors.muted, letterSpacing: 1.2)),
+          ),
+        );
+    if (incoming.isEmpty && outgoing.isEmpty) {
+      return [
+        const SliverFillRemaining(
+          hasScrollBody: false,
+          child: Padding(
+            padding: EdgeInsets.all(32),
+            child:
+                Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+              Icon(Icons.mark_chat_unread_outlined,
+                  size: 56, color: HuntrColors.muted),
+              SizedBox(height: 12),
+              Text('No requests right now'),
+              SizedBox(height: 4),
+              Text('When someone wants to chat, it shows up here.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: HuntrColors.muted)),
+            ]),
+          ),
+        ),
+      ];
+    }
+    return [
+      if (incoming.isNotEmpty) ...[
+        header('Wants to chat with you'),
+        SliverList.builder(
+          itemCount: incoming.length,
+          itemBuilder: (_, i) {
+            final r = incoming[i];
+            final p = app.profileById(r.profileId)!;
+            return Container(
+              margin: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                  color: HuntrColors.surface,
+                  borderRadius: BorderRadius.circular(18)),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    InkWell(
+                      onTap: () => _openProfile(context, p),
+                      child: Row(children: [
+                        Avatar(profile: p, size: 48),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('${p.name}, ${p.age}',
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w700)),
+                                Text(
+                                    '${p.distanceLabel} · ${timeLabel(r.sentAt, now)} ago',
+                                    style: const TextStyle(
+                                        color: HuntrColors.muted,
+                                        fontSize: 12.5)),
+                              ]),
+                        ),
+                        const Icon(Icons.chevron_right,
+                            color: HuntrColors.muted),
+                      ]),
+                    ),
+                    if (r.note != null) ...[
+                      const SizedBox(height: 10),
+                      Text('"${r.note}"',
+                          style: const TextStyle(fontStyle: FontStyle.italic)),
+                    ],
+                    const SizedBox(height: 12),
+                    Row(children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => app.declineRequest(p.id),
+                          child: const Text('Decline'),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        flex: 2,
+                        child: FilledButton.icon(
+                          key: Key('accept-${p.id}'),
+                          icon: const Icon(Icons.check_rounded),
+                          label: const Text('Accept'),
+                          onPressed: () {
+                            app.acceptRequest(p);
+                            _open(context, p);
+                          },
+                        ),
+                      ),
+                    ]),
+                    const SizedBox(height: 8),
+                    const Text('Accepting shares your album with them.',
+                        style:
+                            TextStyle(color: HuntrColors.muted, fontSize: 12)),
+                  ]),
+            );
+          },
+        ),
+      ],
+      if (outgoing.isNotEmpty) ...[
+        header('Sent · waiting for a reply'),
+        SliverList.builder(
+          itemCount: outgoing.length,
+          itemBuilder: (_, i) {
+            final p = app.profileById(outgoing[i].profileId)!;
+            return ListTile(
+              leading: Avatar(profile: p, size: 44),
+              title: Text(p.name),
+              subtitle: Text('Sent ${timeLabel(outgoing[i].sentAt, now)} ago',
+                  style: const TextStyle(color: HuntrColors.muted)),
+              trailing: TextButton(
+                  onPressed: () => app.cancelRequest(p.id),
+                  child: const Text('Cancel')),
+              onTap: () => _openProfile(context, p),
+            );
+          },
+        ),
+      ],
+    ];
+  }
+
+  void _openProfile(BuildContext context, Profile p) {
+    Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => ProfileScreen(profileId: p.id)));
+  }
+
   void _open(BuildContext context, Profile p) {
-    Navigator.of(context).push(MaterialPageRoute(builder: (_) => ChatScreen(profileId: p.id)));
+    Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => ChatScreen(profileId: p.id)));
   }
 }
 
@@ -211,9 +406,11 @@ class _EmptyChats extends StatelessWidget {
           Text('No chats yet', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 4),
           const Text('Say hi to someone nearby to start a conversation.',
-              textAlign: TextAlign.center, style: TextStyle(color: HuntrColors.muted)),
+              textAlign: TextAlign.center,
+              style: TextStyle(color: HuntrColors.muted)),
           const SizedBox(height: 16),
-          FilledButton(onPressed: onExplore, child: const Text('Explore people')),
+          FilledButton(
+              onPressed: onExplore, child: const Text('Explore people')),
         ],
       ),
     );

@@ -5,6 +5,8 @@ import '../models/models.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/avatar.dart';
+import '../widgets/photo.dart';
+import 'album_screen.dart';
 import 'profile_screen.dart';
 
 class ChatScreen extends StatefulWidget {
@@ -30,9 +32,15 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_appRef != null) return; // runs again on every app-state change; set up only once
+    if (_appRef != null) {
+      return; // runs again on every app-state change; set up only once
+    }
     _appRef = AppScope.read(context);
     _app.setOpenChat(widget.profileId);
+    // a notice floating over the message box would block the first tap on Send
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    });
   }
 
   @override
@@ -49,7 +57,8 @@ class _ChatScreenState extends State<ChatScreen> {
     _input.clear();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scroll.hasClients) {
-        _scroll.animateTo(0, duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
+        _scroll.animateTo(0,
+            duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
       }
     });
   }
@@ -58,31 +67,45 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget build(BuildContext context) {
     final app = AppScope.of(context);
     final p = app.profileById(widget.profileId);
-    if (p == null) return const Scaffold(body: Center(child: Text('This chat is no longer available.')));
+    if (p == null) {
+      return const Scaffold(
+          body: Center(child: Text('This chat is no longer available.')));
+    }
     final c = app.conversationWith(p);
     final now = DateTime.now();
     final msgs = c.messages.reversed.toList();
-    if (c.unread > 0) WidgetsBinding.instance.addPostFrameCallback((_) => app.markRead(p));
+    final connected = app.canChat(p.id);
+    if (c.unread > 0) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => app.markRead(p));
+    }
 
     return Scaffold(
       appBar: AppBar(
         titleSpacing: 0,
         title: InkWell(
-          onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ProfileScreen(profileId: p.id))),
+          onTap: () => Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) => ProfileScreen(profileId: p.id))),
           child: Row(children: [
             Avatar(profile: p, size: 40),
             const SizedBox(width: 12),
             Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(p.name, style: const TextStyle(fontWeight: FontWeight.w700)),
-                Text(
-                  c.typing ? 'typing…' : '${p.activeLabel(now)} · ${p.distanceLabel}',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: c.typing || p.online ? HuntrColors.online : HuntrColors.muted,
-                  ),
-                ),
-              ]),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(p.name,
+                        style: const TextStyle(fontWeight: FontWeight.w700)),
+                    Text(
+                      c.typing
+                          ? 'typing…'
+                          : '${p.activeLabel(now)} · ${p.distanceLabel}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: c.typing || p.online
+                            ? HuntrColors.online
+                            : HuntrColors.muted,
+                      ),
+                    ),
+                  ]),
             ),
           ]),
         ),
@@ -90,7 +113,8 @@ class _ChatScreenState extends State<ChatScreen> {
           IconButton(
             tooltip: 'View profile',
             icon: const Icon(Icons.person_outline),
-            onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ProfileScreen(profileId: p.id))),
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => ProfileScreen(profileId: p.id))),
           ),
         ],
       ),
@@ -108,25 +132,65 @@ class _ChatScreenState extends State<ChatScreen> {
                       if (c.typing && i == 0) return const _TypingBubble();
                       final idx = c.typing ? i - 1 : i;
                       final m = msgs[idx];
-                      final older = idx + 1 < msgs.length ? msgs[idx + 1] : null;
+                      final older =
+                          idx + 1 < msgs.length ? msgs[idx + 1] : null;
                       final newer = idx > 0 ? msgs[idx - 1] : null;
-                      final showTime = older == null || m.sentAt.difference(older.sentAt).inMinutes.abs() > 30;
-                      final groupedWithNewer = newer != null && newer.fromMe == m.fromMe;
+                      final showTime = older == null ||
+                          m.sentAt.difference(older.sentAt).inMinutes.abs() >
+                              30;
+                      final groupedWithNewer =
+                          newer != null && newer.fromMe == m.fromMe;
                       return Column(children: [
                         if (showTime) _TimeDivider(time: m.sentAt, now: now),
-                        _Bubble(message: m, tail: !groupedWithNewer, showStatus: m.fromMe && newer == null),
+                        switch (m.kind) {
+                          MessageKind.notice => _Notice(text: m.text),
+                          MessageKind.album => _AlbumBubble(
+                              message: m,
+                              ownerName: m.fromMe ? 'Your' : '${p.name}\'s'),
+                          MessageKind.text => _Bubble(
+                              message: m,
+                              tail: !groupedWithNewer,
+                              showStatus: m.fromMe && newer == null),
+                        },
                       ]);
                     },
                   ),
           ),
 
+          if (!connected)
+            SafeArea(
+              top: false,
+              child: Container(
+                width: double.infinity,
+                margin: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                    color: HuntrColors.surface,
+                    borderRadius: BorderRadius.circular(18)),
+                child: Column(children: [
+                  const Icon(Icons.lock_outline, color: HuntrColors.amber),
+                  const SizedBox(height: 6),
+                  Text(
+                      'You can message ${p.name} once a chat request is accepted.',
+                      textAlign: TextAlign.center),
+                  const SizedBox(height: 10),
+                  OutlinedButton(
+                    onPressed: () => Navigator.of(context).pushReplacement(
+                        MaterialPageRoute(
+                            builder: (_) => ProfileScreen(profileId: p.id))),
+                    child: const Text('View profile'),
+                  ),
+                ]),
+              ),
+            ),
           // ---- quick replies keep the first message low-effort ----
-          if (_input.text.isEmpty)
+          if (connected && _input.text.isEmpty)
             SizedBox(
               height: 46,
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                 itemCount: quickReplies.length,
                 separatorBuilder: (_, __) => const SizedBox(width: 8),
                 itemBuilder: (_, i) => ActionChip(
@@ -136,41 +200,45 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
             ),
 
-          SafeArea(
-            top: false,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 6, 8, 10),
-              child: Row(children: [
-                Expanded(
-                  child: TextField(
-                    key: const Key('messageInput'),
-                    controller: _input,
-                    minLines: 1,
-                    maxLines: 5,
-                    textCapitalization: TextCapitalization.sentences,
-                    decoration: InputDecoration(hintText: 'Message ${p.name}…'),
-                    onSubmitted: (v) => _send(p, v),
-                  ),
-                ),
-                const SizedBox(width: 6),
-                AnimatedScale(
-                  scale: _input.text.trim().isEmpty ? 0.85 : 1,
-                  duration: const Duration(milliseconds: 150),
-                  child: IconButton.filled(
-                    key: const Key('sendButton'),
-                    tooltip: 'Send',
-                    style: IconButton.styleFrom(
-                      backgroundColor: HuntrColors.amber,
-                      foregroundColor: Colors.black,
-                      minimumSize: const Size(48, 48),
+          if (connected)
+            SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 6, 8, 10),
+                child: Row(children: [
+                  Expanded(
+                    child: TextField(
+                      key: const Key('messageInput'),
+                      controller: _input,
+                      minLines: 1,
+                      maxLines: 5,
+                      textCapitalization: TextCapitalization.sentences,
+                      decoration:
+                          InputDecoration(hintText: 'Message ${p.name}…'),
+                      onSubmitted: (v) => _send(p, v),
                     ),
-                    icon: const Icon(Icons.send_rounded),
-                    onPressed: _input.text.trim().isEmpty ? null : () => _send(p, _input.text),
                   ),
-                ),
-              ]),
+                  const SizedBox(width: 6),
+                  AnimatedScale(
+                    scale: _input.text.trim().isEmpty ? 0.85 : 1,
+                    duration: const Duration(milliseconds: 150),
+                    child: IconButton.filled(
+                      key: const Key('sendButton'),
+                      tooltip: 'Send',
+                      style: IconButton.styleFrom(
+                        backgroundColor: HuntrColors.amber,
+                        foregroundColor: Colors.black,
+                        minimumSize: const Size(48, 48),
+                      ),
+                      icon: const Icon(Icons.send_rounded),
+                      onPressed: _input.text.trim().isEmpty
+                          ? null
+                          : () => _send(p, _input.text),
+                    ),
+                  ),
+                ]),
+              ),
             ),
-          ),
         ],
       ),
     );
@@ -189,7 +257,8 @@ class _ChatIntro extends StatelessWidget {
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           Avatar(profile: profile, size: 88),
           const SizedBox(height: 14),
-          Text('Say hi to ${profile.name}', style: Theme.of(context).textTheme.titleMedium),
+          Text('Say hi to ${profile.name}',
+              style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 4),
           Text(
             'You both like ${profile.interests.take(2).join(' and ').toLowerCase()}. Start there!',
@@ -203,7 +272,8 @@ class _ChatIntro extends StatelessWidget {
 }
 
 class _Bubble extends StatelessWidget {
-  const _Bubble({required this.message, required this.tail, required this.showStatus});
+  const _Bubble(
+      {required this.message, required this.tail, required this.showStatus});
   final Message message;
   final bool tail;
   final bool showStatus;
@@ -213,16 +283,21 @@ class _Bubble extends StatelessWidget {
     final me = message.fromMe;
     final r = const Radius.circular(20);
     final small = const Radius.circular(6);
-    final isEmojiOnly = message.text.runes.length <= 2 && !RegExp(r'[A-Za-z0-9]').hasMatch(message.text);
+    final isEmojiOnly = message.text.runes.length <= 2 &&
+        !RegExp(r'[A-Za-z0-9]').hasMatch(message.text);
     return Align(
       alignment: me ? Alignment.centerRight : Alignment.centerLeft,
       child: Column(
-        crossAxisAlignment: me ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        crossAxisAlignment:
+            me ? CrossAxisAlignment.end : CrossAxisAlignment.start,
         children: [
           Container(
             margin: EdgeInsets.only(top: 2, bottom: tail ? 6 : 1),
-            constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width * 0.74),
-            padding: isEmojiOnly ? const EdgeInsets.all(4) : const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            constraints: BoxConstraints(
+                maxWidth: MediaQuery.sizeOf(context).width * 0.74),
+            padding: isEmojiOnly
+                ? const EdgeInsets.all(4)
+                : const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: isEmojiOnly
                 ? null
                 : BoxDecoration(
@@ -259,6 +334,76 @@ class _Bubble extends StatelessWidget {
   }
 }
 
+class _Notice extends StatelessWidget {
+  const _Notice({required this.text});
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+        const Icon(Icons.handshake_outlined,
+            size: 15, color: HuntrColors.amber),
+        const SizedBox(width: 6),
+        Flexible(
+            child: Text(text,
+                style:
+                    const TextStyle(fontSize: 12.5, color: HuntrColors.muted))),
+      ]),
+    );
+  }
+}
+
+/// A shared album, shown as a card with a preview grid. Tap to open the full album.
+class _AlbumBubble extends StatelessWidget {
+  const _AlbumBubble({required this.message, required this.ownerName});
+  final Message message;
+  final String ownerName;
+
+  @override
+  Widget build(BuildContext context) {
+    final me = message.fromMe;
+    final width = MediaQuery.sizeOf(context).width * 0.72;
+    void open() => Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) =>
+              AlbumScreen(title: '$ownerName album', photos: message.album),
+        ));
+    return Align(
+      alignment: me ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        width: width.clamp(220, 340),
+        margin: const EdgeInsets.symmetric(vertical: 6),
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: HuntrColors.surfaceHigh,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: HuntrColors.amber.withValues(alpha: 0.45)),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            const Icon(Icons.photo_library_rounded,
+                size: 18, color: HuntrColors.amber),
+            const SizedBox(width: 8),
+            Expanded(
+                child: Text(message.text,
+                    style: const TextStyle(fontWeight: FontWeight.w600))),
+          ]),
+          const SizedBox(height: 10),
+          AlbumPreview(photos: message.album, maxTiles: 3, onTap: open),
+          const SizedBox(height: 6),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+                onPressed: open,
+                child: Text('View ${message.album.length} photos')),
+          ),
+        ]),
+      ),
+    );
+  }
+}
+
 class _TimeDivider extends StatelessWidget {
   const _TimeDivider({required this.time, required this.now});
   final DateTime time;
@@ -266,9 +411,11 @@ class _TimeDivider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final sameDay = time.year == now.year && time.month == now.month && time.day == now.day;
+    final sameDay =
+        time.year == now.year && time.month == now.month && time.day == now.day;
     final h = time.hour % 12 == 0 ? 12 : time.hour % 12;
-    final clock = '$h:${time.minute.toString().padLeft(2, '0')} ${time.hour < 12 ? 'AM' : 'PM'}';
+    final clock =
+        '$h:${time.minute.toString().padLeft(2, '0')} ${time.hour < 12 ? 'AM' : 'PM'}';
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10),
       child: Text(sameDay ? 'Today $clock' : '${time.day}/${time.month} $clock',
@@ -284,9 +431,11 @@ class _TypingBubble extends StatefulWidget {
   State<_TypingBubble> createState() => _TypingBubbleState();
 }
 
-class _TypingBubbleState extends State<_TypingBubble> with SingleTickerProviderStateMixin {
-  late final AnimationController _c =
-      AnimationController(vsync: this, duration: const Duration(milliseconds: 900))..repeat();
+class _TypingBubbleState extends State<_TypingBubble>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+      vsync: this, duration: const Duration(milliseconds: 900))
+    ..repeat();
 
   @override
   void dispose() {

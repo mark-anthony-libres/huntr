@@ -25,7 +25,8 @@ class _ExploreScreenState extends State<ExploreScreen> {
   }
 
   void _open(Profile p) {
-    Navigator.of(context).push(MaterialPageRoute(builder: (_) => ProfileScreen(profileId: p.id)));
+    Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => ProfileScreen(profileId: p.id)));
   }
 
   @override
@@ -36,7 +37,11 @@ class _ExploreScreenState extends State<ExploreScreen> {
     final favorites = app.favoriteProfiles;
     final text = Theme.of(context).textTheme;
     final width = MediaQuery.sizeOf(context).width;
-    final columns = width >= 900 ? 6 : width >= 600 ? 4 : 3;
+    final columns = width >= 900
+        ? 6
+        : width >= 600
+            ? 4
+            : 3;
 
     return Scaffold(
       body: SafeArea(
@@ -63,7 +68,8 @@ class _ExploreScreenState extends State<ExploreScreen> {
                                   hintText: 'Search names, bios, interests',
                                   prefixIcon: Icon(Icons.search),
                                 ),
-                                onChanged: (v) => app.filters = f.copyWith(query: v),
+                                onChanged: (v) =>
+                                    app.filters = f.copyWith(query: v),
                               ),
                             ),
                             TextButton(
@@ -83,15 +89,20 @@ class _ExploreScreenState extends State<ExploreScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   ShaderMask(
-                                    shaderCallback: HuntrColors.accentGradient.createShader,
+                                    shaderCallback:
+                                        HuntrColors.accentGradient.createShader,
                                     child: Text('Explore',
-                                        style: text.headlineMedium?.copyWith(fontWeight: FontWeight.w800, color: Colors.white)),
+                                        style: text.headlineMedium?.copyWith(
+                                            fontWeight: FontWeight.w800,
+                                            color: Colors.white)),
                                   ),
                                   Row(children: [
                                     const OnlineDot(size: 9),
                                     const SizedBox(width: 6),
-                                    Text('${app.onlineCount} people online near you',
-                                        style: text.bodySmall?.copyWith(color: HuntrColors.muted)),
+                                    Text(
+                                        '${app.onlineCount} people online near you',
+                                        style: text.bodySmall?.copyWith(
+                                            color: HuntrColors.muted)),
                                   ]),
                                 ],
                               ),
@@ -99,7 +110,8 @@ class _ExploreScreenState extends State<ExploreScreen> {
                             IconButton(
                               tooltip: 'Search',
                               icon: const Icon(Icons.search),
-                              onPressed: () => setState(() => _searching = true),
+                              onPressed: () =>
+                                  setState(() => _searching = true),
                             ),
                             IconButton(
                               tooltip: 'All filters',
@@ -121,14 +133,16 @@ class _ExploreScreenState extends State<ExploreScreen> {
                   height: 52,
                   child: ListView(
                     scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                     children: [
                       FilterChip(
                         avatar: const OnlineDot(size: 10),
                         label: const Text('Online now'),
                         selected: f.onlineOnly,
                         showCheckmark: false,
-                        onSelected: (v) => app.filters = f.copyWith(onlineOnly: v),
+                        onSelected: (v) =>
+                            app.filters = f.copyWith(onlineOnly: v),
                       ),
                       const SizedBox(width: 8),
                       FilterChip(
@@ -136,11 +150,16 @@ class _ExploreScreenState extends State<ExploreScreen> {
                         label: const Text('Within 5 km'),
                         selected: f.maxDistanceKm != null,
                         showCheckmark: false,
-                        onSelected: (v) => app.filters =
-                            v ? f.copyWith(maxDistanceKm: 5) : f.copyWith(clearDistance: true),
+                        onSelected: (v) => app.filters = v
+                            ? f.copyWith(maxDistanceKm: 5)
+                            : f.copyWith(clearDistance: true),
                       ),
                       const SizedBox(width: 8),
-                      for (final l in [LookingFor.chat, LookingFor.friends, LookingFor.dates]) ...[
+                      for (final l in [
+                        LookingFor.chat,
+                        LookingFor.friends,
+                        LookingFor.dates
+                      ]) ...[
                         FilterChip(
                           avatar: Icon(l.icon, size: 18),
                           label: Text(l.label),
@@ -173,7 +192,9 @@ class _ExploreScreenState extends State<ExploreScreen> {
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(20, 10, 20, 8),
-                    child: Text('Your favorites', style: text.titleSmall?.copyWith(color: HuntrColors.muted)),
+                    child: Text('Your favorites',
+                        style: text.titleSmall
+                            ?.copyWith(color: HuntrColors.muted)),
                   ),
                 ),
                 SliverToBoxAdapter(
@@ -257,11 +278,14 @@ class _EmptyExplore extends StatelessWidget {
         children: [
           const Icon(Icons.travel_explore, size: 56, color: HuntrColors.muted),
           const SizedBox(height: 12),
-          Text('Nobody matches these filters', style: Theme.of(context).textTheme.titleMedium),
+          Text('Nobody matches these filters',
+              style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 4),
-          const Text('Try widening the distance or age range.', style: TextStyle(color: HuntrColors.muted)),
+          const Text('Try widening the distance or age range.',
+              style: TextStyle(color: HuntrColors.muted)),
           const SizedBox(height: 16),
-          OutlinedButton(onPressed: onClear, child: const Text('Clear filters')),
+          OutlinedButton(
+              onPressed: onClear, child: const Text('Clear filters')),
         ],
       ),
     );
@@ -295,7 +319,8 @@ class _FilterSheetState extends State<_FilterSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Filters', style: text.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
+            Text('Filters',
+                style: text.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
             const SizedBox(height: 12),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
@@ -304,17 +329,21 @@ class _FilterSheetState extends State<_FilterSheet> {
               onChanged: (v) => setState(() => f = f.copyWith(onlineOnly: v)),
             ),
             const SizedBox(height: 8),
-            Text('Distance: ${f.maxDistanceKm == null ? 'Any' : 'up to ${dist.round()} km'}', style: text.titleSmall),
+            Text(
+                'Distance: ${f.maxDistanceKm == null ? 'Any' : 'up to ${dist.round()} km'}',
+                style: text.titleSmall),
             Slider(
               value: dist,
               min: 1,
               max: 25,
               divisions: 24,
               label: dist >= 25 ? 'Any' : '${dist.round()} km',
-              onChanged: (v) => setState(
-                  () => f = v >= 25 ? f.copyWith(clearDistance: true) : f.copyWith(maxDistanceKm: v)),
+              onChanged: (v) => setState(() => f = v >= 25
+                  ? f.copyWith(clearDistance: true)
+                  : f.copyWith(maxDistanceKm: v)),
             ),
-            Text('Age: ${f.ageRange.start.round()} - ${f.ageRange.end.round()}${f.ageRange.end >= 60 ? '+' : ''}',
+            Text(
+                'Age: ${f.ageRange.start.round()} - ${f.ageRange.end.round()}${f.ageRange.end >= 60 ? '+' : ''}',
                 style: text.titleSmall),
             RangeSlider(
               values: f.ageRange,
@@ -348,7 +377,8 @@ class _FilterSheetState extends State<_FilterSheet> {
             Row(
               children: [
                 TextButton(
-                  onPressed: () => setState(() => f = ExploreFilters(query: f.query)),
+                  onPressed: () =>
+                      setState(() => f = ExploreFilters(query: f.query)),
                   child: const Text('Reset'),
                 ),
                 const Spacer(),

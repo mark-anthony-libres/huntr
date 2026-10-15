@@ -13,6 +13,51 @@ enum LookingFor {
   final IconData icon;
 }
 
+/// One picture in someone's private album. Until uploads exist, photos are generated art
+/// (a hue and a subject) so the album flow can be built and tested end to end.
+class AlbumPhoto {
+  const AlbumPhoto(
+      {required this.id, required this.hue, required this.subject});
+  final String id;
+  final double hue;
+  final PhotoSubject subject;
+}
+
+enum PhotoSubject {
+  selfie('Selfie', Icons.face_retouching_natural),
+  beach('Beach day', Icons.beach_access),
+  gym('Gym', Icons.fitness_center),
+  coffee('Coffee', Icons.local_cafe),
+  hike('Hike', Icons.landscape),
+  nightOut('Night out', Icons.nightlife),
+  pet('My pet', Icons.pets),
+  travel('Travel', Icons.flight_takeoff),
+  food('Food trip', Icons.ramen_dining);
+
+  const PhotoSubject(this.label, this.icon);
+  final String label;
+  final IconData icon;
+}
+
+/// Where two people stand. Chatting is only possible once [connected].
+enum Connection {
+  none,
+
+  /// I sent a request and I'm waiting for them.
+  outgoing,
+
+  /// They sent me a request.
+  incoming,
+  connected,
+}
+
+class ChatRequest {
+  const ChatRequest({required this.profileId, required this.sentAt, this.note});
+  final String profileId;
+  final DateTime sentAt;
+  final String? note;
+}
+
 class Profile {
   const Profile({
     required this.id,
@@ -28,6 +73,7 @@ class Profile {
     this.pronouns,
     this.heightCm,
     this.verified = false,
+    this.album = const [],
   });
 
   final String id;
@@ -46,10 +92,14 @@ class Profile {
   final int? heightCm;
   final bool verified;
 
+  /// Private album. Shared with someone automatically when this person accepts their chat request.
+  final List<AlbumPhoto> album;
+
   String get initials {
     final parts = name.trim().split(RegExp(r'\s+'));
     if (parts.length == 1) return parts.first.characters.first.toUpperCase();
-    return (parts.first.characters.first + parts.last.characters.first).toUpperCase();
+    return (parts.first.characters.first + parts.last.characters.first)
+        .toUpperCase();
   }
 
   String get distanceLabel {
@@ -68,6 +118,16 @@ class Profile {
 
 enum MessageStatus { sending, sent, read }
 
+enum MessageKind {
+  text,
+
+  /// An album shared into the chat. [Message.album] holds the photos.
+  album,
+
+  /// A centered notice such as "Chat request accepted".
+  notice,
+}
+
 class Message {
   Message({
     required this.id,
@@ -75,17 +135,22 @@ class Message {
     required this.text,
     required this.sentAt,
     this.status = MessageStatus.sent,
+    this.kind = MessageKind.text,
+    this.album = const [],
   });
 
   final String id;
   final bool fromMe;
   final String text;
   final DateTime sentAt;
+  final MessageKind kind;
+  final List<AlbumPhoto> album;
   MessageStatus status;
 }
 
 class Conversation {
-  Conversation({required this.profile, List<Message>? messages, this.unread = 0})
+  Conversation(
+      {required this.profile, List<Message>? messages, this.unread = 0})
       : messages = messages ?? [];
 
   final Profile profile;
@@ -130,7 +195,8 @@ class ExploreFilters {
   }) {
     return ExploreFilters(
       onlineOnly: onlineOnly ?? this.onlineOnly,
-      maxDistanceKm: clearDistance ? null : (maxDistanceKm ?? this.maxDistanceKm),
+      maxDistanceKm:
+          clearDistance ? null : (maxDistanceKm ?? this.maxDistanceKm),
       ageRange: ageRange ?? this.ageRange,
       lookingFor: lookingFor ?? this.lookingFor,
       query: query ?? this.query,
@@ -141,7 +207,10 @@ class ExploreFilters {
     if (onlineOnly && !p.online) return false;
     if (maxDistanceKm != null && p.distanceKm > maxDistanceKm!) return false;
     if (p.age < ageRange.start || p.age > ageRange.end) return false;
-    if (lookingFor.isNotEmpty && p.lookingFor.intersection(lookingFor).isEmpty) return false;
+    if (lookingFor.isNotEmpty &&
+        p.lookingFor.intersection(lookingFor).isEmpty) {
+      return false;
+    }
     if (query.isNotEmpty) {
       final q = query.toLowerCase();
       final hit = p.name.toLowerCase().contains(q) ||

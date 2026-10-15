@@ -9,9 +9,16 @@ Meet people right around you. A Flutter app with **Explore** (who's nearby) and 
   - One-tap quick filters: *Online now*, *Within 5 km*, *Chat*, *Friends*, *Dates*.
   - A full filter sheet (distance, age range, looking for), search by name, bio or interest, and pull to refresh.
   - A favorites row, plus a friendly empty state when no one matches.
-- **Profiles:** a large portrait, status, distance, pronouns, height, about, looking for and interests.
-  - Thumb-reach actions: **Say hi** (one-tap wave) and **Message**.
+- **Profiles:** a large portrait, status, distance, pronouns, height, album, about, looking for and interests.
+  - A thumb-reach action button that changes with the connection: **Send chat request** → **Request sent** → **Message**, or **Accept / Decline** for requests you received.
   - Favorite, report (with reasons) and block (with confirmation).
+- **Chat requests and albums:** you can't message someone until they accept your chat request.
+  - Send a request from their profile, with an optional note.
+  - Their private album is blurred until then.
+  - When they accept, their album is sent into the chat automatically, and you can both start messaging.
+  - Requests you receive appear under **Chats → Requests**. Accepting sends *your* album to them.
+  - You can decline a request you received, or cancel one you sent.
+  - Manage your own album under **Me** (sample photos until uploads exist).
 - **Chats:** an inbox with unread badges, an online-now row, search, an *Unread* filter, swipe to delete, and a typing indicator.
 - **Chat screen:** message bubbles with grouping, timestamps, sent/read status, large emoji, an animated typing indicator, and quick-reply chips so the first message is easy.
 - **Me:** edit name and bio, privacy switches (show distance, show online status), safety tips.

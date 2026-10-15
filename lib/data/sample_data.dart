@@ -7,15 +7,68 @@ List<Profile> buildSampleProfiles({DateTime? now}) {
   final clock = now ?? DateTime.now();
   final rnd = Random(7);
   const names = [
-    'Alex', 'Jordan', 'Sam', 'Riley', 'Casey', 'Morgan', 'Jamie', 'Taylor', 'Avery', 'Quinn',
-    'Rowan', 'Elliot', 'Kai', 'Noah', 'Leo', 'Mateo', 'Ezra', 'Miguel', 'Paolo', 'Rafael',
-    'Gabe', 'Luis', 'Nico', 'Andre', 'Marco', 'Theo', 'Julian', 'Adrian', 'Liam', 'Ethan',
-    'Ken', 'Joaquin', 'Carlo', 'Dante', 'Isaac', 'Felix',
+    'Alex',
+    'Jordan',
+    'Sam',
+    'Riley',
+    'Casey',
+    'Morgan',
+    'Jamie',
+    'Taylor',
+    'Avery',
+    'Quinn',
+    'Rowan',
+    'Elliot',
+    'Kai',
+    'Noah',
+    'Leo',
+    'Mateo',
+    'Ezra',
+    'Miguel',
+    'Paolo',
+    'Rafael',
+    'Gabe',
+    'Luis',
+    'Nico',
+    'Andre',
+    'Marco',
+    'Theo',
+    'Julian',
+    'Adrian',
+    'Liam',
+    'Ethan',
+    'Ken',
+    'Joaquin',
+    'Carlo',
+    'Dante',
+    'Isaac',
+    'Felix',
   ];
   const interests = [
-    'Coffee', 'Hiking', 'Gym', 'Gaming', 'Anime', 'Music', 'Travel', 'Photography', 'Cooking',
-    'Movies', 'Books', 'Basketball', 'Running', 'Art', 'Design', 'Coding', 'Beach', 'Karaoke',
-    'Dogs', 'Cats', 'Food trips', 'Dancing', 'Volleyball', 'Yoga',
+    'Coffee',
+    'Hiking',
+    'Gym',
+    'Gaming',
+    'Anime',
+    'Music',
+    'Travel',
+    'Photography',
+    'Cooking',
+    'Movies',
+    'Books',
+    'Basketball',
+    'Running',
+    'Art',
+    'Design',
+    'Coding',
+    'Beach',
+    'Karaoke',
+    'Dogs',
+    'Cats',
+    'Food trips',
+    'Dancing',
+    'Volleyball',
+    'Yoga',
   ];
   const bios = [
     'New in town and looking for good coffee spots. Show me around?',
@@ -36,26 +89,42 @@ List<Profile> buildSampleProfiles({DateTime? now}) {
 
   final profiles = <Profile>[];
   for (var i = 0; i < names.length; i++) {
-    final picks = (List.of(interests)..shuffle(rnd)).take(3 + rnd.nextInt(3)).toList();
+    final picks =
+        (List.of(interests)..shuffle(rnd)).take(3 + rnd.nextInt(3)).toList();
     final wants = <LookingFor>{
       looking[rnd.nextInt(looking.length)],
       if (rnd.nextBool()) looking[rnd.nextInt(looking.length)],
     };
     final online = rnd.nextDouble() < 0.45;
+    final subjects = (List.of(PhotoSubject.values)..shuffle(rnd))
+        .take(3 + rnd.nextInt(6))
+        .toList();
+    final baseHue = rnd.nextDouble() * 360;
+    final album = [
+      for (var k = 0; k < subjects.length; k++)
+        AlbumPhoto(
+            id: 'p$i-a$k',
+            hue: (baseHue + k * 37 + rnd.nextDouble() * 30) % 360,
+            subject: subjects[k]),
+    ];
     profiles.add(Profile(
       id: 'p$i',
       name: names[i],
       age: 19 + rnd.nextInt(24),
-      distanceKm: double.parse((0.2 + pow(rnd.nextDouble(), 2) * 24).toStringAsFixed(1)),
+      distanceKm: double.parse(
+          (0.2 + pow(rnd.nextDouble(), 2) * 24).toStringAsFixed(1)),
       bio: bios[rnd.nextInt(bios.length)],
       interests: picks,
       lookingFor: wants,
       online: online,
-      lastActive: online ? clock : clock.subtract(Duration(minutes: 5 + rnd.nextInt(60 * 48))),
+      lastActive: online
+          ? clock
+          : clock.subtract(Duration(minutes: 5 + rnd.nextInt(60 * 48))),
       hue: rnd.nextDouble() * 360,
       pronouns: pronouns[rnd.nextInt(pronouns.length)],
       heightCm: 160 + rnd.nextInt(30),
       verified: rnd.nextDouble() < 0.35,
+      album: album,
     ));
   }
   profiles.sort((a, b) => a.distanceKm.compareTo(b.distanceKm));
@@ -72,6 +141,13 @@ const sampleReplies = [
   'Just got home from work, finally free',
   'Same here honestly',
   'Where are you from originally?',
+];
+
+/// Starter notes offered when sending a chat request.
+const requestNotes = [
+  'Hey! Would love to chat 👋',
+  'You seem fun, say hi?',
+  'We like the same things 😄',
 ];
 
 const quickReplies = [

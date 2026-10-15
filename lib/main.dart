@@ -23,7 +23,9 @@ class HuntrApp extends StatelessWidget {
         home: Builder(
           builder: (context) => AnimatedSwitcher(
             duration: const Duration(milliseconds: 400),
-            child: AppScope.of(context).onboarded ? const HomeShell() : const OnboardingScreen(),
+            child: AppScope.of(context).onboarded
+                ? const HomeShell()
+                : const OnboardingScreen(),
           ),
         ),
       ),

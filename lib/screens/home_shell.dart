@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../state/app_state.dart';
@@ -14,10 +16,33 @@ class HomeShell extends StatefulWidget {
 
 class _HomeShellState extends State<HomeShell> {
   int _tab = 0;
+  StreamSubscription<String>? _events;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Show request answers wherever the user is, with a shortcut to the chat.
+    _events ??= AppScope.read(context).events.listen((msg) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(
+          content: Text(msg),
+          action: SnackBarAction(
+              label: 'Chats', onPressed: () => setState(() => _tab = 1)),
+        ));
+    });
+  }
+
+  @override
+  void dispose() {
+    _events?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final unread = AppScope.of(context).totalUnread;
+    final unread = AppScope.of(context).chatsBadge;
     return Scaffold(
       body: IndexedStack(
         index: _tab,
@@ -37,8 +62,14 @@ class _HomeShellState extends State<HomeShell> {
             label: 'Explore',
           ),
           NavigationDestination(
-            icon: Badge(isLabelVisible: unread > 0, label: Text('$unread'), child: const Icon(Icons.chat_bubble_outline)),
-            selectedIcon: Badge(isLabelVisible: unread > 0, label: Text('$unread'), child: const Icon(Icons.chat_bubble)),
+            icon: Badge(
+                isLabelVisible: unread > 0,
+                label: Text('$unread'),
+                child: const Icon(Icons.chat_bubble_outline)),
+            selectedIcon: Badge(
+                isLabelVisible: unread > 0,
+                label: Text('$unread'),
+                child: const Icon(Icons.chat_bubble)),
             label: 'Chats',
           ),
           const NavigationDestination(

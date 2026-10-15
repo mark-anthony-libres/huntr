@@ -11,7 +11,8 @@ void main() {
     return s;
   }
 
-  testWidgets('onboarding needs a name and the 18+ confirmation', (tester) async {
+  testWidgets('onboarding needs a name and the 18+ confirmation',
+      (tester) async {
     await tester.pumpWidget(HuntrApp(state: AppState()));
     await tester.tap(find.byKey(const Key('onboardNext')));
     await tester.pumpAndSettle();
@@ -31,7 +32,8 @@ void main() {
     expect(find.text('Explore'), findsWidgets);
   });
 
-  testWidgets('explore shows people and the online filter narrows the grid', (tester) async {
+  testWidgets('explore shows people and the online filter narrows the grid',
+      (tester) async {
     final state = onboardedState();
     await tester.pumpWidget(HuntrApp(state: state));
     await tester.pumpAndSettle();
@@ -44,34 +46,115 @@ void main() {
     expect(state.visibleProfiles.every((p) => p.online), isTrue);
   });
 
-  testWidgets('sending a message shows it and gets a reply', (tester) async {
-    final state = onboardedState();
+  testWidgets(
+      'a chat request must be accepted before messaging; accepting shares the album',
+      (tester) async {
+    final state = AppState(
+        replyDelay: const Duration(milliseconds: 200),
+        acceptDelay: const Duration(seconds: 30));
+    state.completeOnboarding(
+        name: 'Mark', age: 27, lookingFor: {LookingFor.chat});
     await tester.pumpWidget(HuntrApp(state: state));
     await tester.pumpAndSettle();
 
-    final first = state.visibleProfiles.first;
-    await tester.tap(find.bySemanticsLabel(RegExp('^${first.name},')).first);
+    final p = state.visibleProfiles
+        .firstWhere((x) => state.connectionWith(x.id) == Connection.none);
+    expect(state.canChat(p.id), isFalse);
+    state.send(p, 'sneaky');
+    expect(state.conversationWith(p).messages, isEmpty,
+        reason: 'no messaging before approval');
+
+    final tile = find.bySemanticsLabel(RegExp('^${p.name},'));
+    await tester.scrollUntilVisible(tile, 200,
+        scrollable: find
+            .descendant(
+                of: find.byType(CustomScrollView),
+                matching: find.byType(Scrollable))
+            .first);
+    await tester.ensureVisible(tile.first);
     await tester.pumpAndSettle();
+    await tester.tap(tile.first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('sendRequest')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+        find.byKey(const Key('requestNote')), 'Hi from the test');
+    await tester.tap(find.byKey(const Key('confirmRequest')));
+    await tester.pumpAndSettle();
+    expect(state.connectionWith(p.id), Connection.outgoing);
+    expect(find.text('Request sent · waiting'), findsOneWidget);
+
+    // they accept: their album arrives and the chat opens up
+    await tester.pump(const Duration(seconds: 31));
+    await tester.pumpAndSettle();
+    expect(state.canChat(p.id), isTrue);
+    final msgs = state.conversationWith(p).messages;
+    final album = msgs.firstWhere((m) => m.kind == MessageKind.album);
+    expect(album.fromMe, isFalse);
+    expect(album.album, p.album);
+    expect(msgs.first.text, 'Hi from the test');
+
     await tester.tap(find.text('Message'));
     await tester.pumpAndSettle();
-
-    await tester.enterText(find.byKey(const Key('messageInput')), 'Hello from the test');
+    expect(find.text('${p.name} shared their album'), findsOneWidget);
+    expect(find.text('View ${p.album.length} photos'), findsOneWidget);
+    await tester.enterText(find.byKey(const Key('messageInput')), 'Hello!');
     await tester.pump();
     await tester.tap(find.byKey(const Key('sendButton')));
     await tester.pump();
-    expect(find.text('Hello from the test'), findsOneWidget);
+    expect(state.conversationWith(p).messages.last.text, 'Hello!');
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
+    expect(
+        msgs.where((m) => !m.fromMe && m.kind == MessageKind.text), isNotEmpty);
+  });
 
-    await tester.pump(const Duration(milliseconds: 250));
-    await tester.pump(const Duration(milliseconds: 50));
-    final conv = state.conversationWith(first);
-    expect(conv.messages.where((m) => !m.fromMe), isNotEmpty);
-    expect(conv.messages.firstWhere((m) => m.fromMe).status, MessageStatus.read);
+  testWidgets('accepting an incoming request sends my album to them',
+      (tester) async {
+    final state = onboardedState();
+    await tester.pumpWidget(HuntrApp(state: state));
+    await tester.pumpAndSettle();
+    final req = state.incomingRequests.first;
+    final p = state.profileById(req.profileId)!;
+
+    await tester.tap(find.text('Chats'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('requestsTab')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(Key('accept-${p.id}')));
+    await tester.pumpAndSettle();
+
+    expect(state.canChat(p.id), isTrue);
+    final album = state
+        .conversationWith(p)
+        .messages
+        .firstWhere((m) => m.kind == MessageKind.album);
+    expect(album.fromMe, isTrue);
+    expect(album.album.map((x) => x.id), state.myAlbum.map((x) => x.id));
+    expect(find.text('You shared your album'), findsOneWidget);
+  });
+
+  test('declining and cancelling clear the request', () {
+    final state = AppState(acceptDelay: const Duration(hours: 1));
+    final incoming = state.incomingRequests.first.profileId;
+    state.declineRequest(incoming);
+    expect(state.connectionWith(incoming), Connection.none);
+    final p = state.visibleProfiles
+        .firstWhere((x) => state.connectionWith(x.id) == Connection.none);
+    state.sendRequest(p);
+    expect(state.outgoingRequests.single.profileId, p.id);
+    state.cancelRequest(p.id);
+    expect(state.connectionWith(p.id), Connection.none);
   });
 
   test('filters match by age, distance and search', () {
     final state = AppState();
-    state.filters = const ExploreFilters(ageRange: RangeValues(20, 25), maxDistanceKm: 5);
-    expect(state.visibleProfiles.every((p) => p.age >= 20 && p.age <= 25 && p.distanceKm <= 5), isTrue);
+    state.filters =
+        const ExploreFilters(ageRange: RangeValues(20, 25), maxDistanceKm: 5);
+    expect(
+        state.visibleProfiles
+            .every((p) => p.age >= 20 && p.age <= 25 && p.distanceKm <= 5),
+        isTrue);
     state.filters = const ExploreFilters(query: 'coffee');
     expect(state.visibleProfiles, isNotEmpty);
   });

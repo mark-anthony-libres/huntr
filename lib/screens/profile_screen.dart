@@ -3,7 +3,10 @@ import 'package:flutter/material.dart';
 import '../models/models.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
+import '../data/sample_data.dart';
 import '../widgets/avatar.dart';
+import '../widgets/photo.dart';
+import 'album_screen.dart';
 import 'chat_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
@@ -15,10 +18,15 @@ class ProfileScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final app = AppScope.of(context);
     final p = app.profileById(profileId);
-    if (p == null) return const Scaffold(body: Center(child: Text('This profile is no longer available.')));
+    if (p == null) {
+      return const Scaffold(
+          body: Center(child: Text('This profile is no longer available.')));
+    }
     final text = Theme.of(context).textTheme;
     final fav = app.isFavorite(p.id);
     final height = MediaQuery.sizeOf(context).height;
+    final conn = app.connectionWith(p.id);
+    final request = app.requestWith(p.id);
 
     return Scaffold(
       body: CustomScrollView(
@@ -31,16 +39,26 @@ class ProfileScreen extends StatelessWidget {
             actions: [
               IconButton(
                 tooltip: fav ? 'Remove from favorites' : 'Add to favorites',
-                icon: Icon(fav ? Icons.star_rounded : Icons.star_outline_rounded,
+                icon: Icon(
+                    fav ? Icons.star_rounded : Icons.star_outline_rounded,
                     color: fav ? HuntrColors.amber : null),
                 onPressed: () => app.toggleFavorite(p.id),
               ),
               PopupMenuButton<String>(
                 tooltip: 'More',
-                onSelected: (v) => v == 'block' ? _confirmBlock(context, p) : _report(context, p),
+                onSelected: (v) => v == 'block'
+                    ? _confirmBlock(context, p)
+                    : _report(context, p),
                 itemBuilder: (_) => const [
-                  PopupMenuItem(value: 'report', child: ListTile(leading: Icon(Icons.flag_outlined), title: Text('Report'))),
-                  PopupMenuItem(value: 'block', child: ListTile(leading: Icon(Icons.block), title: Text('Block'))),
+                  PopupMenuItem(
+                      value: 'report',
+                      child: ListTile(
+                          leading: Icon(Icons.flag_outlined),
+                          title: Text('Report'))),
+                  PopupMenuItem(
+                      value: 'block',
+                      child: ListTile(
+                          leading: Icon(Icons.block), title: Text('Block'))),
                 ],
               ),
             ],
@@ -49,14 +67,21 @@ class ProfileScreen extends StatelessWidget {
               background: Stack(
                 fit: StackFit.expand,
                 children: [
-                  Hero(tag: 'art-${p.id}', child: ProfileArt(profile: p, fontSize: 110)),
+                  Hero(
+                      tag: 'art-${p.id}',
+                      child: ProfileArt(profile: p, fontSize: 110)),
                   const DecoratedBox(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
                         stops: [0, 0.25, 0.7, 1],
-                        colors: [Color(0x990F1014), Colors.transparent, Colors.transparent, HuntrColors.night],
+                        colors: [
+                          Color(0x990F1014),
+                          Colors.transparent,
+                          Colors.transparent,
+                          HuntrColors.night
+                        ],
                       ),
                     ),
                   ),
@@ -74,11 +99,15 @@ class ProfileScreen extends StatelessWidget {
                     children: [
                       Flexible(
                         child: Text('${p.name}, ${p.age}',
-                            style: text.headlineMedium?.copyWith(fontWeight: FontWeight.w800)),
+                            style: text.headlineMedium
+                                ?.copyWith(fontWeight: FontWeight.w800)),
                       ),
                       if (p.verified) ...[
                         const SizedBox(width: 8),
-                        const Tooltip(message: 'Verified', child: Icon(Icons.verified, color: HuntrColors.amber)),
+                        const Tooltip(
+                            message: 'Verified',
+                            child:
+                                Icon(Icons.verified, color: HuntrColors.amber)),
                       ],
                     ],
                   ),
@@ -92,15 +121,73 @@ class ProfileScreen extends StatelessWidget {
                         icon: p.online ? null : Icons.schedule,
                         leading: p.online ? const OnlineDot(size: 10) : null,
                         label: p.activeLabel(DateTime.now()),
-                        color: p.online ? HuntrColors.online : HuntrColors.muted,
+                        color:
+                            p.online ? HuntrColors.online : HuntrColors.muted,
                       ),
-                      _Meta(icon: Icons.near_me_outlined, label: p.distanceLabel),
-                      if (p.pronouns != null) _Meta(icon: Icons.person_outline, label: p.pronouns!),
-                      if (p.heightCm != null) _Meta(icon: Icons.height, label: '${p.heightCm} cm'),
+                      _Meta(
+                          icon: Icons.near_me_outlined, label: p.distanceLabel),
+                      if (p.pronouns != null)
+                        _Meta(icon: Icons.person_outline, label: p.pronouns!),
+                      if (p.heightCm != null)
+                        _Meta(icon: Icons.height, label: '${p.heightCm} cm'),
                     ],
                   ),
                   const SizedBox(height: 22),
-                  _Section(title: 'About', child: Text(p.bio, style: text.bodyLarge?.copyWith(height: 1.45))),
+                  if (conn == Connection.incoming)
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 22),
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: HuntrColors.amber.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                            color: HuntrColors.amber.withValues(alpha: 0.5)),
+                      ),
+                      child: Row(children: [
+                        const Icon(Icons.mark_chat_unread_outlined,
+                            color: HuntrColors.amber),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            request?.note == null
+                                ? '${p.name} wants to chat with you'
+                                : '${p.name} wants to chat: "${request!.note}"',
+                          ),
+                        ),
+                      ]),
+                    ),
+                  _Section(
+                    title: 'Album · ${p.album.length} photos',
+                    child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          AlbumPreview(
+                            photos: p.album,
+                            locked: conn != Connection.connected,
+                            onTap: conn == Connection.connected
+                                ? () => Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                        builder: (_) => AlbumScreen(
+                                            title: '${p.name}\'s album',
+                                            photos: p.album)))
+                                : null,
+                          ),
+                          if (conn != Connection.connected) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              conn == Connection.incoming
+                                  ? 'Accept to start chatting. Your album will be shared with ${p.name}.'
+                                  : 'Shared with you when ${p.name} accepts your chat request.',
+                              style: const TextStyle(
+                                  color: HuntrColors.muted, fontSize: 13),
+                            ),
+                          ],
+                        ]),
+                  ),
+                  _Section(
+                      title: 'About',
+                      child: Text(p.bio,
+                          style: text.bodyLarge?.copyWith(height: 1.45))),
                   _Section(
                     title: 'Looking for',
                     child: Wrap(
@@ -108,7 +195,10 @@ class ProfileScreen extends StatelessWidget {
                       runSpacing: 8,
                       children: [
                         for (final l in p.lookingFor)
-                          Chip(avatar: Icon(l.icon, size: 18, color: HuntrColors.amber), label: Text(l.label)),
+                          Chip(
+                              avatar: Icon(l.icon,
+                                  size: 18, color: HuntrColors.amber),
+                              label: Text(l.label)),
                       ],
                     ),
                   ),
@@ -117,7 +207,9 @@ class ProfileScreen extends StatelessWidget {
                     child: Wrap(
                       spacing: 8,
                       runSpacing: 8,
-                      children: [for (final i in p.interests) Chip(label: Text(i))],
+                      children: [
+                        for (final i in p.interests) Chip(label: Text(i))
+                      ],
                     ),
                   ),
                 ],
@@ -127,50 +219,139 @@ class ProfileScreen extends StatelessWidget {
         ],
       ),
 
-      // ---- one-tap actions, always in reach of the thumb ----
+      // ---- the next step for this connection, always in reach of the thumb ----
       bottomNavigationBar: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-          child: Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(minimumSize: const Size(48, 52), shape: const StadiumBorder()),
-                  icon: const Text('👋', style: TextStyle(fontSize: 18)),
-                  label: const Text('Say hi'),
-                  onPressed: () {
-                    app.wave(p);
-                    ScaffoldMessenger.of(context)
-                      ..hideCurrentSnackBar()
-                      ..showSnackBar(SnackBar(
-                        content: Text('You waved at ${p.name}'),
-                        action: SnackBarAction(label: 'Open chat', onPressed: () => _openChat(context, p)),
-                      ));
-                  },
-                ),
+          child: switch (conn) {
+            Connection.none => _GradientButton(
+                key: const Key('sendRequest'),
+                icon: Icons.send_rounded,
+                label: 'Send chat request',
+                onPressed: () => _requestSheet(context, p),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                flex: 2,
-                child: DecoratedBox(
-                  decoration: const BoxDecoration(gradient: HuntrColors.accentGradient, borderRadius: BorderRadius.all(Radius.circular(30))),
-                  child: FilledButton.icon(
-                    style: FilledButton.styleFrom(backgroundColor: Colors.transparent, foregroundColor: Colors.black),
-                    icon: const Icon(Icons.chat_bubble_rounded),
-                    label: const Text('Message'),
+            Connection.outgoing => Row(children: [
+                const Expanded(
+                  child: _StatusPill(
+                      icon: Icons.hourglass_top_rounded,
+                      label: 'Request sent · waiting'),
+                ),
+                const SizedBox(width: 8),
+                TextButton(
+                    onPressed: () => app.cancelRequest(p.id),
+                    child: const Text('Cancel')),
+              ]),
+            Connection.incoming => Row(children: [
+                Expanded(
+                  child: OutlinedButton(
+                    style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(48, 52),
+                        shape: const StadiumBorder()),
+                    onPressed: () {
+                      app.declineRequest(p.id);
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                          content: Text('Request from ${p.name} declined')));
+                    },
+                    child: const Text('Decline'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  flex: 2,
+                  child: _GradientButton(
+                    key: const Key('acceptRequest'),
+                    icon: Icons.check_rounded,
+                    label: 'Accept & share album',
+                    onPressed: () {
+                      app.acceptRequest(p);
+                      _openChat(context, p);
+                    },
+                  ),
+                ),
+              ]),
+            Connection.connected => Row(children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(48, 52),
+                        shape: const StadiumBorder()),
+                    icon: const Icon(Icons.photo_library_outlined),
+                    label: const Text('Album'),
+                    onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                            builder: (_) => AlbumScreen(
+                                title: '${p.name}\'s album', photos: p.album))),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  flex: 2,
+                  child: _GradientButton(
+                    icon: Icons.chat_bubble_rounded,
+                    label: 'Message',
                     onPressed: () => _openChat(context, p),
                   ),
                 ),
-              ),
-            ],
-          ),
+              ]),
+          },
         ),
       ),
     );
   }
 
+  void _requestSheet(BuildContext context, Profile p) {
+    final note = TextEditingController();
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.fromLTRB(
+            24, 0, 24, 20 + MediaQuery.viewInsetsOf(ctx).bottom),
+        child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('Chat request to ${p.name}',
+                  style: Theme.of(ctx).textTheme.titleLarge),
+              const SizedBox(height: 6),
+              const Text(
+                'Once they accept, their album is shared with you and you can message each other.',
+                style: TextStyle(color: HuntrColors.muted),
+              ),
+              const SizedBox(height: 16),
+              Wrap(spacing: 8, runSpacing: 8, children: [
+                for (final n in requestNotes)
+                  ActionChip(label: Text(n), onPressed: () => note.text = n),
+              ]),
+              const SizedBox(height: 12),
+              TextField(
+                key: const Key('requestNote'),
+                controller: note,
+                maxLength: 120,
+                decoration: const InputDecoration(
+                    hintText: 'Add a short note (optional)'),
+              ),
+              const SizedBox(height: 4),
+              _GradientButton(
+                key: const Key('confirmRequest'),
+                icon: Icons.send_rounded,
+                label: 'Send request',
+                onPressed: () {
+                  AppScope.read(context).sendRequest(p, note: note.text);
+                  Navigator.pop(ctx);
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                      content: Text(
+                          'Request sent to ${p.name}. We\'ll let you know when they reply.')));
+                },
+              ),
+            ]),
+      ),
+    );
+  }
+
   void _openChat(BuildContext context, Profile p) {
-    Navigator.of(context).push(MaterialPageRoute(builder: (_) => ChatScreen(profileId: p.id)));
+    Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => ChatScreen(profileId: p.id)));
   }
 
   Future<void> _confirmBlock(BuildContext context, Profile p) async {
@@ -178,17 +359,23 @@ class ProfileScreen extends StatelessWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text('Block ${p.name}?'),
-        content: const Text('They won\'t be able to see you or message you, and your chat with them is deleted.'),
+        content: const Text(
+            'They won\'t be able to see you or message you, and your chat with them is deleted.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Block')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Block')),
         ],
       ),
     );
     if (ok != true || !context.mounted) return;
     AppScope.read(context).block(p.id);
     Navigator.of(context).popUntil((r) => r.isFirst);
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${p.name} is blocked')));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text('${p.name} is blocked')));
   }
 
   void _report(BuildContext context, Profile p) {
@@ -198,16 +385,25 @@ class ProfileScreen extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('Report ${p.name}', style: Theme.of(ctx).textTheme.titleMedium),
+            Text('Report ${p.name}',
+                style: Theme.of(ctx).textTheme.titleMedium),
             const SizedBox(height: 8),
-            for (final reason in ['Fake profile', 'Inappropriate photos', 'Harassment', 'Spam or scam', 'Underage'])
+            for (final reason in [
+              'Fake profile',
+              'Inappropriate photos',
+              'Harassment',
+              'Spam or scam',
+              'Underage'
+            ])
               ListTile(
                 title: Text(reason),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () {
                   Navigator.pop(ctx);
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Thanks. Our team will review this report.')),
+                    const SnackBar(
+                        content:
+                            Text('Thanks. Our team will review this report.')),
                   );
                 },
               ),
@@ -218,8 +414,63 @@ class ProfileScreen extends StatelessWidget {
   }
 }
 
+class _GradientButton extends StatelessWidget {
+  const _GradientButton(
+      {super.key,
+      required this.icon,
+      required this.label,
+      required this.onPressed});
+  final IconData icon;
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+          gradient: HuntrColors.accentGradient,
+          borderRadius: BorderRadius.all(Radius.circular(30))),
+      child: FilledButton.icon(
+        style: FilledButton.styleFrom(
+            backgroundColor: Colors.transparent,
+            foregroundColor: Colors.black,
+            minimumSize: const Size.fromHeight(52)),
+        icon: Icon(icon),
+        label: Text(label),
+        onPressed: onPressed,
+      ),
+    );
+  }
+}
+
+class _StatusPill extends StatelessWidget {
+  const _StatusPill({required this.icon, required this.label});
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 52,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+          color: HuntrColors.surfaceHigh,
+          borderRadius: BorderRadius.circular(30)),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(icon, size: 18, color: HuntrColors.amber),
+        const SizedBox(width: 8),
+        Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
+      ]),
+    );
+  }
+}
+
 class _Meta extends StatelessWidget {
-  const _Meta({this.icon, this.leading, required this.label, this.color = HuntrColors.muted});
+  const _Meta(
+      {this.icon,
+      this.leading,
+      required this.label,
+      this.color = HuntrColors.muted});
   final IconData? icon;
   final Widget? leading;
   final String label;
@@ -246,7 +497,10 @@ class _Section extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 22),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(title.toUpperCase(),
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(color: HuntrColors.muted, letterSpacing: 1.2)),
+            style: Theme.of(context)
+                .textTheme
+                .labelMedium
+                ?.copyWith(color: HuntrColors.muted, letterSpacing: 1.2)),
         const SizedBox(height: 10),
         child,
       ]),

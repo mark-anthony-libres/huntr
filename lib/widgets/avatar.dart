@@ -6,7 +6,8 @@ import '../theme.dart';
 /// A generated portrait: a soft two-tone gradient from the person's hue, with their initials.
 /// Stands in for profile photos until uploads exist.
 class ProfileArt extends StatelessWidget {
-  const ProfileArt({super.key, required this.profile, this.radius = 0, this.fontSize = 36});
+  const ProfileArt(
+      {super.key, required this.profile, this.radius = 0, this.fontSize = 36});
 
   final Profile profile;
   final double radius;
@@ -15,12 +16,16 @@ class ProfileArt extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final a = HSLColor.fromAHSL(1, profile.hue, 0.55, 0.42).toColor();
-    final b = HSLColor.fromAHSL(1, (profile.hue + 40) % 360, 0.6, 0.22).toColor();
+    final b =
+        HSLColor.fromAHSL(1, (profile.hue + 40) % 360, 0.6, 0.22).toColor();
     return ClipRRect(
       borderRadius: BorderRadius.circular(radius),
       child: DecoratedBox(
         decoration: BoxDecoration(
-          gradient: LinearGradient(colors: [a, b], begin: Alignment.topLeft, end: Alignment.bottomRight),
+          gradient: LinearGradient(
+              colors: [a, b],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight),
         ),
         child: Center(
           child: Text(
@@ -39,7 +44,11 @@ class ProfileArt extends StatelessWidget {
 }
 
 class Avatar extends StatelessWidget {
-  const Avatar({super.key, required this.profile, this.size = 48, this.showOnline = true});
+  const Avatar(
+      {super.key,
+      required this.profile,
+      this.size = 48,
+      this.showOnline = true});
 
   final Profile profile;
   final double size;
@@ -53,7 +62,9 @@ class Avatar extends StatelessWidget {
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          Positioned.fill(child: ProfileArt(profile: profile, radius: size / 2, fontSize: size * 0.36)),
+          Positioned.fill(
+              child: ProfileArt(
+                  profile: profile, radius: size / 2, fontSize: size * 0.36)),
           if (showOnline && profile.online)
             Positioned(
               right: 0,

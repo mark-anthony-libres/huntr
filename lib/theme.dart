@@ -32,7 +32,8 @@ ThemeData buildHuntrTheme() {
     surfaceContainerHighest: HuntrColors.surfaceHigh,
   );
 
-  final base = ThemeData(useMaterial3: true, colorScheme: scheme, brightness: Brightness.dark);
+  final base = ThemeData(
+      useMaterial3: true, colorScheme: scheme, brightness: Brightness.dark);
   return base.copyWith(
     scaffoldBackgroundColor: HuntrColors.night,
     appBarTheme: const AppBarTheme(
@@ -57,7 +58,8 @@ ThemeData buildHuntrTheme() {
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
       fillColor: HuntrColors.surface,
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(28), borderSide: BorderSide.none),
+      border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(28), borderSide: BorderSide.none),
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
     ),
     bottomSheetTheme: const BottomSheetThemeData(

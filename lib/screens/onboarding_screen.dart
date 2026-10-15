@@ -36,9 +36,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   void _next() {
     FocusScope.of(context).unfocus();
     if (_page < 2) {
-      _pages.nextPage(duration: const Duration(milliseconds: 350), curve: Curves.easeOutCubic);
+      _pages.nextPage(
+          duration: const Duration(milliseconds: 350),
+          curve: Curves.easeOutCubic);
     } else {
-      AppScope.read(context).completeOnboarding(name: _name.text, age: _age, lookingFor: _looking);
+      AppScope.read(context).completeOnboarding(
+          name: _name.text, age: _age, lookingFor: _looking);
     }
   }
 
@@ -60,7 +63,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       margin: const EdgeInsets.symmetric(horizontal: 3),
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(4),
-                        gradient: i <= _page ? HuntrColors.accentGradient : null,
+                        gradient:
+                            i <= _page ? HuntrColors.accentGradient : null,
                         color: i <= _page ? null : HuntrColors.surfaceHigh,
                       ),
                     ),
@@ -88,16 +92,21 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                             gradient: HuntrColors.accentGradient,
                             borderRadius: BorderRadius.circular(22),
                           ),
-                          child: const Icon(Icons.radar, size: 40, color: Colors.black),
+                          child: const Icon(Icons.radar,
+                              size: 40, color: Colors.black),
                         ),
                         const SizedBox(height: 28),
                         Text('Meet people\nright around you.',
-                            style: text.displaySmall?.copyWith(fontWeight: FontWeight.w800, height: 1.05)),
+                            style: text.displaySmall?.copyWith(
+                                fontWeight: FontWeight.w800, height: 1.05)),
                         const SizedBox(height: 16),
                         const Text(
                           'See who\'s nearby, say hi with one tap, and chat when it clicks. '
                           'You decide what others see.',
-                          style: TextStyle(fontSize: 16, color: HuntrColors.muted, height: 1.4),
+                          style: TextStyle(
+                              fontSize: 16,
+                              color: HuntrColors.muted,
+                              height: 1.4),
                         ),
                       ],
                     ),
@@ -108,13 +117,16 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     padding: const EdgeInsets.all(28),
                     children: [
                       const SizedBox(height: 24),
-                      Text('What should we call you?', style: text.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
+                      Text('What should we call you?',
+                          style: text.headlineSmall
+                              ?.copyWith(fontWeight: FontWeight.w800)),
                       const SizedBox(height: 20),
                       TextField(
                         key: const Key('onboardName'),
                         controller: _name,
                         textCapitalization: TextCapitalization.words,
-                        decoration: const InputDecoration(hintText: 'Your first name'),
+                        decoration:
+                            const InputDecoration(hintText: 'Your first name'),
                         onChanged: (_) => setState(() {}),
                       ),
                       const SizedBox(height: 28),
@@ -132,7 +144,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         contentPadding: EdgeInsets.zero,
                         controlAffinity: ListTileControlAffinity.leading,
                         value: _confirmedAdult,
-                        onChanged: (v) => setState(() => _confirmedAdult = v ?? false),
+                        onChanged: (v) =>
+                            setState(() => _confirmedAdult = v ?? false),
                         title: const Text('I confirm I\'m 18 or older'),
                       ),
                     ],
@@ -143,9 +156,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     padding: const EdgeInsets.all(28),
                     children: [
                       const SizedBox(height: 24),
-                      Text('What are you here for?', style: text.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
+                      Text('What are you here for?',
+                          style: text.headlineSmall
+                              ?.copyWith(fontWeight: FontWeight.w800)),
                       const SizedBox(height: 6),
-                      const Text('Pick as many as you like. You can change this anytime.',
+                      const Text(
+                          'Pick as many as you like. You can change this anytime.',
                           style: TextStyle(color: HuntrColors.muted)),
                       const SizedBox(height: 20),
                       for (final l in LookingFor.values)
@@ -155,7 +171,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                             icon: l.icon,
                             label: l.label,
                             selected: _looking.contains(l),
-                            onTap: () => setState(() => _looking.contains(l) ? _looking.remove(l) : _looking.add(l)),
+                            onTap: () => setState(() => _looking.contains(l)
+                                ? _looking.remove(l)
+                                : _looking.add(l)),
                           ),
                         ),
                     ],
@@ -169,8 +187,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 children: [
                   if (_page > 0)
                     TextButton(
-                      onPressed: () =>
-                          _pages.previousPage(duration: const Duration(milliseconds: 300), curve: Curves.easeOut),
+                      onPressed: () => _pages.previousPage(
+                          duration: const Duration(milliseconds: 300),
+                          curve: Curves.easeOut),
                       child: const Text('Back'),
                     ),
                   const Spacer(),
@@ -179,7 +198,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     onPressed: _canContinue ? _next : null,
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: Text(_page == 0 ? 'Get started' : _page == 1 ? 'Continue' : 'Start exploring'),
+                      child: Text(_page == 0
+                          ? 'Get started'
+                          : _page == 1
+                              ? 'Continue'
+                              : 'Start exploring'),
                     ),
                   ),
                 ],
@@ -193,7 +216,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 }
 
 class _ChoiceCard extends StatelessWidget {
-  const _ChoiceCard({required this.icon, required this.label, required this.selected, required this.onTap});
+  const _ChoiceCard(
+      {required this.icon,
+      required this.label,
+      required this.selected,
+      required this.onTap});
   final IconData icon;
   final String label;
   final bool selected;
@@ -202,10 +229,14 @@ class _ChoiceCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: selected ? HuntrColors.amber.withValues(alpha: 0.14) : HuntrColors.surface,
+      color: selected
+          ? HuntrColors.amber.withValues(alpha: 0.14)
+          : HuntrColors.surface,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: selected ? HuntrColors.amber : Colors.transparent, width: 1.5),
+        side: BorderSide(
+            color: selected ? HuntrColors.amber : Colors.transparent,
+            width: 1.5),
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
@@ -215,7 +246,10 @@ class _ChoiceCard extends StatelessWidget {
           child: Row(children: [
             Icon(icon, color: selected ? HuntrColors.amber : HuntrColors.muted),
             const SizedBox(width: 14),
-            Expanded(child: Text(label, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600))),
+            Expanded(
+                child: Text(label,
+                    style: const TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.w600))),
             Icon(selected ? Icons.check_circle : Icons.circle_outlined,
                 color: selected ? HuntrColors.amber : HuntrColors.muted),
           ]),
