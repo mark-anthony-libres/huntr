@@ -1,0 +1,11 @@
+// Cloudflare hosting for the web build (https://huntr.marklibres345.workers.dev).
+// Deploy with tool/deploy_web.sh.
+{
+  "name": "huntr",
+  "compatibility_date": "2026-10-01",
+  "preview_urls": false,
+  "assets": {
+    "directory": "./build/web",
+    "not_found_handling": "single-page-application"
+  }
+}

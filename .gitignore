@@ -9,3 +9,34 @@ build/
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Flutter / Dart tooling
+.pub-cache/
+.pub/
+coverage/
+*.log
+
+# IDE
+.vscode/*
+!.vscode/launch.json
+!.vscode/tasks.json
+*.iws
+*.ipr
+
+# OS
+Thumbs.db
+
+# Android
+/android/.gradle/
+/android/local.properties
+/android/key.properties
+*.jks
+*.keystore
+
+# Keep client IDs in assets/google_oauth.json (public); never commit secrets
+.env
+.env.*
+
+# connect_phone.ps1 remembers the last phone address on this PC
+/tool/.phone_address
+.wrangler/
