@@ -1,8 +1,14 @@
-// Cloudflare hosting for the web build (https://huntr.marklibres345.workers.dev).
+// Cloudflare hosting for the web build (https://huntr.online).
 // Deploy with tool/deploy_web.sh.
 {
   "name": "huntr",
   "compatibility_date": "2026-10-01",
+  "routes": [
+    { "pattern": "huntr.online", "custom_domain": true },
+    { "pattern": "www.huntr.online", "custom_domain": true }
+  ],
+  // keep https://huntr.marklibres345.workers.dev working too
+  "workers_dev": true,
   "preview_urls": false,
   "assets": {
     "directory": "./build/web",

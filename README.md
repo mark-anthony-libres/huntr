@@ -47,7 +47,7 @@ The backend URL comes from a `--dart-define-from-file` file in `env/`:
 | `env/dev.json` | `http://localhost:18000/api` | Chrome (VS Code launch config) |
 | `env/phone.json` | `http://localhost:18000/api` | A phone over wireless debugging (`adb reverse`, see `tool/connect_phone.ps1`) |
 | `env/android.json` | `http://10.0.2.2:18000/api` | The Android emulator |
-| `env/prod.json` | `https://152-42-229-3.sslip.io/api` | Release builds and the hosted web app |
+| `env/prod.json` | `https://api.huntr.online/api` | Release builds and the hosted web app |
 
 ```
 flutter run -d chrome --dart-define-from-file=env/dev.json
@@ -61,12 +61,12 @@ The app is connected to the HUNTR backend (the separate `huntr-backend` reposito
 
 | Part | Address | Deploy |
 |---|---|---|
-| Web app | https://huntr.marklibres345.workers.dev | `tool/deploy_web.sh` (this repository) |
-| Backend API | https://152-42-229-3.sslip.io | `./deploy.sh` (in `huntr-backend`) |
+| Web app | https://huntr.online (also `www.` and https://huntr.marklibres345.workers.dev) | `tool/deploy_web.sh` (this repository) |
+| Backend API | https://api.huntr.online (old address https://152-42-229-3.sslip.io still works) | `./deploy.sh` (in `huntr-backend`) |
 
 ### Web app
 
-Hosted on Cloudflare Workers static assets (`wrangler.jsonc`). From Git Bash:
+Hosted on Cloudflare Workers static assets (`wrangler.jsonc`). The `huntr.online` domain is registered at Namecheap with its DNS on Cloudflare. From Git Bash:
 
 ```
 npx wrangler@4 login      # first time only
@@ -107,7 +107,7 @@ Google client IDs are public app configuration, not secrets. Set them once in `a
 ### Web
 
 - Create a **Web application** OAuth client.
-- In **Authorized JavaScript origins**, add every origin you open Huntr from: `http://localhost:7357` for local development with the command below, and `https://huntr.marklibres345.workers.dev` for the hosted web app. Origins have no path or query string. A missing origin shows Google's `Error 400: origin_mismatch`.
+- In **Authorized JavaScript origins**, add every origin you open Huntr from: `http://localhost:7357` for local development with the command below, and `https://huntr.online`, `https://www.huntr.online` and `https://huntr.marklibres345.workers.dev` for the hosted web app. Origins have no path or query string. A missing origin shows Google's `Error 400: origin_mismatch`.
 - The backend must also allow the origin: add it to `CORS_ORIGINS` in the server's `.env`.
 - Put this client's ID in both `webClientId` and `androidServerClientId` in `assets/google_oauth.json`.
 - Run normally, optionally pinning a stable local port:
