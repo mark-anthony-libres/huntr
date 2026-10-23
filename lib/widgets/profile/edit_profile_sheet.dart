@@ -237,7 +237,7 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
                         decoration: _borderedDecoration(
                           hint: 'Enter your display name',
                           error: _fieldErrors['display_name'],
-                          prefixIcon: const Icon(Icons.person_outline_rounded,
+                          prefixIcon: Icon(Icons.person_outline_rounded,
                               color: HuntrColors.orange),
                           suffixIcon: _displayName.text.isEmpty
                               ? null
@@ -301,7 +301,7 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
                               'You must be ${config.minAge} or older. This helps '
                               'others find people in their preferred age range.',
                           error: _fieldErrors['age'],
-                          prefixIcon: const Icon(Icons.calendar_today_outlined,
+                          prefixIcon: Icon(Icons.calendar_today_outlined,
                               color: HuntrColors.orange, size: 20),
                         ),
                         validator: (value) => _validateAge(value, config),

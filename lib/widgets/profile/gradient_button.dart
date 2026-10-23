@@ -18,7 +18,7 @@ class GradientButton extends StatelessWidget {
     return Opacity(
       opacity: onPressed == null ? 0.4 : 1,
       child: DecoratedBox(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
             gradient: HuntrColors.accentGradient,
             borderRadius: BorderRadius.all(Radius.circular(30))),
         child: FilledButton.icon(

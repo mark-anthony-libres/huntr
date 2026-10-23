@@ -152,7 +152,7 @@ Future<void> _location(
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         ListTile(
           key: const Key('location-now'),
-          leading: const Icon(Icons.place_outlined, color: HuntrColors.orange),
+          leading: Icon(Icons.place_outlined, color: HuntrColors.orange),
           title: const Text('Send current location',
               style: TextStyle(fontWeight: FontWeight.w700)),
           subtitle: const Text('Where you are right now',
@@ -161,8 +161,8 @@ Future<void> _location(
         ),
         ListTile(
           key: const Key('location-live'),
-          leading: const Icon(Icons.share_location_rounded,
-              color: HuntrColors.orange),
+          leading:
+              Icon(Icons.share_location_rounded, color: HuntrColors.orange),
           title: const Text('Share live location',
               style: TextStyle(fontWeight: FontWeight.w700)),
           subtitle: const Text(

@@ -93,7 +93,7 @@ class _MyStorySectionState extends State<MyStorySection> {
                                 color: HuntrColors.surfaceHigh)),
                       ),
                     )
-                  : const DecoratedBox(
+                  : DecoratedBox(
                       decoration: BoxDecoration(
                           gradient: HuntrColors.accentGradient,
                           shape: BoxShape.circle),

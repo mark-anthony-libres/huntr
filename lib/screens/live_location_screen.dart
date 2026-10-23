@@ -140,7 +140,7 @@ class _LiveLocationScreenState extends State<LiveLocationScreen> {
                           key: const Key('fitBoth'),
                           tooltip: 'Show both',
                           onPressed: () => _fitBoth(positions),
-                          icon: const Icon(Icons.zoom_out_map_rounded,
+                          icon: Icon(Icons.zoom_out_map_rounded,
                               color: HuntrColors.orange),
                         ),
                       ),
@@ -188,7 +188,7 @@ class _Banner extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
       color: HuntrColors.orange.withValues(alpha: 0.16),
       child: Row(children: [
-        const Icon(Icons.share_location_rounded, color: HuntrColors.orange),
+        Icon(Icons.share_location_rounded, color: HuntrColors.orange),
         const SizedBox(width: 10),
         const Expanded(
           child: Text('You’re sharing a live connection',

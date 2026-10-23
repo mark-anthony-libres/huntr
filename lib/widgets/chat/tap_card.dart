@@ -38,7 +38,7 @@ class TapCard extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Row(mainAxisSize: MainAxisSize.min, children: [
-              const Icon(Icons.waving_hand_rounded,
+              Icon(Icons.waving_hand_rounded,
                   size: 20, color: HuntrColors.orange),
               const SizedBox(width: 8),
               Flexible(

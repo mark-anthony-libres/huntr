@@ -56,8 +56,7 @@ class StoryReplyLabel extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 6, 12, 2),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
-        const Icon(Icons.auto_stories_outlined,
-            size: 14, color: HuntrColors.orange),
+        Icon(Icons.auto_stories_outlined, size: 14, color: HuntrColors.orange),
         const SizedBox(width: 4),
         Flexible(
           child: Text(

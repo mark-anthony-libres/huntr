@@ -117,7 +117,7 @@ class _MediaConfirmScreenState extends State<MediaConfirmScreen> {
               const SizedBox(width: 12),
               Expanded(
                 child: DecoratedBox(
-                  decoration: const BoxDecoration(
+                  decoration: BoxDecoration(
                       gradient: HuntrColors.accentGradient,
                       borderRadius: BorderRadius.all(Radius.circular(30))),
                   child: FilledButton.icon(

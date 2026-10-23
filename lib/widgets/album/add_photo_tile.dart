@@ -20,7 +20,7 @@ class AddPhotoTile extends StatelessWidget {
           radius: _radius,
         ),
         child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          const Icon(Icons.photo_camera_outlined,
+          Icon(Icons.photo_camera_outlined,
               color: HuntrColors.orange, size: 30),
           const SizedBox(height: 8),
           Padding(
@@ -28,7 +28,7 @@ class AddPhotoTile extends StatelessWidget {
             child: Text(label,
                 textAlign: TextAlign.center,
                 maxLines: 2,
-                style: const TextStyle(
+                style: TextStyle(
                     fontSize: 14,
                     height: 1.25,
                     fontWeight: FontWeight.w600,

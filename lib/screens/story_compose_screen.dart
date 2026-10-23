@@ -51,7 +51,7 @@ Future<bool> _roomForAnother(BuildContext context, StoryService service) async {
     context: context,
     builder: (context) => AlertDialog(
       key: const Key('storyLimit'),
-      icon: const Icon(Icons.auto_awesome_rounded, color: HuntrColors.orange),
+      icon: Icon(Icons.auto_awesome_rounded, color: HuntrColors.orange),
       title: Text("You've got ${StoryService.maxActive} stories up"),
       content: const Text(
           "That's the most at once. Each one disappears 24 hours after you "
@@ -228,7 +228,7 @@ class _StoryComposeScreenState extends State<StoryComposeScreen> {
                                             ? _player.pause()
                                             : _player.play()),
                                     child: VideoPlayer(_player))
-                                : const Center(
+                                : Center(
                                     child: CircularProgressIndicator(
                                         color: HuntrColors.orange)),
                           ),
@@ -241,7 +241,7 @@ class _StoryComposeScreenState extends State<StoryComposeScreen> {
                   if (_trimming) ...[
                     const SizedBox(height: 14),
                     Row(children: [
-                      const Icon(Icons.content_cut_rounded,
+                      Icon(Icons.content_cut_rounded,
                           size: 18, color: HuntrColors.orange),
                       const SizedBox(width: 8),
                       Expanded(
@@ -254,7 +254,7 @@ class _StoryComposeScreenState extends State<StoryComposeScreen> {
                           '${_clock(_start)} → '
                           '${_clock(_start + StoryService.maxLength)}',
                           key: const Key('storyTrimRange'),
-                          style: const TextStyle(
+                          style: TextStyle(
                               color: HuntrColors.orange,
                               fontWeight: FontWeight.w600)),
                     ]),
@@ -293,7 +293,7 @@ class _StoryComposeScreenState extends State<StoryComposeScreen> {
                       border: Border.all(
                           color: HuntrColors.orange.withValues(alpha: 0.4)),
                     ),
-                    child: const Row(
+                    child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Icon(Icons.public_rounded, color: HuntrColors.orange),

@@ -10,8 +10,7 @@ class ChatNotice extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-        const Icon(Icons.handshake_outlined,
-            size: 15, color: HuntrColors.orange),
+        Icon(Icons.handshake_outlined, size: 15, color: HuntrColors.orange),
         const SizedBox(width: 6),
         Flexible(
             child: Text(text,

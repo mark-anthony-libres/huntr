@@ -82,7 +82,7 @@ class _RateLimitScreenState extends State<RateLimitScreen> {
                     border: Border.all(
                         color: HuntrColors.orange.withValues(alpha: 0.4)),
                   ),
-                  child: const Icon(Icons.hourglass_top_rounded,
+                  child: Icon(Icons.hourglass_top_rounded,
                       size: 46, color: HuntrColors.orange),
                 ),
                 const SizedBox(height: 28),
@@ -105,7 +105,7 @@ class _RateLimitScreenState extends State<RateLimitScreen> {
                 const SizedBox(height: 6),
                 Text(clock,
                     key: const Key('rateLimitCountdown'),
-                    style: const TextStyle(
+                    style: TextStyle(
                         fontSize: 48,
                         fontWeight: FontWeight.w800,
                         color: HuntrColors.orange,

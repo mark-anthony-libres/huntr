@@ -98,8 +98,7 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
                 _follow = true;
                 _map.move(LatLng(position.latitude, position.longitude), 16);
               },
-              child: const Icon(Icons.my_location_rounded,
-                  color: HuntrColors.orange),
+              child: Icon(Icons.my_location_rounded, color: HuntrColors.orange),
             ),
     );
   }

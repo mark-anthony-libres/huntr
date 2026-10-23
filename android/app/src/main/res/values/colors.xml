@@ -3,4 +3,9 @@
     <!-- HuntrColors.night: the icon's and the splash screen's background -->
     <color name="ic_launcher_background">#0C0C0F</color>
     <color name="splash_background">#0C0C0F</color>
+    <!-- the discreet "Notes" launcher icon's background -->
+    <color name="ic_launcher_notes_background">#FFC93C</color>
+    <!-- the discreet "Weather" and "Clock" icons' backgrounds -->
+    <color name="ic_launcher_weather_background">#3B8EEA</color>
+    <color name="ic_launcher_clock_background">#1F1F24</color>
 </resources>

@@ -32,6 +32,7 @@ import 'services/rate_limit.dart';
 import 'widgets/location_gate.dart';
 import 'widgets/rate_limit_screen.dart';
 import 'widgets/update_required_screen.dart';
+import 'widgets/theme_follower.dart';
 import 'theme.dart';
 
 void main() {
@@ -197,26 +198,29 @@ class HuntrApp extends StatelessWidget {
               presence: presence,
               feedback: feedback,
               stories: stories,
-              child: MaterialApp(
-                title: 'HUNTR',
-                debugShowCheckedModeBanner: false,
-                theme: buildHuntrTheme(),
-                // too many requests: one full-screen notice over everything
-                // too old: "Time to update" over everything, even that
-                builder: (context, child) {
-                  final app = RateLimitOverlay(
-                      gate: rateLimitGate, child: _locationGate(child!));
-                  final updates = this.updates;
-                  return updates == null
-                      ? app
-                      : UpdateGateOverlay(gate: updates, child: app);
-                },
-                home: SessionGate(
-                  sessions: sessions,
-                  profiles: profiles,
-                  agreements: agreements,
-                  locate: locate,
-                  locationAccess: locationAccess,
+              child: ThemeFollower(
+                appearance: state.appearance,
+                builder: (context) => MaterialApp(
+                  title: 'HUNTR',
+                  debugShowCheckedModeBanner: false,
+                  theme: buildHuntrTheme(),
+                  // too many requests: one full-screen notice over everything
+                  // too old: "Time to update" over everything, even that
+                  builder: (context, child) {
+                    final app = RateLimitOverlay(
+                        gate: rateLimitGate, child: _locationGate(child!));
+                    final updates = this.updates;
+                    return updates == null
+                        ? app
+                        : UpdateGateOverlay(gate: updates, child: app);
+                  },
+                  home: SessionGate(
+                    sessions: sessions,
+                    profiles: profiles,
+                    agreements: agreements,
+                    locate: locate,
+                    locationAccess: locationAccess,
+                  ),
                 ),
               ),
             ),

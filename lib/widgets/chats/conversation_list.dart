@@ -353,14 +353,14 @@ class _MaskBadge extends StatelessWidget {
           borderRadius: BorderRadius.circular(10),
         ),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
-          const Icon(Icons.theater_comedy_outlined,
+          Icon(Icons.theater_comedy_outlined,
               size: 13, color: HuntrColors.orange),
           const SizedBox(width: 4),
           Flexible(
             child: Text('as $name',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
+                style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
                     color: HuntrColors.orange)),
@@ -477,7 +477,7 @@ class _ConversationRow extends StatelessWidget {
                         Padding(
                           padding: const EdgeInsets.only(right: 4),
                           child: last.read
-                              ? const Icon(Icons.done_all_rounded,
+                              ? Icon(Icons.done_all_rounded,
                                   key: Key('lastRead'),
                                   size: 16,
                                   color: HuntrColors.orange)
@@ -515,7 +515,7 @@ class _ConversationRow extends StatelessWidget {
                           height: 22,
                           padding: const EdgeInsets.symmetric(horizontal: 7),
                           alignment: Alignment.center,
-                          decoration: const BoxDecoration(
+                          decoration: BoxDecoration(
                               gradient: HuntrColors.accentGradient,
                               borderRadius:
                                   BorderRadius.all(Radius.circular(11))),

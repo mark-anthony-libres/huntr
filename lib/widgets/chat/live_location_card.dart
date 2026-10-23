@@ -8,7 +8,7 @@ import '../../theme.dart';
 import 'location_bubble.dart';
 
 /// The two people's colours on a shared live map.
-const myColor = HuntrColors.orange;
+Color get myColor => HuntrColors.orange;
 const theirColor = HuntrColors.active;
 
 /// A live location sharing request in the chat, and what became of it:

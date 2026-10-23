@@ -9,7 +9,9 @@ import '../widgets/me/privacy_settings_group.dart';
 import '../widgets/me/settings_group.dart';
 import '../widgets/profile/deactivate_account.dart';
 import '../widgets/profile/log_out.dart';
+import '../services/app_icon.dart';
 import 'agreement_screen.dart';
+import 'appearance_screen.dart';
 import 'blocked_users_screen.dart';
 import 'feedback_screen.dart';
 import 'unmatched_users_screen.dart';
@@ -47,6 +49,24 @@ class SettingsScreen extends StatelessWidget {
                     onChanged: (value) =>
                         AppScope.read(context).showVibeBanner = value,
                   ),
+                ),
+              ]),
+              _sectionGap,
+
+              // ---- appearance: theme, and (Android app) the icon ----
+              const SectionLabel('APPEARANCE'),
+              const SizedBox(height: 10),
+              SettingsGroup(children: [
+                SettingsRow(
+                  key: const Key('openAppearance'),
+                  icon: Icons.palette_outlined,
+                  title: 'Appearance',
+                  subtitle: AppIcons.supported
+                      ? '${AppScope.of(context).appearance.value.name} theme '
+                          'and app icon'
+                      : '${AppScope.of(context).appearance.value.name} theme',
+                  onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) => const AppearanceScreen())),
                 ),
               ]),
               _sectionGap,

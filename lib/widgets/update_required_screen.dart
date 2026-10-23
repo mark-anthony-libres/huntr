@@ -95,7 +95,7 @@ class UpdateRequiredScreen extends StatelessWidget {
                   child: Image.asset('assets/huntr_logo.png',
                       width: 88,
                       height: 88,
-                      errorBuilder: (_, __, ___) => const Icon(
+                      errorBuilder: (_, __, ___) => Icon(
                           Icons.system_update_rounded,
                           size: 72,
                           color: HuntrColors.orange)),

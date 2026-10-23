@@ -23,7 +23,7 @@ class _LoadMoreRowState extends State<LoadMoreRow> {
   }
 
   @override
-  Widget build(BuildContext context) => const Padding(
+  Widget build(BuildContext context) => Padding(
         padding: EdgeInsets.all(16),
         child: Center(
           child: SizedBox.square(

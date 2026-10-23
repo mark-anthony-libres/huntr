@@ -250,7 +250,7 @@ class _NoAlbums extends StatelessWidget {
             border:
                 Border.all(color: HuntrColors.orange.withValues(alpha: 0.4)),
           ),
-          child: const Icon(Icons.photo_library_outlined,
+          child: Icon(Icons.photo_library_outlined,
               size: 44, color: HuntrColors.orange),
         ),
         const SizedBox(height: 24),
@@ -273,7 +273,7 @@ class _NoAlbums extends StatelessWidget {
         SizedBox(
           width: double.infinity,
           child: DecoratedBox(
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
                 gradient: HuntrColors.accentGradient,
                 borderRadius: BorderRadius.all(Radius.circular(30))),
             child: FilledButton.icon(

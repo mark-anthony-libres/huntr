@@ -159,7 +159,7 @@ class ProfileScreen extends StatelessWidget {
               ),
               if (p.verified) ...[
                 const SizedBox(width: 8),
-                const Tooltip(
+                Tooltip(
                     message: 'Verified',
                     child: Icon(Icons.verified, color: HuntrColors.orange)),
               ],
@@ -206,7 +206,7 @@ class ProfileScreen extends StatelessWidget {
                     color: HuntrColors.orange.withValues(alpha: 0.5)),
               ),
               child: Row(children: [
-                const Icon(Icons.mark_chat_unread_outlined,
+                Icon(Icons.mark_chat_unread_outlined,
                     color: HuntrColors.orange),
                 const SizedBox(width: 12),
                 Expanded(
@@ -503,7 +503,7 @@ class _PreviewNotice extends StatelessWidget {
         borderRadius: BorderRadius.circular(30),
         border: Border.all(color: HuntrColors.orange, width: 1.4),
       ),
-      child: const Row(mainAxisSize: MainAxisSize.min, children: [
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
         Icon(Icons.visibility_outlined, size: 22, color: HuntrColors.orange),
         SizedBox(width: 10),
         Flexible(
@@ -587,8 +587,9 @@ class _RemoveUnmatchButtonState extends State<_RemoveUnmatchButton> {
 
 /// On a real person's profile, beside Message: one tap and they get it in
 /// their Taps inbox (no chat starts until they reply). Always "Tap": each
-/// one goes (counted up on their side) with a big wave; presses within
-/// [_gap] of the last one are ignored, so a burst is one tap.
+/// one goes (counted up on their side) with a big wave. A burst is one tap:
+/// presses are ignored until [_gap] passes without one (each press starts
+/// the wait again), like the backend.
 class _TapButton extends StatefulWidget {
   const _TapButton({required this.profile});
 
@@ -599,12 +600,13 @@ class _TapButton extends StatefulWidget {
 }
 
 class _TapButtonState extends State<_TapButton> {
-  /// The backend allows one tap per person each 2 seconds too.
-  static const _gap = Duration(seconds: 2);
+  /// The backend's TAP_COOLDOWN_SECONDS.
+  static const _gap = Duration(seconds: 5);
 
   bool _sending = false;
 
-  /// Running for [_gap] after each tap: presses meanwhile are ignored.
+  /// Running for [_gap] after each press: presses meanwhile are ignored,
+  /// and start it again.
   Timer? _cooling;
 
   @override
@@ -618,8 +620,10 @@ class _TapButtonState extends State<_TapButton> {
     final userId = widget.profile.backendId;
     // a burst of presses: only the first
     if (_sending || taps == null || userId == null) return;
-    if (_cooling?.isActive ?? false) return;
+    final burst = _cooling?.isActive ?? false;
+    _cooling?.cancel();
     _cooling = Timer(_gap, () {});
+    if (burst) return;
     final messenger = ScaffoldMessenger.of(context);
     final app = AppScope.read(context);
     setState(() => _sending = true);
@@ -653,7 +657,7 @@ class _TapButtonState extends State<_TapButton> {
       key: const Key('tapButton'),
       style: OutlinedButton.styleFrom(
         foregroundColor: HuntrColors.orange,
-        side: const BorderSide(color: HuntrColors.orange),
+        side: BorderSide(color: HuntrColors.orange),
         minimumSize: const Size(0, 52),
         shape: const StadiumBorder(),
       ),

@@ -164,8 +164,7 @@ class LimitNotice extends StatelessWidget {
         border: Border.all(color: HuntrColors.orange.withValues(alpha: 0.35)),
       ),
       child: Row(children: [
-        const Icon(Icons.info_outline_rounded,
-            color: HuntrColors.orange, size: 20),
+        Icon(Icons.info_outline_rounded, color: HuntrColors.orange, size: 20),
         const SizedBox(width: 10),
         Expanded(
             child: Text(message,

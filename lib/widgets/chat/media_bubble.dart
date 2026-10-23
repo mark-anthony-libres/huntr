@@ -106,7 +106,7 @@ class _Preview extends StatelessWidget {
     final url = attachment.previewUrl;
     final expiresAt = attachment.expiresAt;
     return Stack(fit: StackFit.expand, children: [
-      const DecoratedBox(
+      DecoratedBox(
           decoration: BoxDecoration(gradient: HuntrColors.glowGradient)),
       if (url != null)
         ImageFiltered(

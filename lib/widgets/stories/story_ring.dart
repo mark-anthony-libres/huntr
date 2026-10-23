@@ -41,13 +41,22 @@ class _StoryRingState extends State<StoryRing>
   late final AnimationController _turn =
       AnimationController(vsync: this, duration: const Duration(seconds: 3));
 
-  static const _colors = [
-    HuntrColors.orange,
-    HuntrColors.ember,
-    HuntrColors.coral,
-    Color(0xFFFFC14D),
-    HuntrColors.orange,
-  ];
+  /// HUNTR's own warm ring; other themes go round their own accent.
+  static List<Color> get _colors => HuntrColors.palette.id == 'orange'
+      ? [
+          HuntrColors.orange,
+          HuntrColors.ember,
+          HuntrColors.coral,
+          const Color(0xFFFFC14D),
+          HuntrColors.orange,
+        ]
+      : [
+          HuntrColors.orange,
+          HuntrColors.ember,
+          Color.lerp(HuntrColors.orange, Colors.white, 0.35)!,
+          HuntrColors.ember,
+          HuntrColors.orange,
+        ];
 
   bool get _moving =>
       widget.animate &&

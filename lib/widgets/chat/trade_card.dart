@@ -315,15 +315,14 @@ class _AlbumCard extends StatelessWidget {
         child:
             Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           Row(children: [
-            const Icon(Icons.swap_horiz_rounded,
-                size: 22, color: HuntrColors.orange),
+            Icon(Icons.swap_horiz_rounded, size: 22, color: HuntrColors.orange),
             const SizedBox(width: 8),
             Expanded(
               child: Text.rich(
                 TextSpan(children: [
                   TextSpan(
                       text: who,
-                      style: const TextStyle(
+                      style: TextStyle(
                           color: HuntrColors.orange,
                           fontWeight: FontWeight.w700)),
                   TextSpan(text: ' $verb'),
@@ -396,7 +395,7 @@ class _Cover extends StatelessWidget {
           aspectRatio: 2.2,
           child: Stack(fit: StackFit.expand, children: [
             // always underneath: shows if the preview is missing or fails
-            const DecoratedBox(
+            DecoratedBox(
                 decoration: BoxDecoration(gradient: HuntrColors.glowGradient)),
             if (url != null)
               Image.network(url,

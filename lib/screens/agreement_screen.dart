@@ -207,7 +207,7 @@ class _AgreementScreenState extends State<AgreementScreen> {
               value: _progress,
               minHeight: 3,
               backgroundColor: HuntrColors.surfaceHigh,
-              valueColor: const AlwaysStoppedAnimation(HuntrColors.orange),
+              valueColor: AlwaysStoppedAnimation(HuntrColors.orange),
             ),
           Expanded(child: _document()),
         ],
@@ -278,7 +278,7 @@ class _AgreementScreenState extends State<AgreementScreen> {
           height: 1.25,
           color: Colors.white),
       h1Padding: const EdgeInsets.only(bottom: 8),
-      h2: const TextStyle(
+      h2: TextStyle(
           fontSize: 18,
           fontWeight: FontWeight.w700,
           height: 1.3,
@@ -382,7 +382,7 @@ class _Header extends StatelessWidget {
         Container(
           width: 48,
           height: 48,
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             gradient: HuntrColors.accentGradient,
             shape: BoxShape.circle,
           ),

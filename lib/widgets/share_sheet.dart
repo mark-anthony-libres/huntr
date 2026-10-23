@@ -132,7 +132,7 @@ class _ShareSheetState extends State<_ShareSheet> {
               ],
               const SizedBox(height: 8),
               DecoratedBox(
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                     gradient: HuntrColors.accentGradient,
                     borderRadius: BorderRadius.all(Radius.circular(30))),
                 child: FilledButton.icon(

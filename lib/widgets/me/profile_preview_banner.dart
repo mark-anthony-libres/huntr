@@ -35,7 +35,7 @@ class ProfilePreviewBanner extends StatelessWidget {
                 color: HuntrColors.orange.withValues(alpha: 0.14),
                 borderRadius: BorderRadius.circular(14),
               ),
-              child: const Icon(Icons.visibility_outlined,
+              child: Icon(Icons.visibility_outlined,
                   color: HuntrColors.orange, size: 28),
             ),
             const SizedBox(width: 14),

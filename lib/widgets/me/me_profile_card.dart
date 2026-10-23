@@ -183,7 +183,7 @@ class _RingedAvatar extends StatelessWidget {
           Positioned.fill(
             child: Container(
               padding: const EdgeInsets.all(3),
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: HuntrColors.accentGradient,
               ),

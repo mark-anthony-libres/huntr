@@ -63,7 +63,7 @@ class LocationMap extends StatelessWidget {
             height: 66,
             alignment: Alignment.topCenter,
             child: person == null
-                ? const Icon(Icons.location_on_rounded,
+                ? Icon(Icons.location_on_rounded,
                     key: Key('locationPin'),
                     size: 40,
                     color: HuntrColors.orange)
@@ -281,7 +281,7 @@ class _NoPosition extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DecoratedBox(
-      decoration: const BoxDecoration(gradient: HuntrColors.glowGradient),
+      decoration: BoxDecoration(gradient: HuntrColors.glowGradient),
       child: Center(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           const Icon(Icons.location_off_outlined,
@@ -339,13 +339,15 @@ class MapZoomButtons extends StatelessWidget {
 
 /// Their profile photo in an orange ring, pointing at the spot.
 class PersonPin extends StatelessWidget {
-  const PersonPin(
-      {super.key, required this.person, this.color = HuntrColors.orange});
+  const PersonPin({super.key, required this.person, Color? color})
+      : _color = color;
 
   final Profile person;
 
-  /// The ring (each person has their own on a shared map).
-  final Color color;
+  /// The ring (each person has their own on a shared map); the theme's
+  /// accent by default.
+  final Color? _color;
+  Color get color => _color ?? HuntrColors.orange;
 
   @override
   Widget build(BuildContext context) {
@@ -420,7 +422,7 @@ class LiveMap extends StatelessWidget {
           (m, LatLng(m.position!.latitude, m.position!.longitude)),
     ];
     if (known.isEmpty) {
-      return const DecoratedBox(
+      return DecoratedBox(
         decoration: BoxDecoration(gradient: HuntrColors.glowGradient),
         child: Center(
           child: Text('Waiting for locations…',

@@ -271,7 +271,7 @@ class _ExploreMapState extends State<ExploreMap> {
 
       // ---- loading, and what the map shows ----
       if (_loading)
-        const Positioned(
+        Positioned(
           left: 0,
           right: 0,
           top: 0,

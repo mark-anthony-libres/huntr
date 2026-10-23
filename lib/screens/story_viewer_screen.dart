@@ -504,7 +504,7 @@ class _StoryViewerScreenState extends State<StoryViewerScreen> {
                                           width: player.value.size.width,
                                           height: player.value.size.height,
                                           child: VideoPlayer(player)))
-                                  : const CircularProgressIndicator(
+                                  : CircularProgressIndicator(
                                       color: HuntrColors.orange),
                         ),
                       ),
@@ -734,8 +734,7 @@ class _StoryViewerScreenState extends State<StoryViewerScreen> {
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(999),
-                            borderSide:
-                                const BorderSide(color: HuntrColors.orange),
+                            borderSide: BorderSide(color: HuntrColors.orange),
                           ),
                         ),
                       ),

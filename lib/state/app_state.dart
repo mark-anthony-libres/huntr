@@ -6,6 +6,7 @@ import 'package:flutter/widgets.dart';
 import '../data/sample_data.dart';
 import '../models/models.dart';
 import '../services/device_preferences.dart';
+import '../theme.dart';
 
 /// All app state for the prototype. Swap the sample data and the simulated replies for a real
 /// backend later; screens only talk to this class.
@@ -334,6 +335,18 @@ class AppState extends ChangeNotifier {
         (Object error) => debugPrint('Vibe banner choice not saved: $error')));
   }
 
+  /// The theme the app wears ([HuntrColors.palette]); the app's root
+  /// listens to redraw everything when it changes. Remembered on this device.
+  final appearance = ValueNotifier<HuntrPalette>(HuntrColors.palette);
+
+  void usePalette(HuntrPalette palette) {
+    if (appearance.value.id == palette.id) return;
+    HuntrColors.use(palette);
+    appearance.value = palette;
+    unawaited(devicePreferences?.saveThemeId(palette.id).catchError(
+        (Object error) => debugPrint('Theme choice not saved: $error')));
+  }
+
   /// What this device remembers, when the app starts.
   Future<void> loadDevicePreferences() async {
     try {
@@ -341,6 +354,12 @@ class AppState extends ChangeNotifier {
       if (show != null && show != _showVibeBanner) {
         _showVibeBanner = show;
         notifyListeners();
+      }
+      final themeId = await devicePreferences?.readThemeId();
+      final palette = huntrPalettes.where((p) => p.id == themeId).firstOrNull;
+      if (palette != null && palette.id != appearance.value.id) {
+        HuntrColors.use(palette);
+        appearance.value = palette;
       }
     } catch (error) {
       debugPrint('Device preferences not loaded: $error');

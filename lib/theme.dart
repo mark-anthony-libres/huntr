@@ -1,9 +1,127 @@
 import 'package:flutter/material.dart';
 
-/// Huntr colors: a warm orange-to-ember accent on a deep night background.
+/// One accent the app can wear (Settings > Theme): its main colour, the
+/// deeper end of its gradient, and the glow behind highlighted cards.
+class HuntrPalette {
+  const HuntrPalette({
+    required this.id,
+    required this.name,
+    required this.accent,
+    required this.ember,
+    required this.glow,
+  });
+
+  /// Saved on the device ('orange', 'blue', ...).
+  final String id;
+  final String name;
+  final Color accent;
+  final Color ember;
+  final List<Color> glow;
+}
+
+/// The themes to choose from; the first is HUNTR's own.
+const huntrPalettes = [
+  HuntrPalette(
+      id: 'orange',
+      name: 'Sunset',
+      accent: Color(0xFFFF7A1A),
+      ember: Color(0xFFFF4F1A),
+      glow: [Color(0xFF1E120B), Color(0xFF5C2408), Color(0xFFD9530F)]),
+  HuntrPalette(
+      id: 'blue',
+      name: 'Ocean',
+      accent: Color(0xFF3B9CFF),
+      ember: Color(0xFF2563EB),
+      glow: [Color(0xFF0B121E), Color(0xFF0B2A5C), Color(0xFF1F5FD9)]),
+  HuntrPalette(
+      id: 'purple',
+      name: 'Violet',
+      accent: Color(0xFFB06BFF),
+      ember: Color(0xFF7C3AED),
+      glow: [Color(0xFF150B1E), Color(0xFF3A0B5C), Color(0xFF8A2BD9)]),
+  HuntrPalette(
+      id: 'pink',
+      name: 'Rose',
+      accent: Color(0xFFFF5CA8),
+      ember: Color(0xFFE11D74),
+      glow: [Color(0xFF1E0B14), Color(0xFF5C0B33), Color(0xFFD91F6E)]),
+  HuntrPalette(
+      id: 'green',
+      name: 'Mint',
+      accent: Color(0xFF2EE59D),
+      ember: Color(0xFF10B981),
+      glow: [Color(0xFF0B1E15), Color(0xFF0B5C3A), Color(0xFF12B47A)]),
+  HuntrPalette(
+      id: 'red',
+      name: 'Crimson',
+      accent: Color(0xFFFF5252),
+      ember: Color(0xFFDC2626),
+      glow: [Color(0xFF1E0B0B), Color(0xFF5C0B0B), Color(0xFFD91F1F)]),
+  HuntrPalette(
+      id: 'gold',
+      name: 'Gold',
+      accent: Color(0xFFFFC83D),
+      ember: Color(0xFFF59E0B),
+      glow: [Color(0xFF1E180B), Color(0xFF5C430B), Color(0xFFD99A0F)]),
+  HuntrPalette(
+      id: 'peach',
+      name: 'Peach',
+      accent: Color(0xFFFFAB91),
+      ember: Color(0xFFFF7A59),
+      glow: [Color(0xFF1E130F), Color(0xFF5C2E1F), Color(0xFFD9704F)]),
+  HuntrPalette(
+      id: 'magenta',
+      name: 'Magenta',
+      accent: Color(0xFFE879F9),
+      ember: Color(0xFFC026D3),
+      glow: [Color(0xFF1A0B1E), Color(0xFF4F0B5C), Color(0xFFB01FD9)]),
+  HuntrPalette(
+      id: 'indigo',
+      name: 'Indigo',
+      accent: Color(0xFF8B93FF),
+      ember: Color(0xFF4F46E5),
+      glow: [Color(0xFF0E0B1E), Color(0xFF1F1A5C), Color(0xFF4F46D9)]),
+  HuntrPalette(
+      id: 'sky',
+      name: 'Sky',
+      accent: Color(0xFF7DD3FC),
+      ember: Color(0xFF38BDF8),
+      glow: [Color(0xFF0B161E), Color(0xFF0B3A5C), Color(0xFF1FA0D9)]),
+  HuntrPalette(
+      id: 'teal',
+      name: 'Lagoon',
+      accent: Color(0xFF2DD4BF),
+      ember: Color(0xFF0D9488),
+      glow: [Color(0xFF0B1E1C), Color(0xFF0B5C55), Color(0xFF0FB8A6)]),
+  HuntrPalette(
+      id: 'lime',
+      name: 'Lime',
+      accent: Color(0xFFA3E635),
+      ember: Color(0xFF65A30D),
+      glow: [Color(0xFF131E0B), Color(0xFF3A5C0B), Color(0xFF7AB40F)]),
+  HuntrPalette(
+      id: 'mono',
+      name: 'Mono',
+      accent: Color(0xFFE5E7EB),
+      ember: Color(0xFF9CA3AF),
+      glow: [Color(0xFF121214), Color(0xFF2E2F36), Color(0xFF6B7080)]),
+];
+
+/// Huntr colors: an accent (orange by default; see [huntrPalettes]) on a
+/// deep night background. The accent follows the chosen theme
+/// ([HuntrColors.use]); everything else stays.
 class HuntrColors {
-  static const orange = Color(0xFFFF7A1A);
-  static const ember = Color(0xFFFF4F1A);
+  static HuntrPalette _palette = huntrPalettes.first;
+
+  /// The theme in use.
+  static HuntrPalette get palette => _palette;
+
+  /// Wears [palette] from now on (the app rebuilds to show it).
+  static void use(HuntrPalette palette) => _palette = palette;
+
+  /// The accent (named for HUNTR's own orange).
+  static Color get orange => _palette.accent;
+  static Color get ember => _palette.ember;
   static const coral = Color(0xFFFF6B5B);
   static const night = Color(0xFF0C0C0F);
   static const surface = Color(0xFF16171C);
@@ -15,19 +133,19 @@ class HuntrColors {
   static const active = Color(0xFF3B82F6);
   static const muted = Color(0xFF9A9FAD);
 
-  static const accentGradient = LinearGradient(
-    colors: [orange, ember],
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-  );
+  static LinearGradient get accentGradient => LinearGradient(
+        colors: [orange, ember],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      );
 
   /// The warm glow behind highlighted cards (e.g. the Me profile card).
-  static const glowGradient = LinearGradient(
-    colors: [Color(0xFF1E120B), Color(0xFF5C2408), Color(0xFFD9530F)],
-    stops: [0, 0.5, 1],
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-  );
+  static LinearGradient get glowGradient => LinearGradient(
+        colors: _palette.glow,
+        stops: const [0, 0.5, 1],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      );
 }
 
 /// The app's font, everywhere. Text styles that replace the theme's (e.g. a
@@ -93,7 +211,7 @@ ThemeData buildHuntrTheme() {
               ? HuntrColors.orange
               : HuntrColors.border),
     ),
-    badgeTheme: const BadgeThemeData(
+    badgeTheme: BadgeThemeData(
       backgroundColor: HuntrColors.ember,
       textColor: Colors.white,
     ),

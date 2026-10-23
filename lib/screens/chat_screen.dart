@@ -508,7 +508,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     color: HuntrColors.surface,
                     borderRadius: BorderRadius.circular(18)),
                 child: Column(children: [
-                  const Icon(Icons.lock_outline, color: HuntrColors.orange),
+                  Icon(Icons.lock_outline, color: HuntrColors.orange),
                   const SizedBox(height: 6),
                   Text(
                       'You can message ${p.name} once a chat request is accepted.',
@@ -581,41 +581,53 @@ class _ChatScreenState extends State<ChatScreen> {
         child: Padding(
           padding: const EdgeInsets.fromLTRB(12, 6, 8, 10),
           child: Row(children: [
-            // no photos, videos, albums or locations in an anonymous chat
-            if (_conversationId != null && !anonymous) ...[
-              IconButton(
-                key: const Key('attachButton'),
-                tooltip: 'Photo, video or album trade',
-                style: IconButton.styleFrom(
-                  backgroundColor: HuntrColors.surfaceHigh,
-                  minimumSize: const Size(44, 44),
-                ),
-                icon: const Icon(Icons.add_rounded, color: HuntrColors.orange),
-                onPressed: () => showAttachMenu(context,
-                    conversationId: _conversationId!,
-                    recipient: p,
-                    // on a phone GIFs are in this menu
-                    onGif: wideComposer ? null : () => _pickGif(p)),
-              ),
-              const SizedBox(width: 6),
-            ],
-            // GIFs and stickers: their own button on wide screens, and in
-            // anonymous chats (which have no + menu); on a phone in a
-            // direct chat they're in the + menu
-            if (_conversationId != null && (anonymous || wideComposer)) ...[
-              IconButton(
-                key: const Key('gifButton'),
-                tooltip: 'GIF or sticker',
-                style: IconButton.styleFrom(
-                  backgroundColor: HuntrColors.surfaceHigh,
-                  minimumSize: const Size(44, 44),
-                ),
-                icon: const Icon(Icons.gif_box_outlined,
-                    color: HuntrColors.orange),
-                onPressed: () => _pickGif(p),
-              ),
-              const SizedBox(width: 6),
-            ],
+            // typing: the + (and GIF) buttons slide away, giving the text
+            // room; they come back when the box is empty
+            AnimatedSize(
+              duration: const Duration(milliseconds: 180),
+              curve: Curves.easeOut,
+              child: _input.text.isNotEmpty
+                  ? const SizedBox.shrink()
+                  : Row(mainAxisSize: MainAxisSize.min, children: [
+                      // no photos, videos, albums or locations in an anonymous chat
+                      if (_conversationId != null && !anonymous) ...[
+                        IconButton(
+                          key: const Key('attachButton'),
+                          tooltip: 'Photo, video or album trade',
+                          style: IconButton.styleFrom(
+                            backgroundColor: HuntrColors.surfaceHigh,
+                            minimumSize: const Size(44, 44),
+                          ),
+                          icon: Icon(Icons.add_rounded,
+                              color: HuntrColors.orange),
+                          onPressed: () => showAttachMenu(context,
+                              conversationId: _conversationId!,
+                              recipient: p,
+                              // on a phone GIFs are in this menu
+                              onGif: wideComposer ? null : () => _pickGif(p)),
+                        ),
+                        const SizedBox(width: 6),
+                      ],
+                      // GIFs and stickers: their own button on wide screens, and in
+                      // anonymous chats (which have no + menu); on a phone in a
+                      // direct chat they're in the + menu
+                      if (_conversationId != null &&
+                          (anonymous || wideComposer)) ...[
+                        IconButton(
+                          key: const Key('gifButton'),
+                          tooltip: 'GIF or sticker',
+                          style: IconButton.styleFrom(
+                            backgroundColor: HuntrColors.surfaceHigh,
+                            minimumSize: const Size(44, 44),
+                          ),
+                          icon: Icon(Icons.gif_box_outlined,
+                              color: HuntrColors.orange),
+                          onPressed: () => _pickGif(p),
+                        ),
+                        const SizedBox(width: 6),
+                      ],
+                    ]),
+            ),
             Expanded(
               // Enter sends; Shift+Enter adds a new line
               child: Focus(
@@ -910,7 +922,7 @@ class _ChatScreenState extends State<ChatScreen> {
                               // where I'm anonymous: whom they see
                               if (anonymous != null && anonymous.iAmAnonymous)
                                 Row(children: [
-                                  const Icon(Icons.theater_comedy_outlined,
+                                  Icon(Icons.theater_comedy_outlined,
                                       size: 13, color: HuntrColors.orange),
                                   const SizedBox(width: 4),
                                   Flexible(
@@ -919,7 +931,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                         key: const Key('anonymousAsHeader'),
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
+                                        style: TextStyle(
                                             fontSize: 12,
                                             color: HuntrColors.orange)),
                                   ),
@@ -1418,8 +1430,7 @@ class _PendingLiveBanner extends StatelessWidget {
         border: Border.all(color: HuntrColors.orange.withValues(alpha: 0.5)),
       ),
       child: Row(children: [
-        const Icon(Icons.share_location_rounded,
-            color: HuntrColors.orange, size: 20),
+        Icon(Icons.share_location_rounded, color: HuntrColors.orange, size: 20),
         const SizedBox(width: 10),
         Expanded(
           child: Text(
@@ -1488,7 +1499,7 @@ class _LiveBanner extends StatelessWidget {
                 Border.all(color: HuntrColors.orange.withValues(alpha: 0.5)),
           ),
           child: Row(children: [
-            const Icon(Icons.share_location_rounded,
+            Icon(Icons.share_location_rounded,
                 color: HuntrColors.orange, size: 20),
             const SizedBox(width: 10),
             const Expanded(

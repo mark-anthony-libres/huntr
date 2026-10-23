@@ -176,7 +176,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
                       ),
                       const SizedBox(height: 2),
                       Row(children: [
-                        const Icon(Icons.near_me_rounded,
+                        Icon(Icons.near_me_rounded,
                             size: 16, color: HuntrColors.orange),
                         const SizedBox(width: 6),
                         Flexible(

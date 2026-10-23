@@ -65,7 +65,7 @@ class VibeBanner extends StatelessWidget {
                             color: Color(0xFF241812),
                             shape: BoxShape.circle,
                           ),
-                          child: const Icon(Icons.auto_awesome_rounded,
+                          child: Icon(Icons.auto_awesome_rounded,
                               color: HuntrColors.orange, size: 28),
                         ),
                         const SizedBox(width: 14),

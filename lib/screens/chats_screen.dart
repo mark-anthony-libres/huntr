@@ -102,7 +102,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
                     key: const Key('requestsTab'),
                     avatar: incoming.isEmpty
                         ? null
-                        : const Icon(Icons.circle,
+                        : Icon(Icons.circle,
                             size: 10, color: HuntrColors.orange),
                     label: Text(
                         'Requests${incoming.isNotEmpty ? ' (${incoming.length})' : ''}'),

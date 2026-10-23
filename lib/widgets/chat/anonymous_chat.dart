@@ -213,8 +213,8 @@ class _AnswerButtons extends StatelessWidget {
       label: const Text('Unmatch'),
     );
     final accept = DecoratedBox(
-      decoration: const ShapeDecoration(
-          gradient: HuntrColors.accentGradient, shape: shape),
+      decoration:
+          ShapeDecoration(gradient: HuntrColors.accentGradient, shape: shape),
       child: FilledButton.icon(
         key: const Key('acceptReveal'),
         style: FilledButton.styleFrom(
@@ -418,7 +418,7 @@ class RevealedCard extends StatelessWidget {
               width: 40,
               height: 40,
               child: avatar == null
-                  ? const Icon(Icons.theater_comedy_rounded,
+                  ? Icon(Icons.theater_comedy_rounded,
                       color: HuntrColors.orange)
                   : AnonymousArt(animal: avatar!, radius: 20, size: 40),
             ),
@@ -441,7 +441,7 @@ class RevealedCard extends StatelessWidget {
                     TextSpan(text: '$who now knows '),
                     TextSpan(
                         text: name,
-                        style: const TextStyle(
+                        style: TextStyle(
                             color: HuntrColors.orange,
                             fontWeight: FontWeight.w700)),
                     const TextSpan(text: ' was you. Have fun chatting!'),
@@ -449,7 +449,7 @@ class RevealedCard extends StatelessWidget {
                 : TextSpan(children: [
                     TextSpan(
                         text: name,
-                        style: const TextStyle(
+                        style: TextStyle(
                             color: HuntrColors.orange,
                             fontWeight: FontWeight.w700)),
                     TextSpan(text: ' is $who! Say hi properly 👋'),
@@ -563,8 +563,7 @@ class RevealRequestCard extends StatelessWidget {
           border: Border.all(color: HuntrColors.orange.withValues(alpha: 0.45)),
         ),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
-          const Icon(Icons.visibility_outlined,
-              size: 18, color: HuntrColors.orange),
+          Icon(Icons.visibility_outlined, size: 18, color: HuntrColors.orange),
           const SizedBox(width: 8),
           Flexible(
             child: Text(

@@ -136,7 +136,7 @@ class _SendFeedbackScreenState extends State<SendFeedbackScreen> {
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(20),
                     borderSide:
-                        const BorderSide(color: HuntrColors.orange, width: 1.5),
+                        BorderSide(color: HuntrColors.orange, width: 1.5),
                   ),
                 ),
               ),
@@ -188,7 +188,7 @@ class _Header extends StatelessWidget {
         Container(
           width: 52,
           height: 52,
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
               gradient: HuntrColors.accentGradient, shape: BoxShape.circle),
           child: const Icon(Icons.favorite_rounded, color: Colors.black),
         ),
@@ -300,7 +300,7 @@ class _AddScreenshot extends StatelessWidget {
           key: const Key('addScreenshot'),
           borderRadius: BorderRadius.circular(18),
           onTap: onTap,
-          child: const Padding(
+          child: Padding(
             padding: EdgeInsets.all(16),
             child: Row(children: [
               Icon(Icons.add_photo_alternate_outlined,
@@ -548,7 +548,7 @@ class _FeedbackCard extends StatelessWidget {
                       const SizedBox(height: 8),
                       Wrap(spacing: 14, children: [
                         if (feedback.teamReply != null)
-                          const _Note(
+                          _Note(
                               icon: Icons.mark_chat_unread_outlined,
                               text: 'The team replied',
                               color: HuntrColors.orange),
@@ -643,7 +643,7 @@ class FeedbackDetailScreen extends StatelessWidget {
                   child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('From the HUNTR team',
+                        Text('From the HUNTR team',
                             style: TextStyle(
                                 color: HuntrColors.orange,
                                 fontWeight: FontWeight.w700)),

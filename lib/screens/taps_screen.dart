@@ -248,7 +248,7 @@ class _TapRow extends StatelessWidget {
                   key: Key('tapUnread-${tap.id}'),
                   width: 10,
                   height: 10,
-                  decoration: const BoxDecoration(
+                  decoration: BoxDecoration(
                       shape: BoxShape.circle, color: HuntrColors.orange),
                 ),
               ],
@@ -561,11 +561,11 @@ class _ViewerRow extends StatelessWidget {
                       color: HuntrColors.orange.withValues(alpha: 0.5)),
                 ),
                 child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  const Icon(Icons.visibility_rounded,
+                  Icon(Icons.visibility_rounded,
                       size: 15, color: HuntrColors.orange),
                   const SizedBox(width: 5),
                   Text(visits,
-                      style: const TextStyle(
+                      style: TextStyle(
                           color: HuntrColors.orange,
                           fontWeight: FontWeight.w700,
                           fontSize: 13)),

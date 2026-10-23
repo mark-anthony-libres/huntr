@@ -97,8 +97,7 @@ class _GifPickerState extends State<_GifPicker> {
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(28),
-                  borderSide:
-                      const BorderSide(color: HuntrColors.orange, width: 1.5),
+                  borderSide: BorderSide(color: HuntrColors.orange, width: 1.5),
                 ),
               ),
             ),

@@ -210,7 +210,7 @@ class _Hero extends StatelessWidget {
             color: HuntrColors.orange.withValues(alpha: 0.15),
             borderRadius: BorderRadius.circular(20),
           ),
-          child: const Row(mainAxisSize: MainAxisSize.min, children: [
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
             Icon(Icons.theater_comedy_outlined,
                 size: 15, color: HuntrColors.orange),
             SizedBox(width: 6),
@@ -361,7 +361,7 @@ class _RevealAction extends StatelessWidget {
       return Opacity(
         opacity: enabled || busy ? 1 : 0.45,
         child: DecoratedBox(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
               gradient: HuntrColors.accentGradient,
               borderRadius: BorderRadius.all(Radius.circular(30))),
           child: FilledButton.icon(

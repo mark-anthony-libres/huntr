@@ -367,8 +367,7 @@ class _StoryCameraScreenState extends State<StoryCameraScreen>
                       borderRadius: BorderRadius.circular(18),
                       child: CameraPreview(camera))
                   : _problem == null
-                      ? const CircularProgressIndicator(
-                          color: HuntrColors.orange)
+                      ? CircularProgressIndicator(color: HuntrColors.orange)
                       : const SizedBox.shrink(),
             ),
           ),
@@ -581,7 +580,7 @@ class _LiveOnlyLabel extends StatelessWidget {
             borderRadius: BorderRadius.circular(18),
           ),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            const Row(mainAxisSize: MainAxisSize.min, children: [
+            Row(mainAxisSize: MainAxisSize.min, children: [
               Icon(Icons.auto_awesome_rounded,
                   color: HuntrColors.orange, size: 18),
               SizedBox(width: 6),

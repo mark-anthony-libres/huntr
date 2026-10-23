@@ -33,7 +33,7 @@ class AlbumBubble extends StatelessWidget {
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
-            const Icon(Icons.photo_library_rounded,
+            Icon(Icons.photo_library_rounded,
                 size: 18, color: HuntrColors.orange),
             const SizedBox(width: 8),
             Expanded(
