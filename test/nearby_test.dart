@@ -22,7 +22,7 @@ NearbyPost _post(int id,
         bool liked = false}) =>
     NearbyPost(
         id: id,
-        author: NearbyName(name: name, avatar: 'fox'),
+        author: AnonymousName(name: name, avatar: 'fox'),
         body: 'Post $id',
         distanceM: mine ? 120 : distance,
         createdAt: _now.subtract(const Duration(minutes: 12)),
@@ -39,7 +39,7 @@ NearbyComment _comment(int id, String name, String body,
     NearbyComment(
         id: id,
         parentId: parent,
-        author: NearbyName(name: name, avatar: 'cat'),
+        author: AnonymousName(name: name, avatar: 'cat'),
         body: body,
         distanceM: 1200,
         createdAt: _now.subtract(const Duration(minutes: 5)),
@@ -67,16 +67,19 @@ class _FakeNearby extends NearbyService {
   }
 
   @override
-  Future<NearbyName> previewName(String token) async =>
-      const NearbyName(name: 'HappyMango', avatar: 'bear');
+  Future<NearbyFeedPage> mine(String token, {int offset = 0}) async =>
+      NearbyFeedPage(posts: [
+        for (final p in posts)
+          if (p.mine) p
+      ], nextOffset: null);
 
   @override
   Future<NearbyPost> post(String token,
-      {required String body, required int radiusM, NearbyName? as}) async {
+      {required String body, required int radiusM, AnonymousName? as}) async {
     calls.add('post $radiusM ${as?.name} $body');
     return NearbyPost(
         id: 50,
-        author: as ?? const NearbyName(name: 'X', avatar: 'fox'),
+        author: const AnonymousName(name: 'HappyMango', avatar: 'bear'),
         body: body,
         distanceM: null,
         createdAt: DateTime.now(),
@@ -141,7 +144,8 @@ Future<void> _open(WidgetTester tester, _FakeNearby service,
       agreements: null,
       nearby: service,
       child: MaterialApp(
-          theme: buildHuntrTheme(), home: home ?? const NearbyScreen()),
+          theme: buildHuntrTheme(),
+          home: home ?? const Scaffold(body: NearbyScreen())),
     ),
   ));
   await tester.pumpAndSettle();
@@ -175,13 +179,11 @@ void main() {
       ]
       ..next = 20;
     await _open(tester, service);
-    expect(find.text('Nearby'), findsWidgets);
-    expect(find.text('Anonymous posts from people around you'), findsOneWidget);
     expect(find.text('ChillCorgi'), findsOneWidget);
-    expect(find.text('320 m away · 12 min ago'), findsOneWidget);
-    expect(find.text('2.3 km away · 12 min ago'), findsOneWidget);
-    expect(find.text('You · 120 m away · within 5 km · 12 min ago'),
-        findsOneWidget);
+    expect(find.text('320 m away'), findsOneWidget);
+    expect(find.text('2.3 km away'), findsOneWidget);
+    expect(find.text('  ·  12m'), findsWidgets);
+    expect(find.text('You · 120 m away'), findsOneWidget);
     expect(find.byKey(const Key('nearbyComments-1')), findsOneWidget);
     expect(find.text('14'), findsOneWidget);
     expect(find.text('28'), findsOneWidget);
@@ -199,7 +201,7 @@ void main() {
     await tester.tap(find.byKey(const Key('nearbyWithin-1000')));
     await tester.pumpAndSettle();
     expect(service.calls, contains('feed latest 1000 0'));
-    expect(find.text('Within 1 km'), findsOneWidget);
+    expect(find.text('1 km'), findsOneWidget);
   });
 
   testWidgets(
@@ -221,14 +223,19 @@ void main() {
     expect(find.byKey(const Key('nearbyEmpty')), findsOneWidget);
   });
 
-  testWidgets('writing a post: counter, limit, radius, previewed name',
+  testWidgets('a new thread: counter, limit, distance, and my posts below',
       (tester) async {
-    final service = _FakeNearby()..posts = [_post(1)];
+    final service = _FakeNearby()
+      ..posts = [_post(1), _post(2, name: 'NightCat', mine: true, comments: 7)];
     await _open(tester, service);
     await tester.tap(find.byKey(const Key('nearbyCompose')));
     await tester.pumpAndSettle();
-    expect(find.text('HappyMango'), findsOneWidget); // the preview
-    expect(find.text('Within 5 km'), findsWidgets);
+    expect(find.text('New thread'), findsOneWidget);
+    // my posts, below
+    expect(find.text('My posts'), findsOneWidget);
+    expect(find.byKey(const Key('nearbyMine-2')), findsOneWidget);
+    expect(find.byKey(const Key('nearbyMine-1')), findsNothing);
+    expect(find.text('Within 5 km'), findsOneWidget);
     final post = find.byKey(const Key('nearbyPost'));
     expect(tester.widget<FilledButton>(post).onPressed, isNull); // empty
     await tester.enterText(find.byKey(const Key('nearbyText')), 'x' * 501);
@@ -239,15 +246,15 @@ void main() {
         find.byKey(const Key('nearbyText')), 'Any good coffee here?');
     await tester.pump();
     expect(find.text('21/500'), findsOneWidget);
-    // 1 km
-    final slider = tester.getRect(find.byKey(const Key('nearbyRadius')));
-    await tester
-        .tapAt(Offset(slider.left + slider.width * 0.27, slider.center.dy));
+    // how far: 1 km
+    await tester.tap(find.byKey(const Key('nearbyRadius')));
     await tester.pumpAndSettle();
-    expect(find.text('Within 1 km'), findsWidgets);
+    await tester.tap(find.byKey(const Key('nearbyRadius-1000')));
+    await tester.pumpAndSettle();
+    expect(find.text('Within 1 km'), findsOneWidget);
     await tester.tap(post);
     await tester.pumpAndSettle();
-    expect(service.calls.last, 'post 1000 HappyMango Any good coffee here?');
+    expect(service.calls.last, 'post 1000 null Any good coffee here?');
     // back on the feed, mine first
     expect(find.text('Posted as HappyMango 🎭'), findsOneWidget);
     final mine = tester.getTopLeft(find.byKey(const Key('nearbyPost-50'))).dy;

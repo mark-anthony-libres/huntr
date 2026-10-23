@@ -10,12 +10,11 @@ import '../theme.dart';
 import '../widgets/load_more_row.dart';
 import '../widgets/me/section_states.dart';
 import '../widgets/nearby/nearby_post_card.dart';
-import '../widgets/pill_tabs.dart';
 import 'nearby_compose_screen.dart';
 import 'nearby_post_screen.dart';
 
-/// The Nearby tab: anonymous posts from people around me - nearest or
-/// newest first, optionally only within a distance - and + to post one.
+/// Threads (in Explore): anonymous posts from people around me - nearest
+/// or newest first, optionally only within a distance - and Post to write one.
 /// Everyone shows as a random name and animal; the backend decides who
 /// sees what (each post's radius from where it was posted).
 class NearbyScreen extends StatefulWidget {
@@ -242,141 +241,169 @@ class _NearbyScreenState extends State<NearbyScreen> {
   Widget build(BuildContext context) {
     final posts = _posts;
     final now = DateTime.now();
+    return RefreshIndicator(
+      color: HuntrColors.orange,
+      onRefresh: _load,
+      child: LayoutBuilder(
+        builder: (context, box) {
+          // a centred column on a wide screen, like Taps
+          final side = box.maxWidth > 752 ? (box.maxWidth - 720) / 2 : 16.0;
+          return ListView(
+            key: const Key('nearbyList'),
+            padding: EdgeInsets.fromLTRB(side, 12, side, 24),
+            children: [
+              // ---- nearest or newest, and how far (a second line when
+              // the screen is narrow) ----
+              Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Expanded(
+                  child: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        for (final (latest, label, key) in const [
+                          (false, 'Nearby', 'nearbySortNearby'),
+                          (true, 'Latest', 'nearbySortLatest'),
+                        ]) ...[
+                          ChoiceChip(
+                            key: Key(key),
+                            visualDensity: VisualDensity.compact,
+                            materialTapTargetSize:
+                                MaterialTapTargetSize.shrinkWrap,
+                            labelPadding:
+                                const EdgeInsets.symmetric(horizontal: 4),
+                            label: Text(label),
+                            selected: _latest == latest,
+                            showCheckmark: false,
+                            selectedColor:
+                                HuntrColors.orange.withValues(alpha: 0.18),
+                            side: BorderSide(
+                                color: _latest == latest
+                                    ? HuntrColors.orange
+                                    : HuntrColors.border),
+                            onSelected: (_) => _sort(latest),
+                          ),
+                        ],
+                        ActionChip(
+                          key: const Key('nearbyWithin'),
+                          visualDensity: VisualDensity.compact,
+                          materialTapTargetSize:
+                              MaterialTapTargetSize.shrinkWrap,
+                          labelPadding:
+                              const EdgeInsets.symmetric(horizontal: 4),
+                          avatar:
+                              const Icon(Icons.location_on_outlined, size: 16),
+                          label: Row(mainAxisSize: MainAxisSize.min, children: [
+                            Text(_withinM == null
+                                ? 'Distance'
+                                : nearbyRadiusLabel(_withinM!)),
+                            const Icon(Icons.expand_more_rounded, size: 16),
+                          ]),
+                          onPressed: _pickWithin,
+                        ),
+                      ]),
+                ),
+                const SizedBox(width: 8),
+                // + to write one
+                IconButton.filled(
+                  key: const Key('nearbyCompose'),
+                  tooltip: 'New thread',
+                  style: IconButton.styleFrom(
+                      backgroundColor: HuntrColors.orange,
+                      foregroundColor: Colors.black,
+                      minimumSize: const Size(40, 40)),
+                  onPressed: _noLocation ? null : _compose,
+                  icon: const Icon(Icons.add_rounded),
+                ),
+              ]),
+              const SizedBox(height: 14),
+
+              // ---- the feed, or why not ----
+              if (ServicesScope.nearbyOf(context) == null)
+                const EmptyStateCard(
+                    icon: Icons.theater_comedy_outlined,
+                    title: 'Threads',
+                    message: 'Sign in to see threads from people around you.')
+              else if (_noLocation)
+                EmptyStateCard(
+                  key: const Key('nearbyNoLocation'),
+                  icon: Icons.location_off_outlined,
+                  title: 'Where are you?',
+                  message: 'Threads shows posts from people around you, so '
+                      'it needs your location. Turn it on, then try again.',
+                  actionLabel: 'Try again',
+                  onAction: _load,
+                )
+              else if (posts == null && _error != null)
+                LoadFailedCard(
+                  title: "Couldn't load Threads",
+                  message: _error!,
+                  onRetry: _load,
+                  retryKey: const Key('nearbyRetry'),
+                )
+              else if (posts == null)
+                const LoadingRows(count: 4, height: 150)
+              else if (posts.isEmpty)
+                EmptyStateCard(
+                  key: const Key('nearbyEmpty'),
+                  icon: Icons.theater_comedy_outlined,
+                  title: 'Quiet around here',
+                  message: 'No threads near you yet. Be the first: say '
+                      'something to the people around you.',
+                  actionLabel: 'Start a thread',
+                  onAction: _compose,
+                )
+              else ...[
+                for (final post in posts)
+                  NearbyPostCard(
+                    key: ValueKey('nearbyCard-${post.id}'),
+                    post: post,
+                    now: now,
+                    onLike: () => _like(post),
+                    onAction: (action) => _act(post, action),
+                    onOpen: () => _open(post),
+                  ),
+                if (_next != null)
+                  LoadMoreRow(onVisible: () => _load(more: true)),
+              ],
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// The Threads tab: its title (like the other tabs'), then [NearbyScreen].
+class ThreadsTab extends StatelessWidget {
+  const ThreadsTab({super.key});
+
+  @override
+  Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
     return Scaffold(
       body: SafeArea(
         bottom: false,
-        child: RefreshIndicator(
-          color: HuntrColors.orange,
-          onRefresh: _load,
-          child: LayoutBuilder(
-            builder: (context, box) {
-              // a centred column on a wide screen, like Taps
-              final side = box.maxWidth > 752 ? (box.maxWidth - 720) / 2 : 16.0;
-              return ListView(
-                key: const Key('nearbyList'),
-                padding: EdgeInsets.fromLTRB(side, 12, side, 24),
-                children: [
-                  // ---- header ----
-                  Row(children: [
-                    Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: HuntrColors.accentGradient),
-                      child: const Icon(Icons.theater_comedy_rounded,
-                          color: Colors.black),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text('Nearby',
-                          style: text.headlineMedium
-                              ?.copyWith(fontWeight: FontWeight.w800)),
-                    ),
-                    TextButton.icon(
-                      key: const Key('nearbyWithin'),
-                      onPressed: _pickWithin,
-                      style: TextButton.styleFrom(
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 8)),
-                      icon: const Icon(Icons.location_on_outlined, size: 18),
-                      label: Row(mainAxisSize: MainAxisSize.min, children: [
-                        Text(_withinM == null
-                            ? 'Nearby'
-                            : 'Within ${nearbyRadiusLabel(_withinM!)}'),
-                        const Icon(Icons.expand_more_rounded, size: 18),
-                      ]),
-                    ),
-                    const SizedBox(width: 4),
-                    IconButton.filled(
-                      key: const Key('nearbyCompose'),
-                      tooltip: 'New post',
-                      style: IconButton.styleFrom(
-                          backgroundColor: HuntrColors.orange,
-                          foregroundColor: Colors.black,
-                          minimumSize: const Size(48, 48)),
-                      onPressed: _noLocation ? null : _compose,
-                      icon: const Icon(Icons.add_rounded, size: 28),
-                    ),
-                  ]),
-                  // under the header, the whole width (it fits on a phone)
-                  const Padding(
-                    padding: EdgeInsets.only(top: 4),
-                    child: Text('Anonymous posts from people around you',
-                        style:
-                            TextStyle(color: HuntrColors.muted, fontSize: 13)),
-                  ),
-                  const SizedBox(height: 14),
-                  PillTabs(
-                    selected: _latest ? 1 : 0,
-                    onChanged: (i) => _sort(i == 1),
-                    tabs: const [
-                      PillTab(
-                          key: Key('nearbySortNearby'),
-                          icon: Icons.near_me_outlined,
-                          label: 'Nearby'),
-                      PillTab(
-                          key: Key('nearbySortLatest'),
-                          icon: Icons.schedule_rounded,
-                          label: 'Latest'),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-
-                  // ---- the feed, or why not ----
-                  if (ServicesScope.nearbyOf(context) == null)
-                    const EmptyStateCard(
-                        icon: Icons.theater_comedy_outlined,
-                        title: 'Nearby',
-                        message: 'Sign in to see posts from people around you.')
-                  else if (_noLocation)
-                    EmptyStateCard(
-                      key: const Key('nearbyNoLocation'),
-                      icon: Icons.location_off_outlined,
-                      title: 'Where are you?',
-                      message: 'Nearby shows posts from people around you, so '
-                          'it needs your location. Turn it on, then try again.',
-                      actionLabel: 'Try again',
-                      onAction: _load,
-                    )
-                  else if (posts == null && _error != null)
-                    LoadFailedCard(
-                      title: "Couldn't load Nearby",
-                      message: _error!,
-                      onRetry: _load,
-                      retryKey: const Key('nearbyRetry'),
-                    )
-                  else if (posts == null)
-                    const LoadingRows(count: 4, height: 150)
-                  else if (posts.isEmpty)
-                    EmptyStateCard(
-                      key: const Key('nearbyEmpty'),
-                      icon: Icons.theater_comedy_outlined,
-                      title: 'Quiet around here',
-                      message: 'No posts near you yet. Be the first: say '
-                          'something to the people around you.',
-                      actionLabel: 'Write a post',
-                      onAction: _compose,
-                    )
-                  else ...[
-                    for (final post in posts)
-                      NearbyPostCard(
-                        key: ValueKey('nearbyCard-${post.id}'),
-                        post: post,
-                        now: now,
-                        onLike: () => _like(post),
-                        onAction: (action) => _act(post, action),
-                        onOpen: () => _open(post),
-                      ),
-                    if (_next != null)
-                      LoadMoreRow(onVisible: () => _load(more: true)),
-                  ],
-                ],
-              );
-            },
+        child:
+            Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              ShaderMask(
+                shaderCallback: HuntrColors.accentGradient.createShader,
+                child: Text('Threads',
+                    style: text.headlineMedium?.copyWith(
+                        fontWeight: FontWeight.w800, color: Colors.white)),
+              ),
+              const SizedBox(height: 2),
+              const Text('Anonymous posts from people around you',
+                  style: TextStyle(color: HuntrColors.muted)),
+            ]),
           ),
-        ),
+          const SizedBox(height: 6),
+          const Expanded(child: NearbyScreen()),
+        ]),
       ),
     );
   }

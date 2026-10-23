@@ -225,7 +225,7 @@ class _NearbyPostScreenState extends State<NearbyPostScreen> {
                 commentCount: comments == null ? null : _commentTotal));
       },
       child: Scaffold(
-        appBar: AppBar(),
+        appBar: AppBar(title: const Text('Thread')),
         body: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 720),

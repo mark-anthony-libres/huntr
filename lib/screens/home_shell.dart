@@ -27,7 +27,7 @@ class HomeShell extends StatefulWidget {
 
 class _HomeShellState extends State<HomeShell> {
   // the tabs, in order
-  static const _exploreTab = 0; // Nearby is 1
+  static const _exploreTab = 0; // Threads is 1
   static const _tapsTab = 2;
   static const _chatsTab = 3;
 
@@ -222,7 +222,7 @@ class _HomeShellState extends State<HomeShell> {
         index: _tab,
         children: [
           const ExploreScreen(),
-          const NearbyScreen(),
+          const ThreadsTab(),
           const TapsScreen(),
           ChatsScreen(onExplore: () => setState(() => _tab = _exploreTab)),
           const MeScreen(),
@@ -233,18 +233,29 @@ class _HomeShellState extends State<HomeShell> {
         onSelected: (i) => setState(() => _tab = i),
         items: [
           const HuntrBottomBarItem(
-              icon: Icons.explore_outlined, label: 'Explore'),
+              icon: Icons.explore_outlined,
+              selectedIcon: Icons.explore,
+              label: 'Explore'),
           // anonymous posts from people around
           const HuntrBottomBarItem(
-              icon: Icons.location_on_outlined, label: 'Nearby'),
+              icon: Icons.forum_outlined,
+              selectedIcon: Icons.forum_rounded,
+              label: 'Threads'),
           HuntrBottomBarItem(
               icon: Icons.waving_hand_outlined,
+              selectedIcon: Icons.waving_hand_rounded,
               label: 'Taps',
               // unread taps and new viewers, both under Taps
               badge: (taps?.unreadCount ?? 0) + (taps?.newViewers ?? 0)),
           HuntrBottomBarItem(
-              icon: Icons.chat_bubble_outline, label: 'Chats', badge: unread),
-          const HuntrBottomBarItem(icon: Icons.person_outline, label: 'Me'),
+              icon: Icons.chat_bubble_outline,
+              selectedIcon: Icons.chat_bubble_rounded,
+              label: 'Chats',
+              badge: unread),
+          const HuntrBottomBarItem(
+              icon: Icons.person_outline,
+              selectedIcon: Icons.person_rounded,
+              label: 'Me'),
         ],
       ),
     );

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../services/huntr_backend.dart';
 import '../../services/nearby_service.dart';
 import '../../theme.dart';
+import '../../screens/chats_screen.dart' show timeLabel;
 import '../anonymous_avatar.dart';
 
 /// A random animal in a circle: who someone is on a Nearby post.
@@ -163,23 +164,42 @@ class NearbyPostCard extends StatelessWidget {
                   child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(post.author.name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                                fontSize: 16, fontWeight: FontWeight.w700)),
+                        // the name, and how long ago (short)
+                        Row(children: [
+                          Flexible(
+                            child: Text(post.author.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                    fontSize: 16, fontWeight: FontWeight.w700)),
+                          ),
+                          Text('  ·  ${timeLabel(post.createdAt, now)}',
+                              style: const TextStyle(
+                                  color: HuntrColors.muted, fontSize: 13)),
+                        ]),
                         const SizedBox(height: 2),
-                        Text(
-                            nearbyMeta(
-                                distanceM: distance,
-                                at: post.createdAt,
-                                now: now,
-                                mine: post.mine,
-                                radiusM: post.radiusM),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                                color: HuntrColors.muted, fontSize: 13)),
+                        // how far it is from me (mine too: from where I
+                        // wrote it)
+                        Row(children: [
+                          const Icon(Icons.location_on_outlined,
+                              size: 14, color: HuntrColors.muted),
+                          const SizedBox(width: 4),
+                          Flexible(
+                            child: Text(
+                                [
+                                  if (post.mine) 'You',
+                                  distance == null
+                                      ? 'Nearby'
+                                      : distance < 10
+                                          ? 'Right here'
+                                          : '${nearbyDistanceLabel(distance)} away',
+                                ].join(' · '),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                    color: HuntrColors.muted, fontSize: 13)),
+                          ),
+                        ]),
                       ]),
                 ),
                 NearbyMenu(mine: post.mine, onSelected: onAction),
@@ -214,15 +234,6 @@ class NearbyPostCard extends StatelessWidget {
                   ),
                 ),
                 const Spacer(),
-                if (distance != null) ...[
-                  Icon(Icons.location_on_rounded,
-                      size: 17, color: HuntrColors.muted),
-                  const SizedBox(width: 3),
-                  Text(nearbyDistanceLabel(distance),
-                      style: const TextStyle(
-                          color: HuntrColors.muted, fontSize: 14)),
-                  const SizedBox(width: 10),
-                ],
               ]),
             ]),
           ),

@@ -6,6 +6,7 @@ import 'package:flutter/widgets.dart';
 import '../data/sample_data.dart';
 import '../models/models.dart';
 import '../services/device_preferences.dart';
+import '../services/huntr_backend.dart' show AnonymousName;
 import '../theme.dart';
 
 /// All app state for the prototype. Swap the sample data and the simulated replies for a real
@@ -71,6 +72,7 @@ class AppState extends ChangeNotifier {
     myStats = const ProfileStats();
     anonymousMessaging = true;
     notifications = (taps: true, messages: true, storyReplies: true);
+    _anonymousName = null;
     myIsNew = false;
     albumLimits = null;
     onboarded = false;
@@ -101,6 +103,14 @@ class AppState extends ChangeNotifier {
 
   /// I may send anonymous messages (Settings); the backend enforces it.
   bool anonymousMessaging = true;
+
+  /// My anonymous name in anonymous chats and Threads (null: not loaded).
+  AnonymousName? _anonymousName;
+  AnonymousName? get anonymousName => _anonymousName;
+  set anonymousName(AnonymousName? name) {
+    _anonymousName = name;
+    notifyListeners();
+  }
 
   /// Push notifications for each kind (Settings > Notifications), as saved
   /// on the backend.

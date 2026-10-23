@@ -63,6 +63,11 @@ class ProfileService {
         notifyStoryReplies: notifyStoryReplies,
       );
 
+  /// A new random anonymous name for me, from now on.
+  Future<AnonymousName> changeAnonymousName(String token) async =>
+      changeMyAnonymousName(
+          backendUrl: await GoogleOAuthConfig.loadBackendUrl(), token: token);
+
   /// Permanently deletes the account and everything stored about it.
   Future<void> deleteAccount(String token) async => deleteMyAccount(
       backendUrl: await GoogleOAuthConfig.loadBackendUrl(), token: token);

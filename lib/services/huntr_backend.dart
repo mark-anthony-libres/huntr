@@ -98,6 +98,7 @@ class MyProfile {
     this.privacy = const PrivacySettings(),
     this.sexualPosition,
     this.stats = const ProfileStats(),
+    this.anonymousName,
   });
 
   factory MyProfile.fromJson(Map<String, dynamic> json) => MyProfile(
@@ -115,7 +116,14 @@ class MyProfile {
         privacy: PrivacySettings.fromJson(json),
         sexualPosition: json['sexual_position'] as String?,
         stats: ProfileStats.fromJson(json),
+        anonymousName: json['anonymous_name'] == null
+            ? null
+            : AnonymousName.fromJson(
+                json['anonymous_name'] as Map<String, dynamic>),
       );
+
+  /// My anonymous name in anonymous chats and Threads (only I see it's me).
+  final AnonymousName? anonymousName;
 
   /// Account name from Google.
   /// My user id (null from older backends).
@@ -3639,14 +3647,28 @@ Future<List<BlockedPerson>> fetchMyBlocks(
       ],
     );
 
+/// POST .../profile/me/anonymous-name: a new random anonymous name for me,
+/// from now on (what I already wrote keeps the old one).
+Future<AnonymousName> changeMyAnonymousName(
+        {required String backendUrl,
+        required String token,
+        http.Client? client}) =>
+    _sendAuthorized(
+      client,
+      (httpClient) => httpClient.post(
+          _endpoint(backendUrl, '/profile/me/anonymous-name'),
+          headers: _authorization(token)),
+      AnonymousName.fromJson,
+    );
+
 // ---- Nearby: anonymous posts around me ----
 
-/// Someone as they show in one Nearby post: a random name and animal (never
-/// who they are).
-class NearbyName {
-  const NearbyName({required this.name, required this.avatar});
+/// Someone's anonymous name and animal, like "SpicyHamster1234" - in
+/// anonymous chats and Threads (never who they are).
+class AnonymousName {
+  const AnonymousName({required this.name, required this.avatar});
 
-  factory NearbyName.fromJson(Map<String, dynamic> json) => NearbyName(
+  factory AnonymousName.fromJson(Map<String, dynamic> json) => AnonymousName(
       name: json['name'] as String, avatar: json['avatar'] as String);
 
   final String name;
@@ -3672,7 +3694,7 @@ class NearbyPost {
 
   factory NearbyPost.fromJson(Map<String, dynamic> json) => NearbyPost(
         id: json['id'] as int,
-        author: NearbyName.fromJson(json),
+        author: AnonymousName.fromJson(json),
         body: json['body'] as String,
         distanceM: json['distance_m'] as int?,
         createdAt: DateTime.parse(json['created_at'] as String).toLocal(),
@@ -3684,7 +3706,7 @@ class NearbyPost {
       );
 
   final int id;
-  final NearbyName author;
+  final AnonymousName author;
   final String body;
 
   /// From me to where it was posted, to 10 m (mine too).
@@ -3732,7 +3754,7 @@ class NearbyComment {
   factory NearbyComment.fromJson(Map<String, dynamic> json) => NearbyComment(
         id: json['id'] as int,
         parentId: json['parent_id'] as int?,
-        author: NearbyName.fromJson(json),
+        author: AnonymousName.fromJson(json),
         body: json['body'] as String,
         distanceM: json['distance_m'] as int?,
         createdAt: DateTime.parse(json['created_at'] as String).toLocal(),
@@ -3748,7 +3770,7 @@ class NearbyComment {
 
   final int id;
   final int? parentId;
-  final NearbyName author;
+  final AnonymousName author;
   final String body;
   final int? distanceM;
   final DateTime createdAt;
@@ -3834,16 +3856,25 @@ Future<NearbyFeedPage> fetchNearbyPosts(
           ),
         ));
 
-/// GET .../nearby/identity: a random name for the composer's preview.
-Future<NearbyName> fetchNearbyIdentity(
+/// GET .../nearby/mine: my live posts, newest first.
+Future<NearbyFeedPage> fetchMyNearbyPosts(
         {required String backendUrl,
         required String token,
+        int offset = 0,
         http.Client? client}) =>
     _sendAuthorized(
       client,
-      (httpClient) => httpClient.get(_nearby(backendUrl, '/identity'),
+      (httpClient) => httpClient.get(
+          _nearby(backendUrl, '/mine')
+              .replace(queryParameters: {'offset': '$offset'}),
           headers: _authorization(token)),
-      NearbyName.fromJson,
+      (data) => NearbyFeedPage(
+        posts: [
+          for (final p in data['posts'] as List)
+            NearbyPost.fromJson(p as Map<String, dynamic>),
+        ],
+        nextOffset: data['next_offset'] as int?,
+      ),
     );
 
 /// POST .../nearby/posts: my post, as [as] (the previewed name).
@@ -3852,7 +3883,7 @@ Future<NearbyPost> createNearbyPost(
         required String token,
         required String body,
         required int radiusM,
-        NearbyName? as,
+        AnonymousName? as,
         http.Client? client}) =>
     _nearbyCall(() => _sendAuthorized(
           client,

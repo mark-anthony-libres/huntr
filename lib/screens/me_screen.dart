@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../state/app_state.dart';
 import '../widgets/avatar.dart';
+import '../widgets/me/anonymous_name_card.dart';
 import '../widgets/me/me_profile_card.dart';
 import '../widgets/me/my_albums_section.dart';
 import '../widgets/me/my_story_section.dart';
@@ -36,6 +37,11 @@ class MeScreen extends StatelessWidget {
       const SizedBox(height: 16),
       const MyStorySection(),
       const SizedBox(height: 16),
+      // my anonymous name (chats and Threads), and Change
+      if (app.anonymousName != null) ...[
+        const AnonymousNameCard(),
+        const SizedBox(height: 16),
+      ],
       ProfilePreviewBanner(
         onViewProfile: () => Navigator.of(context).push(
           MaterialPageRoute(

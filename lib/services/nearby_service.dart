@@ -1,7 +1,7 @@
 import '../config/google_oauth_config.dart';
 import 'huntr_backend.dart' as backend;
 import 'huntr_backend.dart'
-    show NearbyDiscussion, NearbyName, NearbyFeedPage, NearbyPost;
+    show NearbyDiscussion, AnonymousName, NearbyFeedPage, NearbyPost;
 
 /// Nearby: anonymous text posts for the people around me (the backend
 /// decides who sees what, and never says who anyone is).
@@ -25,11 +25,13 @@ class NearbyService {
           withinM: withinM,
           offset: offset);
 
-  Future<NearbyName> previewName(String token) async =>
-      backend.fetchNearbyIdentity(backendUrl: await _url(), token: token);
+  /// My live posts, newest first.
+  Future<NearbyFeedPage> mine(String token, {int offset = 0}) async =>
+      backend.fetchMyNearbyPosts(
+          backendUrl: await _url(), token: token, offset: offset);
 
   Future<NearbyPost> post(String token,
-          {required String body, required int radiusM, NearbyName? as}) async =>
+          {required String body, required int radiusM, AnonymousName? as}) async =>
       backend.createNearbyPost(
           backendUrl: await _url(),
           token: token,

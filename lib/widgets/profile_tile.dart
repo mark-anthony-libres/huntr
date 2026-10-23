@@ -164,60 +164,12 @@ class ProfileTile extends StatelessWidget {
                         ),
                       ),
                     ]),
-                    if (!compact && profile.lookingFor.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      _LookingForTags(profile.lookingFor),
-                    ],
                   ],
                 ),
               ),
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-/// What they're looking for, as small pills, all alike;
-/// one line, whatever doesn't fit is left out.
-class _LookingForTags extends StatelessWidget {
-  const _LookingForTags(this.lookingFor);
-
-  final Set<LookingFor> lookingFor;
-
-  @override
-  Widget build(BuildContext context) {
-    final tags = [
-      for (final l in LookingFor.values)
-        if (lookingFor.contains(l)) l
-    ];
-    return SizedBox(
-      height: 28,
-      child: Wrap(
-        spacing: 6,
-        runSpacing: 8,
-        clipBehavior: Clip.hardEdge,
-        children: [
-          for (final l in tags)
-            Container(
-              height: 28,
-              padding: const EdgeInsets.symmetric(horizontal: 11),
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.35),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
-              ),
-              child: Center(
-                widthFactor: 1,
-                child: Text(l.label,
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600)),
-              ),
-            ),
-        ],
       ),
     );
   }
