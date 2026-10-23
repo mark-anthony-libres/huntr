@@ -179,7 +179,7 @@ class ProfileTile extends StatelessWidget {
   }
 }
 
-/// What they're looking for, as small pills (the first one highlighted);
+/// What they're looking for, as small pills, all alike;
 /// one line, whatever doesn't fit is left out.
 class _LookingForTags extends StatelessWidget {
   const _LookingForTags(this.lookingFor);
@@ -199,19 +199,14 @@ class _LookingForTags extends StatelessWidget {
         runSpacing: 8,
         clipBehavior: Clip.hardEdge,
         children: [
-          for (final (i, l) in tags.indexed)
+          for (final l in tags)
             Container(
               height: 28,
               padding: const EdgeInsets.symmetric(horizontal: 11),
               decoration: BoxDecoration(
-                color: i == 0
-                    ? const Color(0xFF7A3A12).withValues(alpha: 0.9)
-                    : Colors.black.withValues(alpha: 0.35),
+                color: Colors.black.withValues(alpha: 0.35),
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                    color: i == 0
-                        ? const Color(0xFF7A3A12)
-                        : Colors.white.withValues(alpha: 0.22)),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
               ),
               child: Center(
                 widthFactor: 1,

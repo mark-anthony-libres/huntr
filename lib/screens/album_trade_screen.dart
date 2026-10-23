@@ -6,6 +6,7 @@ import '../services/huntr_backend.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/me/profile_photo_grid.dart' show AlbumCard;
+import '../widgets/photo.dart';
 import '../widgets/me/section_states.dart';
 import 'my_album_screen.dart';
 
@@ -14,9 +15,9 @@ import 'my_album_screen.dart';
 ///
 /// - No albums: "Create an Album First". Creating one opens the usual album
 ///   screen (to add photos and videos); coming back lands here again, with
-///   the list refreshed, in the same trade.
-/// - One album: it's chosen at once (no list).
-/// - More: a list to choose from.
+///   the list refreshed, in the same trade (nothing is sent yet).
+/// - Otherwise a list to choose from, even of one album: nothing is sent
+///   until it's chosen.
 ///
 /// [onChosen] sends the choice and throws what the backend says; the screen
 /// closes (returning true) once it succeeds, and offers a retry if not.
@@ -27,7 +28,18 @@ class AlbumTradeScreen extends StatefulWidget {
     required this.intro,
     required this.sendingLabel,
     required this.onChosen,
+    this.waiting = const {},
+    this.onStopWaiting,
   });
+
+  /// Albums that can't be chosen now, by id (already offered here and still
+  /// waiting for an answer).
+  final Set<String> waiting;
+
+  /// Withdraws a waiting album's offer (throws what the backend says).
+  /// Given: tapping a waiting album offers to stop sharing it (it can't be
+  /// sent again while waiting).
+  final Future<void> Function(Album album)? onStopWaiting;
 
   final String title;
 
@@ -50,13 +62,16 @@ class _AlbumTradeScreenState extends State<AlbumTradeScreen> {
   Album? _sending;
   String? _sendError;
 
+  /// [AlbumTradeScreen.waiting], less the offers withdrawn here.
+  late final Set<String> _waiting = {...widget.waiting};
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
   }
 
-  /// My albums from the backend; one album is chosen at once.
+  /// My albums from the backend.
   Future<void> _load() async {
     final app = AppScope.read(context);
     final token = app.sessionToken;
@@ -81,7 +96,6 @@ class _AlbumTradeScreenState extends State<AlbumTradeScreen> {
     if (!mounted) return;
     final albums = List<Album>.of(app.myAlbums);
     setState(() => _albums = albums);
-    if (albums.length == 1) await _choose(albums.single);
   }
 
   Future<void> _choose(Album album) async {
@@ -102,6 +116,52 @@ class _AlbumTradeScreenState extends State<AlbumTradeScreen> {
             : 'Check your connection and try again.');
       }
     }
+  }
+
+  /// A waiting album: stop sharing it (withdraw the offer).
+  Future<void> _waitingActions(Album album) async {
+    final stop = widget.onStopWaiting;
+    if (stop == null) return;
+    final confirmed = await showModalBottomSheet<bool>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+            child: Text('“${album.name}” is offered and waiting for an answer.',
+                style: const TextStyle(color: HuntrColors.muted)),
+          ),
+          ListTile(
+            key: const Key('tradeStopSharing'),
+            leading: const Icon(Icons.block_rounded, color: HuntrColors.coral),
+            title: const Text('Stop sharing',
+                style: TextStyle(color: HuntrColors.coral)),
+            subtitle: const Text('Withdraw the offer'),
+            onTap: () => Navigator.of(context).pop(true),
+          ),
+        ]),
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _sendError = null);
+    try {
+      await stop(album);
+    } on SessionRejectedException {
+      if (mounted) AppScope.read(context).endSession();
+      return;
+    } catch (error) {
+      if (mounted) {
+        setState(() => _sendError = error is BackendException
+            ? error.message
+            : 'Check your connection and try again.');
+      }
+      return;
+    }
+    if (!mounted) return;
+    setState(() => _waiting.remove(album.id));
+    ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Stopped sharing “${album.name}”')));
   }
 
   /// The usual album creation (name, then the album screen to add photos
@@ -148,22 +208,19 @@ class _AlbumTradeScreenState extends State<AlbumTradeScreen> {
                   )
                 : albums == null
                     ? const Center(child: CircularProgressIndicator())
-                    : sending != null &&
-                            (albums.length == 1 || _sendError == null)
-                        ? _Sending(
-                            album: sending,
-                            label: widget.sendingLabel,
-                            error: _sendError,
-                            onRetry: () => _choose(sending),
-                            onBack: () => Navigator.of(context).pop(false),
-                          )
+                    : sending != null && _sendError == null
+                        ? _Sending(album: sending, label: widget.sendingLabel)
                         : albums.isEmpty
                             ? _NoAlbums(onCreate: _createAlbum)
                             : _AlbumList(
                                 intro: widget.intro,
                                 albums: albums,
+                                waiting: _waiting,
                                 error: _sendError,
                                 onChoose: _choose,
+                                onWaiting: widget.onStopWaiting == null
+                                    ? null
+                                    : _waitingActions,
                               ),
           ),
         ),
@@ -243,12 +300,18 @@ class _AlbumList extends StatelessWidget {
     required this.albums,
     required this.error,
     required this.onChoose,
+    this.waiting = const {},
+    this.onWaiting,
   });
 
   final String intro;
   final List<Album> albums;
+  final Set<String> waiting;
   final String? error;
   final void Function(Album album) onChoose;
+
+  /// A waiting album tapped (null: it can't be).
+  final void Function(Album album)? onWaiting;
 
   @override
   Widget build(BuildContext context) {
@@ -271,31 +334,120 @@ class _AlbumList extends StatelessWidget {
             child: _ErrorLine(message: error!),
           ),
         for (final album in albums)
-          AlbumCard(
-            key: Key('tradeAlbum-${album.id}'),
-            album: album,
-            onTap: () => onChoose(album),
-          ),
+          if (waiting.contains(album.id))
+            // already offered and waiting: not to choose, but its offer can
+            // be withdrawn
+            _WaitingAlbumCard(
+                key: Key('tradeAlbumWaiting-${album.id}'),
+                album: album,
+                onStop: onWaiting == null ? null : () => onWaiting!(album))
+          else
+            AlbumCard(
+              key: Key('tradeAlbum-${album.id}'),
+              album: album,
+              onTap: () => onChoose(album),
+            ),
       ],
     );
   }
 }
 
-/// Sending the choice (or why it failed, with a retry).
-class _Sending extends StatelessWidget {
-  const _Sending({
+/// An album already offered here and still waiting for an answer: like
+/// the others, with Stop sharing in place of the arrow (it can't be offered
+/// again meanwhile).
+class _WaitingAlbumCard extends StatelessWidget {
+  const _WaitingAlbumCard({
+    super.key,
     required this.album,
-    required this.label,
-    required this.error,
-    required this.onRetry,
-    required this.onBack,
+    required this.onStop,
   });
 
   final Album album;
+  final VoidCallback? onStop;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Material(
+        color: HuntrColors.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+          side: const BorderSide(color: HuntrColors.border),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          key: Key('tradeAlbum-${album.id}'),
+          onTap: onStop,
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(children: [
+              SizedBox(
+                width: 60,
+                height: 60,
+                child: album.photos.isEmpty
+                    ? Container(
+                        decoration: BoxDecoration(
+                          color: HuntrColors.surfaceHigh,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.photo_library_outlined,
+                            color: HuntrColors.muted),
+                      )
+                    : PhotoArt(
+                        photo: album.photos.first, radius: 10, iconSize: 22),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(album.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            fontSize: 17, fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 2),
+                    Text('${album.contentsLabel} · Private',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: HuntrColors.muted)),
+                  ],
+                ),
+              ),
+              if (onStop != null) ...[
+                const SizedBox(width: 8),
+                OutlinedButton(
+                  key: Key('stopSharing-${album.id}'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: HuntrColors.coral,
+                    side: BorderSide(
+                        color: HuntrColors.coral.withValues(alpha: 0.6)),
+                    minimumSize: const Size(0, 36),
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    visualDensity: VisualDensity.compact,
+                    shape: const StadiumBorder(),
+                  ),
+                  onPressed: onStop,
+                  child: const Text('Stop sharing',
+                      style:
+                          TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                ),
+              ],
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Sending the choice (a failure shows in the list, to choose again).
+class _Sending extends StatelessWidget {
+  const _Sending({required this.album, required this.label});
+
+  final Album album;
   final String label;
-  final String? error;
-  final VoidCallback onRetry;
-  final VoidCallback onBack;
 
   @override
   Widget build(BuildContext context) {
@@ -304,37 +456,10 @@ class _Sending extends StatelessWidget {
       child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
         AlbumCard(album: album, onTap: () {}),
         const SizedBox(height: 20),
-        if (error == null) ...[
-          const CircularProgressIndicator(),
-          const SizedBox(height: 16),
-          Text('$label “${album.name}”…',
-              style: const TextStyle(color: HuntrColors.muted)),
-        ] else ...[
-          _ErrorLine(message: error!),
-          const SizedBox(height: 18),
-          Row(children: [
-            Expanded(
-              child: OutlinedButton(
-                style: OutlinedButton.styleFrom(
-                    minimumSize: const Size(48, 50),
-                    shape: const StadiumBorder()),
-                onPressed: onBack,
-                child: const Text('Back'),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: FilledButton(
-                key: const Key('retryTrade'),
-                style: FilledButton.styleFrom(
-                    minimumSize: const Size(48, 50),
-                    shape: const StadiumBorder()),
-                onPressed: onRetry,
-                child: const Text('Try again'),
-              ),
-            ),
-          ]),
-        ],
+        const CircularProgressIndicator(),
+        const SizedBox(height: 16),
+        Text('$label “${album.name}”…',
+            style: const TextStyle(color: HuntrColors.muted)),
       ]),
     );
   }

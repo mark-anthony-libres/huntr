@@ -24,7 +24,16 @@ class TradeCard extends StatelessWidget {
     required this.onOpenMine,
     this.busy = false,
     this.wrapOffer,
+    this.returnOnly = false,
+    this.onJumpTo,
   });
+
+  /// Goes to another message of the chat (the album traded back).
+  final void Function(int messageId)? onJumpTo;
+
+  /// The album chosen in return, as its own message (the trade's return
+  /// message): only that card.
+  final bool returnOnly;
 
   final ChatMessage message;
 
@@ -49,6 +58,29 @@ class TradeCard extends StatelessWidget {
     final me = trade.fromMe;
     final name = other.name.isEmpty ? 'They' : other.name;
     final completed = trade.status == TradeStatus.completed;
+    final returned = _AlbumCard(
+      key: Key('tradeBack-${trade.id}'),
+      mine: !me,
+      who: me ? name : 'You',
+      // which offer it answers
+      verb: switch (trade.offeredAlbum?.name) {
+        final offered? => 'traded back for “$offered”',
+        null => 'traded an album',
+      },
+      time: trade.completedAt ?? message.sentAt,
+      album: trade.returnedAlbum,
+      status: null,
+      coverAction: _view(trade.returnedAlbum, theirs: me),
+      footer: [
+        if (me) ..._countdown(trade.returnedAlbum),
+        // mine, given back: can they still open it?
+        if (!me) ..._theirAccess(trade.returnedAlbum, name),
+      ],
+    );
+    if (returnOnly) return wrapOffer?.call(returned) ?? returned;
+    // the album chosen came as its own message further down (older trades
+    // show it here, under the offer)
+    final returnedBelow = completed && trade.returnMessageId != null;
     // the offer: theirs to open once completed, mine to open any time
     final offerTheirs = !me && completed;
     final offerAction =
@@ -64,24 +96,78 @@ class TradeCard extends StatelessWidget {
       coverAction: offerAction,
       footer: [
         if (offerTheirs) ..._countdown(trade.offeredAlbum),
+        // mine, offered: can they still open it?
+        if (me && completed) ..._theirAccess(trade.offeredAlbum, name),
         ..._offerFooter(trade, name),
+        if (returnedBelow)
+          // which album came back, and a way to it
+          InkWell(
+            key: Key('tradedBelow-${trade.id}'),
+            borderRadius: BorderRadius.circular(8),
+            onTap: onJumpTo == null
+                ? null
+                : () => onJumpTo!(trade.returnMessageId!),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(children: [
+                const Icon(Icons.check_circle_rounded,
+                    size: 16, color: HuntrColors.online),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                      switch (trade.returnedAlbum?.name) {
+                        final back? => me
+                            ? 'Traded for $name\'s “$back” · see below'
+                            : 'Traded for your “$back” · see below',
+                        null => 'Traded · see below',
+                      },
+                      style: const TextStyle(
+                          color: HuntrColors.muted, fontSize: 13)),
+                ),
+                if (onJumpTo != null)
+                  const Icon(Icons.arrow_downward_rounded,
+                      size: 16, color: HuntrColors.muted),
+              ]),
+            ),
+          ),
       ],
     );
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       wrapOffer?.call(offer) ?? offer,
-      if (completed)
-        _AlbumCard(
-          key: Key('tradeBack-${trade.id}'),
-          mine: !me,
-          who: me ? name : 'You',
-          verb: 'traded an album',
-          time: trade.completedAt ?? message.sentAt,
-          album: trade.returnedAlbum,
-          status: null,
-          coverAction: _view(trade.returnedAlbum, theirs: me),
-          footer: [if (me) ..._countdown(trade.returnedAlbum)],
-        ),
+      if (completed && !returnedBelow) returned,
     ]);
+  }
+
+  /// Under my own album once traded: whether [name] can still open it.
+  List<Widget> _theirAccess(TradeAlbum? album, String name) {
+    if (album == null) return const [];
+    final expiresAt = album.expiresAt;
+    final (IconData icon, String text, Color color) = album.expiredAt(now)
+        ? (
+            Icons.lock_clock_outlined,
+            "$name can't open it anymore",
+            HuntrColors.coral
+          )
+        : expiresAt != null
+            ? (
+                Icons.timer_outlined,
+                '$name can open it for ${remainingLabel(expiresAt, now)}',
+                HuntrColors.muted
+              )
+            : (
+                Icons.visibility_off_outlined,
+                "$name hasn't opened it yet",
+                HuntrColors.muted
+              );
+    return [
+      Row(key: const Key('tradeTheirAccess'), children: [
+        Icon(icon, size: 15, color: color),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(text, style: TextStyle(color: color, fontSize: 12.5)),
+        ),
+      ]),
+    ];
   }
 
   List<Widget> _offerFooter(AlbumTrade trade, String name) {

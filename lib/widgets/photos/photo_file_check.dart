@@ -24,6 +24,14 @@ ImageFileType detectImageType(List<int> bytes) {
   return ImageFileType.other;
 }
 
+/// A browser's own camera recording (WebM) starts with the EBML header.
+bool isWebmFile(List<int> bytes) =>
+    bytes.length >= 4 &&
+    bytes[0] == 0x1a &&
+    bytes[1] == 0x45 &&
+    bytes[2] == 0xdf &&
+    bytes[3] == 0xa3;
+
 /// MP4 and MOV files start with an `ftyp` box (the backend checks properly).
 bool isVideoFile(List<int> bytes) =>
     bytes.length >= 12 &&

@@ -14,8 +14,22 @@ import '../widgets/stories/story_round_button.dart';
 /// [StoryService.maxLength], and it stops by itself then. There's no way to
 /// pick a video from the gallery: a story is a moment as it happens. Pops
 /// with the recording, or null.
+///
+/// With [story] false it's the chat's camera on a computer's browser (whose
+/// file input can't open the webcam): a [photo], or a video up to
+/// [maxLength]; without a camera, a file can be chosen instead.
 class StoryCameraScreen extends StatefulWidget {
-  const StoryCameraScreen({super.key});
+  const StoryCameraScreen(
+      {super.key, this.story = true, this.photo = false, this.maxLength});
+
+  /// A story (the default); false: a photo or video for a chat.
+  final bool story;
+
+  /// Takes a photo instead of recording.
+  final bool photo;
+
+  /// The longest recording (stories: [StoryService.maxLength]).
+  final Duration? maxLength;
 
   /// The shortest recording a story takes.
   static const minLength = Duration(seconds: 1);
@@ -56,15 +70,16 @@ class _StoryCameraScreenState extends State<StoryCameraScreen>
 
   bool get _isRecording => _camera?.value.isRecordingVideo ?? false;
 
+  Duration get _maxLength => widget.maxLength ?? StoryService.maxLength;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _recording =
-        AnimationController(vsync: this, duration: StoryService.maxLength)
-          ..addStatusListener((status) {
-            if (status == AnimationStatus.completed) _stop();
-          });
+    _recording = AnimationController(vsync: this, duration: _maxLength)
+      ..addStatusListener((status) {
+        if (status == AnimationStatus.completed) _stop();
+      });
     _open();
   }
 
@@ -129,9 +144,10 @@ class _StoryCameraScreenState extends State<StoryCameraScreen>
       if (_cameras.isEmpty) {
         throw CameraException('NoCamera', 'No camera found.');
       }
-      final camera = CameraController(_cameras[_which], ResolutionPreset.high);
+      final camera = CameraController(_cameras[_which], ResolutionPreset.high,
+          enableAudio: !widget.photo);
       await camera.initialize();
-      await camera.prepareForVideoRecording();
+      if (!widget.photo) await camera.prepareForVideoRecording();
       if (!mounted) {
         await camera.dispose();
         return;
@@ -182,8 +198,10 @@ class _StoryCameraScreenState extends State<StoryCameraScreen>
   /// straight to recording - still nothing from the gallery).
   Future<void> _recordWithPhone() async {
     try {
-      final video = await ChatMediaPicker.instance
-          .recordVideo(maxDuration: StoryService.maxLength);
+      final picker = ChatMediaPicker.instance;
+      final video = widget.photo
+          ? await picker.takePhoto()
+          : await picker.recordVideo(maxDuration: _maxLength);
       if (video != null && mounted) Navigator.of(context).pop(video);
     } catch (error) {
       debugPrint('Phone camera not opened: $error');
@@ -195,21 +213,30 @@ class _StoryCameraScreenState extends State<StoryCameraScreen>
   ({String title, String body, String? blocked}) _explain(
       CameraException error) {
     final code = error.code.toLowerCase();
-    final seconds = StoryService.maxLength.inSeconds;
+    final seconds = _maxLength.inSeconds;
+    final what = widget.story
+        ? 'record a story'
+        : widget.photo
+            ? 'take a photo'
+            : 'record a video';
     final refused = code.contains('denied') ||
         code.contains('restricted') ||
         code.contains('permission');
     if (refused && code.contains('audio')) {
       return (
         title: "Let's turn your microphone on",
-        body: 'Stories have sound, so HUNTR needs your microphone too.',
+        body: widget.story
+            ? 'Stories have sound, so HUNTR needs your microphone too.'
+            : 'Videos have sound, so HUNTR needs your microphone too.',
         blocked: 'Microphone',
       );
     }
     if (refused) {
       return (
         title: "Let's turn your camera on",
-        body: 'HUNTR needs your camera and microphone to record a story.',
+        body: widget.photo
+            ? 'HUNTR needs your camera to $what.'
+            : 'HUNTR needs your camera and microphone to $what.',
         blocked: 'Camera',
       );
     }
@@ -217,14 +244,16 @@ class _StoryCameraScreenState extends State<StoryCameraScreen>
       return StoryCameraScreen.canChooseFile
           ? (
               title: 'No camera here',
-              body: 'No problem, you can upload a short clip instead '
-                  '(up to $seconds seconds).',
+              body: !widget.story
+                  ? 'No problem, you can choose a file instead.'
+                  : 'No problem, you can upload a short clip instead '
+                      '(up to $seconds seconds).',
               blocked: null,
             )
           : (
               title: 'No camera found',
-              body: 'Stories are recorded with your camera. Try on a phone '
-                  'with one.',
+              body: 'HUNTR needs a camera to $what. Try on a phone with '
+                  'one.',
               blocked: null,
             );
     }
@@ -292,16 +321,35 @@ class _StoryCameraScreenState extends State<StoryCameraScreen>
     }
   }
 
-  /// A video file instead (the website on a computer only).
+  /// Taking a photo now (photo mode).
+  bool _snapping = false;
+
+  Future<void> _snap() async {
+    final camera = _camera;
+    if (camera == null || _snapping) return;
+    _snapping = true;
+    try {
+      final photo = await camera.takePicture();
+      if (mounted) Navigator.of(context).pop(photo);
+    } on CameraException catch (error) {
+      if (mounted) setState(() => _problem = _explain(error));
+    } finally {
+      _snapping = false;
+    }
+  }
+
+  /// A file instead (the website on a computer only).
   Future<void> _chooseFile() async {
     if (_isRecording) return;
-    final video = await ChatMediaPicker.instance.pickVideo();
-    if (video != null && mounted) Navigator.of(context).pop(video);
+    final picker = ChatMediaPicker.instance;
+    final file =
+        widget.photo ? await picker.pickImage() : await picker.pickVideo();
+    if (file != null && mounted) Navigator.of(context).pop(file);
   }
 
   /// Long enough to stop (a story is at least [StoryCameraScreen.minLength]).
   bool get _canStop =>
-      _recording.value * StoryService.maxLength.inMilliseconds >=
+      _recording.value * _maxLength.inMilliseconds >=
       StoryCameraScreen.minLength.inMilliseconds;
 
   @override
@@ -348,7 +396,7 @@ class _StoryCameraScreenState extends State<StoryCameraScreen>
                   ),
               ]),
               // what stories are for (not over a problem: that says enough)
-              if (_problem == null) ...[
+              if (_problem == null && widget.story) ...[
                 const SizedBox(height: 12),
                 _LiveOnlyLabel(fileToo: StoryCameraScreen.canChooseFile),
               ],
@@ -399,8 +447,12 @@ class _StoryCameraScreenState extends State<StoryCameraScreen>
                       FilledButton.icon(
                         key: const Key('storyPhoneCamera'),
                         onPressed: _recordWithPhone,
-                        icon: const Icon(Icons.videocam_rounded),
-                        label: const Text("Record with phone's camera"),
+                        icon: Icon(widget.photo
+                            ? Icons.photo_camera_rounded
+                            : Icons.videocam_rounded),
+                        label: Text(widget.photo
+                            ? "Use phone's camera"
+                            : "Record with phone's camera"),
                       ),
                       const SizedBox(height: 4),
                       if (!_starting)
@@ -430,7 +482,9 @@ class _StoryCameraScreenState extends State<StoryCameraScreen>
                         key: const Key('storyChooseFile'),
                         onPressed: _chooseFile,
                         icon: const Icon(Icons.upload_file_rounded),
-                        label: const Text('Choose a video file instead'),
+                        label: Text(widget.photo
+                            ? 'Choose a photo instead'
+                            : 'Choose a video file instead'),
                       ),
                     ],
                   ]),
@@ -447,16 +501,17 @@ class _StoryCameraScreenState extends State<StoryCameraScreen>
               child: AnimatedBuilder(
                 animation: _recording,
                 builder: (context, _) {
-                  final seconds = _recording.value *
-                      StoryService.maxLength.inMilliseconds /
-                      1000;
+                  final seconds =
+                      _recording.value * _maxLength.inMilliseconds / 1000;
                   return Column(children: [
                     Text(
-                      _isRecording
-                          ? '${seconds.toStringAsFixed(1)}s / '
-                              '${StoryService.maxLength.inSeconds}s'
-                          : 'Tap to record · up to '
-                              '${StoryService.maxLength.inSeconds} seconds',
+                      widget.photo
+                          ? 'Tap to take a photo'
+                          : _isRecording
+                              ? '${seconds.toStringAsFixed(1)}s / '
+                                  '${_maxLength.inSeconds}s'
+                              : 'Tap to record · up to '
+                                  '${_maxLength.inSeconds} seconds',
                       style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.w600,
@@ -472,15 +527,21 @@ class _StoryCameraScreenState extends State<StoryCameraScreen>
                       _RecordButton(
                         recording: _isRecording,
                         progress: _recording.value,
-                        onPressed:
-                            _isRecording ? (_canStop ? _stop : null) : _start,
+                        photo: widget.photo,
+                        onPressed: widget.photo
+                            ? _snap
+                            : _isRecording
+                                ? (_canStop ? _stop : null)
+                                : _start,
                       ),
                       Expanded(
                         child: StoryCameraScreen.canChooseFile && !_isRecording
                             ? Center(
                                 child: StoryRoundButton(
                                   key: const Key('storyChooseFile'),
-                                  tooltip: 'Choose a video file',
+                                  tooltip: widget.photo
+                                      ? 'Choose a photo'
+                                      : 'Choose a video file',
                                   icon: Icons.upload_file_rounded,
                                   size: 52,
                                   onPressed: _chooseFile,
@@ -549,19 +610,27 @@ class _LiveOnlyLabel extends StatelessWidget {
 }
 
 /// The big round button: white to start; red, with the time running round
-/// it in orange, while recording.
+/// it in orange, while recording. A [photo] shutter stays white.
 class _RecordButton extends StatelessWidget {
   const _RecordButton(
-      {required this.recording, required this.progress, this.onPressed});
+      {required this.recording,
+      required this.progress,
+      this.photo = false,
+      this.onPressed});
 
   final bool recording;
   final double progress;
+  final bool photo;
   final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) => Semantics(
         button: true,
-        label: recording ? 'Stop recording' : 'Record',
+        label: photo
+            ? 'Take photo'
+            : recording
+                ? 'Stop recording'
+                : 'Record',
         child: GestureDetector(
           key: const Key('storyRecord'),
           onTap: onPressed,

@@ -6,6 +6,7 @@ import 'media_permission.dart';
 
 import '../models/models.dart';
 import '../screens/album_trade_screen.dart';
+import '../screens/story_camera_screen.dart';
 import '../services/huntr_backend.dart';
 import '../services/location_service.dart' show LocationException;
 import '../state/app_state.dart';
@@ -26,6 +27,9 @@ class ChatMediaPicker {
 
   Future<XFile?> pickVideo() =>
       ImagePicker().pickVideo(source: ImageSource.gallery);
+
+  /// A photo or a video from the library (which one is told by its bytes).
+  Future<XFile?> pickMedia() => ImagePicker().pickMedia();
 
   bool get hasCamera => ImagePicker().supportsImageSource(ImageSource.camera);
 
@@ -67,15 +71,9 @@ Future<void> showAttachMenu(BuildContext context,
               'Offer one of your private albums'
             ),
             (
-              'image',
-              Icons.photo_outlined,
-              'Send image',
-              'From your photo library'
-            ),
-            (
-              'video',
-              Icons.videocam_outlined,
-              'Send video',
+              'media',
+              Icons.photo_library_outlined,
+              'Send photo or video',
               'From your library'
             ),
             (
@@ -129,12 +127,9 @@ Future<void> showAttachMenu(BuildContext context,
     case 'trade':
       await offerAlbumTrade(context,
           conversationId: conversationId, recipient: recipient);
-    case 'image':
+    case 'media':
       await _send(context, conversationId, recipient,
-          () => ChatMediaPicker.instance.pickImage());
-    case 'video':
-      await _send(context, conversationId, recipient,
-          () => ChatMediaPicker.instance.pickVideo());
+          () => ChatMediaPicker.instance.pickMedia());
     case 'camera':
       await _camera(context, conversationId, recipient);
     case 'location':
@@ -220,6 +215,16 @@ Future<void> offerAlbumTrade(BuildContext context,
   final messaging = MessagingScope.read(context)!;
   // one id per album chosen, so a retried offer is stored once
   final clientIds = <String, String>{};
+  // my offers here still waiting: those albums can't be offered again
+  // while waiting (they can be withdrawn)
+  final pending = {
+    for (final m in messaging.messagesOf(conversationId))
+      if (m.trade case final trade?
+          when trade.fromMe &&
+              trade.status == TradeStatus.pending &&
+              trade.offeredAlbum != null)
+        '${trade.offeredAlbum!.id}': trade,
+  };
   await Navigator.of(context).push(MaterialPageRoute(
     fullscreenDialog: true,
     builder: (_) => AlbumTradeScreen(
@@ -227,6 +232,9 @@ Future<void> offerAlbumTrade(BuildContext context,
       intro: 'Choose an album to offer ${_name(recipient)}. They can pick '
           'one of theirs in return.',
       sendingLabel: 'Offering',
+      waiting: pending.keys.toSet(),
+      onStopWaiting: (album) =>
+          messaging.cancelTrade(conversationId, pending[album.id]!),
       onChosen: (album) => messaging.offerAlbum(
           conversationId, recipient, int.parse(album.id),
           clientId: clientIds.putIfAbsent(album.id, messaging.newClientId)),
@@ -263,7 +271,8 @@ String _name(Profile p) => p.name.isEmpty ? 'them' : p.name;
 Future<void> _camera(
     BuildContext context, int conversationId, Profile recipient) async {
   final picker = ChatMediaPicker.instance;
-  if (!picker.hasCamera) {
+  // (a computer's browser: the camera screen says so, and offers a file)
+  if (!picker.hasCamera && !StoryCameraScreen.canChooseFile) {
     _say(context, 'There’s no camera available on this device.');
     return;
   }
@@ -290,16 +299,24 @@ Future<void> _camera(
   );
   if (mode == null || !context.mounted) return;
   final limits = AppScope.read(context).albumLimits;
+  final maxDuration =
+      limits == null ? null : Duration(seconds: limits.maxVideoSeconds);
   await _send(
     context,
     conversationId,
     recipient,
-    () => mode == 'photo'
-        ? picker.takePhoto()
-        : picker.recordVideo(
-            maxDuration: limits == null
-                ? null
-                : Duration(seconds: limits.maxVideoSeconds)),
+    // a computer's browser can't open the webcam from a file input: the
+    // camera screen does (or offers a file when there's none)
+    () => StoryCameraScreen.canChooseFile
+        ? Navigator.of(context).push<XFile>(MaterialPageRoute(
+            fullscreenDialog: true,
+            builder: (_) => StoryCameraScreen(
+                story: false,
+                photo: mode == 'photo',
+                maxLength: maxDuration ?? const Duration(seconds: 60))))
+        : mode == 'photo'
+            ? picker.takePhoto()
+            : picker.recordVideo(maxDuration: maxDuration),
     confirm: true,
   );
 }
@@ -323,7 +340,7 @@ Future<void> _send(BuildContext context, int conversationId, Profile recipient,
     if (file == null || !context.mounted) return;
     bytes = await file.readAsBytes();
     if (!context.mounted) return;
-    isVideo = isVideoFile(bytes);
+    isVideo = isVideoFile(bytes) || isWebmFile(bytes);
     final problem = _check(context, bytes, isVideo);
     if (problem != null) {
       _say(context, problem);

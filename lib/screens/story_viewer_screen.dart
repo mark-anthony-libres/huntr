@@ -741,19 +741,40 @@ class _StoryViewerScreenState extends State<StoryViewerScreen> {
                       ),
                     ),
                     const SizedBox(width: 6),
-                    for (final emoji in _reactions)
-                      Padding(
-                        padding: const EdgeInsets.only(left: 6),
-                        child: IconButton(
-                          key: Key('storyReact-$emoji'),
-                          tooltip: 'React $emoji',
-                          style: IconButton.styleFrom(
-                              minimumSize: const Size(48, 48)),
-                          onPressed: () => _send(emoji),
-                          icon:
-                              Text(emoji, style: const TextStyle(fontSize: 30)),
-                        ),
-                      ),
+                    // typing: a send button (Enter sends too); otherwise the
+                    // quick reactions
+                    ValueListenableBuilder<TextEditingValue>(
+                      valueListenable: _reply,
+                      builder: (context, value, _) => value.text.trim().isEmpty
+                          ? Row(mainAxisSize: MainAxisSize.min, children: [
+                              for (final emoji in _reactions)
+                                Padding(
+                                  padding: const EdgeInsets.only(left: 6),
+                                  child: IconButton(
+                                    key: Key('storyReact-$emoji'),
+                                    tooltip: 'React $emoji',
+                                    style: IconButton.styleFrom(
+                                        minimumSize: const Size(48, 48)),
+                                    onPressed: () => _send(emoji),
+                                    icon: Text(emoji,
+                                        style: const TextStyle(fontSize: 30)),
+                                  ),
+                                ),
+                            ])
+                          : Padding(
+                              padding: const EdgeInsets.only(left: 4),
+                              child: IconButton.filled(
+                                key: const Key('storySend'),
+                                tooltip: 'Send',
+                                style: IconButton.styleFrom(
+                                    backgroundColor: HuntrColors.orange,
+                                    foregroundColor: Colors.black,
+                                    minimumSize: const Size(48, 48)),
+                                onPressed: () => _send(_reply.text),
+                                icon: const Icon(Icons.send_rounded),
+                              ),
+                            ),
+                    ),
                   ]),
           ),
         ]),

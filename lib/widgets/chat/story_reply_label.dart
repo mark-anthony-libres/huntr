@@ -5,7 +5,9 @@ import '../../theme.dart';
 
 /// Over a story reply's bubble, on its side of the chat: "You replied to
 /// Sam's story" / "Replied to your story", or "reacted" when it's just an
-/// emoji (a quick reaction). Other messages are shown as they are.
+/// emoji (a quick reaction), and under that the story while it's still up
+/// (tap: watch it), or "Story unavailable" once it's gone. Other messages
+/// are shown as they are.
 class StoryReplyLabel extends StatelessWidget {
   const StoryReplyLabel(
       {super.key,
@@ -21,9 +23,10 @@ class StoryReplyLabel extends StatelessWidget {
   /// Only an emoji (a quick reaction), not a written reply.
   final bool reaction;
 
-  /// [bubble], with the label over it when [message] is a story reply.
+  /// [bubble], with the label (and the story) over it when [message] is a
+  /// story reply. [onOpenStory] plays that story.
   static Widget over(ChatMessage message, Widget bubble,
-          {required String otherName}) =>
+          {required String otherName, VoidCallback? onOpenStory}) =>
       message.type != ChatMessageType.storyReply
           ? bubble
           : Column(
@@ -36,6 +39,8 @@ class StoryReplyLabel extends StatelessWidget {
                     fromMe: message.fromMe,
                     otherName: otherName,
                     reaction: isReaction(message.body)),
+                if (message.storyId != null)
+                  StoryReplyPreview(message: message, onOpen: onOpenStory),
                 bubble,
               ],
             );
@@ -65,6 +70,81 @@ class StoryReplyLabel extends StatelessWidget {
           ),
         ),
       ]),
+    );
+  }
+}
+
+/// The story a reply answered, as Instagram shows it: a small portrait
+/// thumbnail to tap and watch while it's still up; "Story unavailable" once
+/// it has expired or been deleted.
+class StoryReplyPreview extends StatelessWidget {
+  const StoryReplyPreview({super.key, required this.message, this.onOpen});
+
+  final ChatMessage message;
+  final VoidCallback? onOpen;
+
+  static const _width = 96.0;
+  static const _height = 160.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final url = message.storyThumbnailUrl;
+    if (!message.storyAvailable) {
+      return Padding(
+        key: Key('storyReplyGone-${message.id}'),
+        padding: const EdgeInsets.fromLTRB(4, 4, 4, 6),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: HuntrColors.border),
+          ),
+          child: const Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(Icons.history_toggle_off_rounded,
+                size: 15, color: HuntrColors.muted),
+            SizedBox(width: 6),
+            Text('Story unavailable',
+                style: TextStyle(color: HuntrColors.muted, fontSize: 12.5)),
+          ]),
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 4, 4, 6),
+      child: Material(
+        color: HuntrColors.surfaceHigh,
+        borderRadius: BorderRadius.circular(14),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          key: Key('storyReplyPreview-${message.id}'),
+          onTap: onOpen,
+          child: SizedBox(
+            width: _width,
+            height: _height,
+            child: Stack(fit: StackFit.expand, children: [
+              if (url != null)
+                Image.network(url,
+                    fit: BoxFit.cover,
+                    // a plain <img> on web: no CORS needed for the bucket
+                    webHtmlElementStrategy: WebHtmlElementStrategy.fallback,
+                    errorBuilder: (context, error, stack) =>
+                        const SizedBox.shrink()),
+              // a play mark: it's a video
+              const Center(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                      shape: BoxShape.circle, color: Color(0x80000000)),
+                  child: Padding(
+                    padding: EdgeInsets.all(6),
+                    child: Icon(Icons.play_arrow_rounded,
+                        color: Colors.white, size: 22),
+                  ),
+                ),
+              ),
+            ]),
+          ),
+        ),
+      ),
     );
   }
 }

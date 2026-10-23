@@ -39,6 +39,7 @@ import '../state/block_state.dart';
 import '../widgets/block_gate.dart';
 import '../widgets/chat/location_bubble.dart';
 import 'my_album_screen.dart';
+import 'story_viewer_screen.dart';
 import 'anonymous_profile_screen.dart';
 import '../widgets/chat/anonymous_chat.dart';
 import '../flows/my_albums.dart';
@@ -110,6 +111,25 @@ class _ChatScreenState extends State<ChatScreen> {
 
   /// One of my albums from a trade card: my album screen (my albums are
   /// loaded first if they aren't yet).
+  /// A story reply's story: theirs (I replied) or mine (they did), from
+  /// that story; then the reply again (the story may have gone meanwhile).
+  Future<void> _openStory(ChatMessage m, Profile other) async {
+    final service = ServicesScope.storiesOf(context);
+    if (service == null || m.storyId == null) return;
+    await Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => m.fromMe
+            ? StoryViewerScreen(
+                service: service, people: [other], startStoryId: m.storyId)
+            : StoryViewerScreen.mine(
+                service: service,
+                me: _app.myPublicProfile,
+                startStoryId: m.storyId)));
+    if (mounted && m.id != null) {
+      unawaited(MessagingScope.read(context)!
+          .refreshMessage(m.conversationId, m.id!));
+    }
+  }
+
   Future<void> _openMyAlbum(int albumId) async {
     final app = _app;
     final token = app.sessionToken;
@@ -1079,6 +1099,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                           : null,
                                       child: StoryReplyLabel.over(
                                         m,
+                                        onOpenStory: () => _openStory(m, p),
                                         MessageBubble(
                                           key: Key(
                                               'message-${m.id ?? m.clientId}'),
@@ -1109,10 +1130,32 @@ class _ChatScreenState extends State<ChatScreen> {
                                           sender: p,
                                           trade: m.trade!),
                                       onCancel: () => _cancelTrade(m),
+                                      onJumpTo: _jumpTo,
                                       wrapOffer: (offer) =>
                                           _actions(m, p, offer),
                                     ),
                                   ChatMessageType.albumTrade =>
+                                    const SizedBox.shrink(),
+                                  // the album chosen in return, at the
+                                  // bottom when it was chosen
+                                  ChatMessageType.albumTradeReturn
+                                      when m.trade != null =>
+                                    TradeCard(
+                                      message: m,
+                                      other: p,
+                                      now: now,
+                                      returnOnly: true,
+                                      onOpenMine: _openMyAlbum,
+                                      onOpenTheirs: () => Navigator.of(context)
+                                          .push(MaterialPageRoute(
+                                              builder: (_) =>
+                                                  TradedAlbumViewerScreen(
+                                                      message: m))),
+                                      onRespond: () {},
+                                      onCancel: () {},
+                                      wrapOffer: (card) => _actions(m, p, card),
+                                    ),
+                                  ChatMessageType.albumTradeReturn =>
                                     const SizedBox.shrink(),
                                   ChatMessageType.location
                                       when m.location != null =>
@@ -1215,6 +1258,9 @@ class _ChatScreenState extends State<ChatScreen> {
                                 // cards are messages too: Sent / Read under my newest
                                 final Widget bubble = showStatus &&
                                         (m.type == ChatMessageType.albumTrade ||
+                                            m.type ==
+                                                ChatMessageType
+                                                    .albumTradeReturn ||
                                             m.type ==
                                                 ChatMessageType.location ||
                                             m.type ==

@@ -1068,6 +1068,10 @@ enum ChatMessageType {
   image,
   video,
   albumTrade,
+
+  /// The album chosen in return for an [albumTrade], as its own message (at
+  /// the bottom, when it was chosen); [ChatMessage.trade] is the trade.
+  albumTradeReturn,
   location,
   liveLocation,
 
@@ -1097,6 +1101,7 @@ enum ChatMessageType {
         'image' => image,
         'video' => video,
         'album_trade' => albumTrade,
+        'album_trade_return' => albumTradeReturn,
         'location' => location,
         'live_location' => liveLocation,
         _ => text,
@@ -1129,6 +1134,8 @@ class ChatMessage {
     this.tapAnswers = const [],
     this.gif,
     this.storyId,
+    this.storyAvailable = false,
+    this.storyThumbnailUrl,
   });
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) => ChatMessage(
@@ -1172,10 +1179,20 @@ class ChatMessage {
             : ChatGif.fromJson(json['gif'] as Map<String, dynamic>),
         storyId:
             (json['story_reply'] as Map<String, dynamic>?)?['story_id'] as int?,
+        storyAvailable: (json['story_reply']
+                as Map<String, dynamic>?)?['available'] as bool? ??
+            false,
+        storyThumbnailUrl: (json['story_reply']
+            as Map<String, dynamic>?)?['thumbnail_url'] as String?,
       );
 
   /// A story reply: the story it answered.
   final int? storyId;
+
+  /// A story reply: whether that story is still up (until it expires or is
+  /// deleted), and then its thumbnail (none on a live event: fetched after).
+  final bool storyAvailable;
+  final String? storyThumbnailUrl;
 
   final ChatMessageType type;
 
@@ -1263,6 +1280,8 @@ class ChatMessage {
           tapAnswers: tapAnswers,
           gif: gif,
           storyId: storyId,
+          storyAvailable: storyAvailable,
+          storyThumbnailUrl: storyThumbnailUrl,
           reactions: reactions ?? this.reactions,
           replyTo: replyTo,
           upload: upload ?? this.upload,
@@ -1274,6 +1293,7 @@ class ChatMessage {
         ChatMessageType.image => '📷 Photo',
         ChatMessageType.video => '🎥 Video',
         ChatMessageType.albumTrade => '🔁 Album trade',
+        ChatMessageType.albumTradeReturn => '🔁 Traded an album',
         ChatMessageType.location => '📍 Location',
         ChatMessageType.liveLocation => '📍 Live location',
         ChatMessageType.reveal =>
@@ -1364,7 +1384,11 @@ class ReplyPreview {
       id: message.id!,
       fromMe: message.fromMe,
       type: message.type,
-      body: message.type == ChatMessageType.text ? message.body : '');
+      body: switch (message.type) {
+        ChatMessageType.text => message.body,
+        ChatMessageType.albumTrade => message.trade?.offeredAlbum?.name ?? '',
+        _ => '',
+      });
 
   final int id;
   final bool fromMe;
@@ -1376,7 +1400,10 @@ class ReplyPreview {
         ChatMessageType.text => body,
         ChatMessageType.image => '📷 Photo',
         ChatMessageType.video => '🎥 Video',
-        ChatMessageType.albumTrade => '🔁 Album trade',
+        // which album (its name, when known)
+        ChatMessageType.albumTrade =>
+          body.isEmpty ? '🔁 Album trade' : '🔁 Album trade · “$body”',
+        ChatMessageType.albumTradeReturn => '🔁 Traded an album',
         ChatMessageType.location => '📍 Location',
         ChatMessageType.liveLocation => '📍 Live location',
         ChatMessageType.reveal => '🎭 Profile shown',
@@ -1716,6 +1743,7 @@ class AlbumTrade {
     this.canRespond = false,
     this.canCancel = false,
     this.completedAt,
+    this.returnMessageId,
   });
 
   factory AlbumTrade.fromJson(Map<String, dynamic> json) => AlbumTrade(
@@ -1739,7 +1767,13 @@ class AlbumTrade {
         completedAt: json['completed_at'] == null
             ? null
             : DateTime.parse(json['completed_at'] as String).toLocal(),
+        returnMessageId: json['return_message_id'] as int?,
       );
+
+  /// The message the album chosen in return came as (null: not chosen yet,
+  /// or a trade from before those messages - its album shows under the
+  /// offer).
+  final int? returnMessageId;
 
   final int id;
   final TradeStatus status;

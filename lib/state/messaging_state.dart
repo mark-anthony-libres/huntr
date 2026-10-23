@@ -1123,6 +1123,8 @@ class MessagingState extends ChangeNotifier {
     final saved =
         await _call((t) => service.respondToTrade(t, trade.id, albumId));
     if (saved != null) _upsert(conversationId, saved);
+    // my album comes as a new message at the bottom: fetch it
+    unawaited(catchUp(conversationId));
   }
 
   Future<void> cancelTrade(int conversationId, AlbumTrade trade) async {

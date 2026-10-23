@@ -302,6 +302,9 @@ class _FakePicker extends ChatMediaPicker {
   Future<XFile?> pickVideo() async => _take();
 
   @override
+  Future<XFile?> pickMedia() async => _take();
+
+  @override
   bool get hasCamera => camera;
 
   @override
@@ -494,14 +497,13 @@ void main() {
   });
 
   group('+ menu and album trades', () {
-    testWidgets('the + menu offers the four options', (tester) async {
+    testWidgets('the + menu offers its options', (tester) async {
       await _openChat(tester, _state(_FakeMessaging()));
       await tester.tap(find.byKey(const Key('attachButton')));
       await tester.pumpAndSettle();
       for (final label in [
         'Trade album',
-        'Send image',
-        'Send video',
+        'Send photo or video',
         'Open camera'
       ]) {
         expect(find.text(label), findsOneWidget);
@@ -528,10 +530,14 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(MyAlbumScreen), findsOneWidget);
 
-      // back from the album: the same trade, refreshed; one album is offered
+      // back from the album: the same trade, refreshed, to choose from
       await tester.pageBack();
       await tester.pumpAndSettle();
       expect(albums.loads, 2);
+      expect(service.calls.where((c) => c.startsWith('offer')), isEmpty);
+      expect(find.byKey(const Key('tradeAlbumList')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('tradeAlbum-90')));
+      await tester.pumpAndSettle();
       expect(service.calls.single, startsWith('offer 90 '));
       expect(find.byType(AlbumTradeScreen), findsNothing);
       expect(find.byKey(const Key('tradeStatus')), findsOneWidget);
@@ -549,11 +555,15 @@ void main() {
       expect(find.text('Create an Album First'), findsOneWidget);
     });
 
-    testWidgets('one album is offered without a list', (tester) async {
+    testWidgets('one album is listed too, and offered once chosen',
+        (tester) async {
       final service = _FakeMessaging();
       await _openChat(tester, _state(service), albums: _FakeAlbums(['Only']));
       await _attach(tester, 'trade');
-      expect(find.byKey(const Key('tradeAlbumList')), findsNothing);
+      expect(find.byKey(const Key('tradeAlbumList')), findsOneWidget);
+      expect(service.calls, isEmpty);
+      await tester.tap(find.byKey(const Key('tradeAlbum-60')));
+      await tester.pumpAndSettle();
       expect(service.calls.single, startsWith('offer 60 '));
       expect(find.byType(AlbumTradeScreen), findsNothing);
     });
@@ -582,10 +592,12 @@ void main() {
         ..offerError = const BackendException('Album not found.');
       await _openChat(tester, _state(service), albums: _FakeAlbums(['Only']));
       await _attach(tester, 'trade');
+      await tester.tap(find.byKey(const Key('tradeAlbum-60')));
+      await tester.pumpAndSettle();
       expect(find.text('Album not found.'), findsOneWidget);
 
       service.offerError = null;
-      await tester.tap(find.byKey(const Key('retryTrade')));
+      await tester.tap(find.byKey(const Key('tradeAlbum-60')));
       await tester.pumpAndSettle();
       final ids = service.calls.map((c) => c.split(' ').last).toSet();
       expect(service.calls, hasLength(2));
@@ -604,12 +616,15 @@ void main() {
 
       await tester.tap(find.byKey(const Key('respondTrade-30')));
       await tester.pumpAndSettle();
+      expect(service.calls, isEmpty);
+      await tester.tap(find.byKey(const Key('tradeAlbum-60')));
+      await tester.pumpAndSettle();
       expect(service.calls, ['respond 30 60']);
       expect(find.byKey(const Key('tradeBack-30')), findsOneWidget);
       // my album chosen in return shows as its own card on my side
       expect(find.byKey(const Key('tradeBack-30')), findsOneWidget);
-      expect(
-          find.text('You traded an album', findRichText: true), findsOneWidget);
+      expect(find.text('You traded back for “Beach”', findRichText: true),
+          findsOneWidget);
       expect(find.text('Mine'), findsOneWidget);
       expect(find.byKey(const Key('openTheirs-30')), findsOneWidget);
       expect(find.byKey(const Key('respondTrade-30')), findsNothing);
@@ -634,6 +649,9 @@ void main() {
       await tester.tap(find.text('Save'));
       await tester.pumpAndSettle();
       await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(service.calls, isEmpty);
+      await tester.tap(find.byKey(const Key('tradeAlbum-90')));
       await tester.pumpAndSettle();
       expect(service.calls, ['respond 30 90']);
       expect(find.byKey(const Key('tradeBack-30')), findsOneWidget);
@@ -811,7 +829,7 @@ void main() {
       ChatMediaPicker.instance = picker;
       final service = _FakeMessaging()..sendGate = Completer();
       await _openChat(tester, _state(service));
-      await _attach(tester, 'image');
+      await _attach(tester, 'media');
       expect(find.byKey(const Key('uploadProgress')), findsOneWidget);
       expect(find.text('Sending…'), findsOneWidget);
       service.sendGate!.complete();
@@ -829,7 +847,7 @@ void main() {
         ..sendError = const BackendException(
             'The video is too long. The maximum is 60 seconds.');
       await _openChat(tester, _state(service));
-      await _attach(tester, 'video');
+      await _attach(tester, 'media');
       expect(find.text('Not sent · Tap to retry'), findsOneWidget);
       expect(find.byKey(const Key('sendError')), findsOneWidget);
     });
@@ -839,7 +857,7 @@ void main() {
         ..next.add(XFile.fromData(utf8.encode('GIF89a......'), name: 'a.gif'));
       final service = _FakeMessaging();
       await _openChat(tester, _state(service));
-      await _attach(tester, 'image');
+      await _attach(tester, 'media');
       expect(find.textContaining('GIFs aren'), findsOneWidget);
       expect(service.calls, isEmpty);
     });
