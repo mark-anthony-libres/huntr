@@ -70,6 +70,7 @@ class AppState extends ChangeNotifier {
     myUserId = null;
     myStats = const ProfileStats();
     anonymousMessaging = true;
+    notifications = (taps: true, messages: true, storyReplies: true);
     myIsNew = false;
     albumLimits = null;
     onboarded = false;
@@ -100,6 +101,20 @@ class AppState extends ChangeNotifier {
 
   /// I may send anonymous messages (Settings); the backend enforces it.
   bool anonymousMessaging = true;
+
+  /// Push notifications for each kind (Settings > Notifications), as saved
+  /// on the backend.
+  ({bool taps, bool messages, bool storyReplies}) notifications =
+      (taps: true, messages: true, storyReplies: true);
+
+  void updateNotifications({bool? taps, bool? messages, bool? storyReplies}) {
+    notifications = (
+      taps: taps ?? notifications.taps,
+      messages: messages ?? notifications.messages,
+      storyReplies: storyReplies ?? notifications.storyReplies,
+    );
+    notifyListeners();
+  }
 
   void setAnonymousMessaging(bool enabled) {
     anonymousMessaging = enabled;

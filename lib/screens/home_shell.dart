@@ -1,13 +1,16 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../services/presence/presence_service.dart';
+import '../services/push_notifications.dart';
 import '../services/services_scope.dart';
 import '../state/block_state.dart';
 import '../state/app_state.dart';
 import '../state/messaging_state.dart';
 import '../state/tap_state.dart';
+import 'chat_screen.dart';
 import 'chats_screen.dart';
 import 'explore_screen.dart';
 import 'me_screen.dart';
@@ -24,7 +27,8 @@ class HomeShell extends StatefulWidget {
 class _HomeShellState extends State<HomeShell> {
   // the tabs, in order
   static const _exploreTab = 0;
-  static const _chatsTab = 2; // Taps is 1
+  static const _tapsTab = 1;
+  static const _chatsTab = 2;
 
   int _tab = _exploreTab;
   StreamSubscription<String>? _events;
@@ -94,6 +98,14 @@ class _HomeShellState extends State<HomeShell> {
         if (!mounted) return;
         unawaited(_messaging?.refresh());
         unawaited(_taps?.refresh());
+        // push notifications: this device, and a tapped one's place
+        unawaited(PushNotifications.instance
+            .start(token, onOpen: _open)
+            .then((_) => _offerNotifications()));
+        // the website opened from a notification's link
+        final linked =
+            kIsWeb ? PushTarget.from(Uri.base.queryParameters) : null;
+        if (linked != null) unawaited(_open(linked));
       });
       _lifecycle = AppLifecycleListener(
         onShow: _foreground,
@@ -117,6 +129,75 @@ class _HomeShellState extends State<HomeShell> {
               onPressed: () => setState(() => _tab = _chatsTab)),
         ));
     });
+  }
+
+  /// A tapped notification: the Taps inbox, or that chat.
+  Future<void> _open(PushTarget target) async {
+    if (!mounted) return;
+    switch (target) {
+      case OpenTaps():
+        setState(() => _tab = _tapsTab);
+      case OpenChat(:final conversationId):
+        setState(() => _tab = _chatsTab);
+        final messaging = _messaging;
+        if (messaging == null) return;
+        if (messaging.summary(conversationId) == null) {
+          await messaging.refresh();
+        }
+        final chat = messaging.summary(conversationId);
+        if (chat == null || !mounted) return;
+        await Navigator.of(context).push(MaterialPageRoute(
+            builder: (_) => ChatScreen.conversation(
+                conversationId: conversationId, other: chat.other)));
+    }
+  }
+
+  /// Once per device, while notifications aren't allowed or refused yet:
+  /// offer them (the website's prompt must follow a tap, so it's a button).
+  Future<void> _offerNotifications() async {
+    final push = PushNotifications.instance;
+    final preferences = AppScope.read(context).devicePreferences;
+    if (!mounted || !push.undecided || preferences == null) return;
+    if (await preferences.readNotificationsOffered() || !mounted) return;
+    unawaited(preferences.saveNotificationsOffered());
+    final turnOn = await showModalBottomSheet<bool>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const Icon(Icons.notifications_active_outlined, size: 40),
+            const SizedBox(height: 12),
+            const Text("Don't miss a tap or a message",
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 6),
+            const Text(
+                'Get a notification when someone taps you, messages you or '
+                'replies to your story. It says who, never what they wrote. '
+                'Change it any time in Settings.',
+                textAlign: TextAlign.center,
+                style: TextStyle(height: 1.4)),
+            const SizedBox(height: 18),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                key: const Key('notificationsOfferOn'),
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Turn on notifications'),
+              ),
+            ),
+            TextButton(
+              key: const Key('notificationsOfferLater'),
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Not now'),
+            ),
+          ]),
+        ),
+      ),
+    );
+    if (turnOn == true) await push.enable();
   }
 
   @override

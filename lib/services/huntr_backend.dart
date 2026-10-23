@@ -149,7 +149,10 @@ class PrivacySettings {
       {this.showOnline = true,
       this.showDistance = true,
       this.showOnMap = true,
-      this.anonymousMessaging = true});
+      this.anonymousMessaging = true,
+      this.notifyTaps = true,
+      this.notifyMessages = true,
+      this.notifyStoryReplies = true});
 
   factory PrivacySettings.fromJson(Map<String, dynamic> json) =>
       PrivacySettings(
@@ -158,6 +161,9 @@ class PrivacySettings {
         showOnMap: json['show_on_map'] as bool? ?? true,
         anonymousMessaging:
             json['anonymous_messaging_enabled'] as bool? ?? true,
+        notifyTaps: json['notify_taps'] as bool? ?? true,
+        notifyMessages: json['notify_messages'] as bool? ?? true,
+        notifyStoryReplies: json['notify_story_replies'] as bool? ?? true,
       );
 
   final bool showOnline;
@@ -168,6 +174,11 @@ class PrivacySettings {
 
   /// I may send anonymous messages (Settings > Anonymous messaging).
   final bool anonymousMessaging;
+
+  /// Push notifications for each kind (Settings > Notifications).
+  final bool notifyTaps;
+  final bool notifyMessages;
+  final bool notifyStoryReplies;
 }
 
 /// The signed-in Huntr account returned by the backend.
@@ -693,6 +704,9 @@ Future<PrivacySettings> updateMyPrivacy({
   bool? showOnline,
   bool? showDistance,
   bool? showOnMap,
+  bool? notifyTaps,
+  bool? notifyMessages,
+  bool? notifyStoryReplies,
   http.Client? client,
 }) =>
     _sendAuthorized(
@@ -704,9 +718,49 @@ Future<PrivacySettings> updateMyPrivacy({
           if (showOnline != null) 'show_online': showOnline,
           if (showDistance != null) 'show_distance': showDistance,
           if (showOnMap != null) 'show_on_map': showOnMap,
+          if (notifyTaps != null) 'notify_taps': notifyTaps,
+          if (notifyMessages != null) 'notify_messages': notifyMessages,
+          if (notifyStoryReplies != null)
+            'notify_story_replies': notifyStoryReplies,
         }),
       ),
       PrivacySettings.fromJson,
+    );
+
+/// POST .../devices: this device gets my push notifications ([platform]:
+/// 'android', 'ios' or 'web').
+Future<void> registerPushDevice(
+        {required String backendUrl,
+        required String token,
+        required String pushToken,
+        required String platform,
+        http.Client? client}) =>
+    _sendAuthorized(
+      client,
+      (httpClient) => httpClient.post(_endpoint(backendUrl, '/devices'),
+          headers: {
+            ..._authorization(token),
+            'Content-Type': 'application/json'
+          },
+          body: jsonEncode({'token': pushToken, 'platform': platform})),
+      (_) {},
+    );
+
+/// POST .../devices/forget: signing out here; no more notifications.
+Future<void> forgetPushDevice(
+        {required String backendUrl,
+        required String token,
+        required String pushToken,
+        http.Client? client}) =>
+    _sendAuthorized(
+      client,
+      (httpClient) => httpClient.post(_endpoint(backendUrl, '/devices/forget'),
+          headers: {
+            ..._authorization(token),
+            'Content-Type': 'application/json'
+          },
+          body: jsonEncode({'token': pushToken})),
+      (_) {},
     );
 
 /// My profile photos and the limits for adding more.

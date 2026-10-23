@@ -33,6 +33,7 @@ import 'widgets/location_gate.dart';
 import 'widgets/rate_limit_screen.dart';
 import 'widgets/update_required_screen.dart';
 import 'widgets/theme_follower.dart';
+import 'services/push_notifications.dart';
 import 'theme.dart';
 
 void main() {
@@ -49,9 +50,13 @@ void main() {
   late final MessagingState messaging;
   late final BlockState blocks;
   late final TapState taps;
-  final state = AppState(
+  late final AppState state;
+  state = AppState(
     // A signed-out device keeps none of the user's photos or messages.
     onSessionEnd: () async {
+      // this device stops getting the account's notifications (the token
+      // is read now, before it's cleared)
+      unawaited(PushNotifications.instance.stop(state.sessionToken));
       messaging.clear();
       blocks.clear();
       taps.clear();

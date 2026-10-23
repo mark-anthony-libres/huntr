@@ -46,13 +46,21 @@ class ProfileService {
 
   /// Saves whichever privacy settings are given.
   Future<PrivacySettings> updatePrivacy(String token,
-          {bool? showOnline, bool? showDistance, bool? showOnMap}) async =>
+          {bool? showOnline,
+          bool? showDistance,
+          bool? showOnMap,
+          bool? notifyTaps,
+          bool? notifyMessages,
+          bool? notifyStoryReplies}) async =>
       updateMyPrivacy(
         backendUrl: await GoogleOAuthConfig.loadBackendUrl(),
         token: token,
         showOnline: showOnline,
         showDistance: showDistance,
         showOnMap: showOnMap,
+        notifyTaps: notifyTaps,
+        notifyMessages: notifyMessages,
+        notifyStoryReplies: notifyStoryReplies,
       );
 
   /// Permanently deletes the account and everything stored about it.

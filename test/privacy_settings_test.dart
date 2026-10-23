@@ -35,7 +35,12 @@ class _FakeProfiles extends ProfileService {
 
   @override
   Future<PrivacySettings> updatePrivacy(String token,
-      {bool? showOnline, bool? showDistance, bool? showOnMap}) async {
+      {bool? showOnline,
+      bool? showDistance,
+      bool? showOnMap,
+      bool? notifyTaps,
+      bool? notifyMessages,
+      bool? notifyStoryReplies}) async {
     saves.add((showOnline: showOnline, showDistance: showDistance));
     if (failSaveWith != null) throw failSaveWith!;
     stored = PrivacySettings(

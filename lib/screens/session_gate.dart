@@ -119,6 +119,10 @@ class _SessionGateState extends State<SessionGate> {
       );
       app.myStats = profile.stats;
       app.anonymousMessaging = profile.privacy.anonymousMessaging;
+      app.updateNotifications(
+          taps: profile.privacy.notifyTaps,
+          messages: profile.privacy.notifyMessages,
+          storyReplies: profile.privacy.notifyStoryReplies);
       if (!profile.onboarded) {
         // Onboarding shows the backend's limits. Without them it still works:
         // the backend enforces them when onboarding is saved.

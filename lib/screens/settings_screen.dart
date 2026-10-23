@@ -5,6 +5,7 @@ import '../state/app_state.dart';
 import '../state/block_state.dart';
 import '../state/messaging_state.dart';
 import '../widgets/me/anonymous_messaging_setting.dart';
+import '../widgets/me/notification_settings_group.dart';
 import '../widgets/me/privacy_settings_group.dart';
 import '../widgets/me/settings_group.dart';
 import '../widgets/profile/deactivate_account.dart';
@@ -97,6 +98,12 @@ class SettingsScreen extends StatelessWidget {
                         builder: (_) => const UnmatchedUsersScreen())),
                   ),
               ]),
+              _sectionGap,
+
+              // ---- notifications: each kind, and this device ----
+              const SectionLabel('NOTIFICATIONS'),
+              const SizedBox(height: 10),
+              const NotificationSettingsGroup(),
               _sectionGap,
 
               // ---- anonymous messaging ----

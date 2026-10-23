@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "257912667122",
+    "project_id": "huntr-e9ae3",
+    "storage_bucket": "huntr-e9ae3.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:257912667122:android:e2252089fd5444e9dec96b",
+        "android_client_info": {
+          "package_name": "com.marklibres.huntr"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBFq8JsUSK3MJwa83bHwIGqlvIWMbDk7VU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

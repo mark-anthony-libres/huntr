@@ -10,6 +10,10 @@ abstract class DevicePreferences {
   /// The chosen theme's id (see huntrPalettes); null until one was chosen.
   Future<String?> readThemeId();
   Future<void> saveThemeId(String id);
+
+  /// Turning notifications on was offered on this device (once).
+  Future<bool> readNotificationsOffered();
+  Future<void> saveNotificationsOffered();
 }
 
 /// Kept in the platform's secure storage, like the session token (the one
@@ -19,6 +23,7 @@ class SecureDevicePreferences implements DevicePreferences {
 
   static const _showVibeBannerKey = 'huntr_show_vibe_banner';
   static const _themeKey = 'huntr_theme';
+  static const _notificationsOfferedKey = 'huntr_notifications_offered';
   static const _storage = FlutterSecureStorage();
 
   @override
@@ -35,6 +40,14 @@ class SecureDevicePreferences implements DevicePreferences {
 
   @override
   Future<String?> readThemeId() => _storage.read(key: _themeKey);
+
+  @override
+  Future<bool> readNotificationsOffered() async =>
+      await _storage.read(key: _notificationsOfferedKey) == 'true';
+
+  @override
+  Future<void> saveNotificationsOffered() =>
+      _storage.write(key: _notificationsOfferedKey, value: 'true');
 
   @override
   Future<void> saveThemeId(String id) =>
