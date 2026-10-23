@@ -56,107 +56,117 @@ class _TapsScreenState extends State<TapsScreen> {
                   ? taps?.refreshViewers().then((_) => taps.markViewersSeen())
                   : taps?.refresh()) ??
               Future.value(),
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(left: 4, bottom: 12),
-                child: ShaderMask(
-                  shaderCallback: HuntrColors.accentGradient.createShader,
-                  child: Text('Taps',
-                      style: text.headlineMedium?.copyWith(
-                          fontWeight: FontWeight.w800, color: Colors.white)),
-                ),
-              ),
-              // ---- Taps / Viewers ----
-              Padding(
-                padding: const EdgeInsets.only(bottom: 14),
-                child: PillTabs(
-                  selected: _viewersTab ? 1 : 0,
-                  onChanged: (i) => _show(viewers: i == 1),
-                  tabs: [
-                    PillTab(
-                        key: const Key('tapsTab'),
-                        icon: Icons.waving_hand_outlined,
-                        label: 'Taps',
-                        badge: taps?.unreadCount ?? 0),
-                    PillTab(
-                        key: const Key('viewersTab'),
-                        icon: Icons.visibility_outlined,
-                        label: 'Viewers',
-                        // new since I last looked (none while looking)
-                        badge: _viewersTab ? 0 : taps?.newViewers ?? 0),
-                  ],
-                ),
-              ),
-              if (_viewersTab)
-                ..._ViewersList.rows(context, taps, now)
-              else ...[
-                const Padding(
-                  padding: EdgeInsets.only(left: 4, bottom: 16),
-                  child: Text(
-                      'People who tapped you. Say hi back to start a chat.',
-                      style: TextStyle(color: HuntrColors.muted, height: 1.4)),
-                ),
-                // no backend (sample data): nothing to load, so empty
-                if (taps != null && list == null && taps.error == null)
-                  const LoadingRows(count: 3, height: 76)
-                else if (taps != null && list == null)
-                  LoadFailedCard(
-                    title: "Couldn't load your taps",
-                    message: taps.error!,
-                    onRetry: taps.refresh,
-                    retryKey: const Key('tapsRetry'),
-                  )
-                else if (list == null || list.isEmpty)
-                  const EmptyStateCard(
-                    icon: Icons.waving_hand_outlined,
-                    title: 'No taps yet',
-                    message: "When someone taps you, they'll show up here. "
-                        'Say hi back to start a chat.',
-                  )
-                else ...[
-                  // Recent (the default) or Most taps
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: Row(children: [
-                      for (final (byCount, label, key) in [
-                        (false, 'Recent', 'tapsSortRecent'),
-                        (true, 'Most taps', 'tapsSortCount'),
-                      ])
-                        Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: ChoiceChip(
-                            key: Key(key),
-                            label: Text(label),
-                            selected: taps!.byCount == byCount,
-                            showCheckmark: false,
-                            selectedColor:
-                                HuntrColors.orange.withValues(alpha: 0.18),
-                            side: BorderSide(
-                                color: taps.byCount == byCount
-                                    ? HuntrColors.orange
-                                    : HuntrColors.border),
-                            onSelected: (_) => taps.sortByCount(byCount),
-                          ),
-                        ),
-                    ]),
+          // on a wide screen (the website) a centred column, like Settings;
+          // the whole width still scrolls
+          child: LayoutBuilder(
+            builder: (context, box) => ListView(
+              padding: EdgeInsets.fromLTRB(
+                  _side(box.maxWidth), 12, _side(box.maxWidth), 24),
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(left: 4, bottom: 12),
+                  child: ShaderMask(
+                    shaderCallback: HuntrColors.accentGradient.createShader,
+                    child: Text('Taps',
+                        style: text.headlineMedium?.copyWith(
+                            fontWeight: FontWeight.w800, color: Colors.white)),
                   ),
-                  for (final tap in list)
-                    _TapRow(
-                      tap: tap,
-                      time: timeLabel(tap.receivedAt, now),
-                      onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                          builder: (_) => TapDetailScreen(tap: tap))),
+                ),
+                // ---- Taps / Viewers ----
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 14),
+                  child: PillTabs(
+                    selected: _viewersTab ? 1 : 0,
+                    onChanged: (i) => _show(viewers: i == 1),
+                    tabs: [
+                      PillTab(
+                          key: const Key('tapsTab'),
+                          icon: Icons.waving_hand_outlined,
+                          label: 'Taps',
+                          badge: taps?.unreadCount ?? 0),
+                      PillTab(
+                          key: const Key('viewersTab'),
+                          icon: Icons.visibility_outlined,
+                          label: 'Viewers',
+                          // new since I last looked (none while looking)
+                          badge: _viewersTab ? 0 : taps?.newViewers ?? 0),
+                    ],
+                  ),
+                ),
+                if (_viewersTab)
+                  ..._ViewersList.rows(context, taps, now)
+                else ...[
+                  const Padding(
+                    padding: EdgeInsets.only(left: 4, bottom: 16),
+                    child: Text(
+                        'People who tapped you. Say hi back to start a chat.',
+                        style:
+                            TextStyle(color: HuntrColors.muted, height: 1.4)),
+                  ),
+                  // no backend (sample data): nothing to load, so empty
+                  if (taps != null && list == null && taps.error == null)
+                    const LoadingRows(count: 3, height: 76)
+                  else if (taps != null && list == null)
+                    LoadFailedCard(
+                      title: "Couldn't load your taps",
+                      message: taps.error!,
+                      onRetry: taps.refresh,
+                      retryKey: const Key('tapsRetry'),
+                    )
+                  else if (list == null || list.isEmpty)
+                    const EmptyStateCard(
+                      icon: Icons.waving_hand_outlined,
+                      title: 'No taps yet',
+                      message: "When someone taps you, they'll show up here. "
+                          'Say hi back to start a chat.',
+                    )
+                  else ...[
+                    // Recent (the default) or Most taps
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Row(children: [
+                        for (final (byCount, label, key) in [
+                          (false, 'Recent', 'tapsSortRecent'),
+                          (true, 'Most taps', 'tapsSortCount'),
+                        ])
+                          Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: ChoiceChip(
+                              key: Key(key),
+                              label: Text(label),
+                              selected: taps!.byCount == byCount,
+                              showCheckmark: false,
+                              selectedColor:
+                                  HuntrColors.orange.withValues(alpha: 0.18),
+                              side: BorderSide(
+                                  color: taps.byCount == byCount
+                                      ? HuntrColors.orange
+                                      : HuntrColors.border),
+                              onSelected: (_) => taps.sortByCount(byCount),
+                            ),
+                          ),
+                      ]),
                     ),
+                    for (final tap in list)
+                      _TapRow(
+                        tap: tap,
+                        time: timeLabel(tap.receivedAt, now),
+                        onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute(
+                                builder: (_) => TapDetailScreen(tap: tap))),
+                      ),
+                  ],
                 ],
               ],
-            ],
+            ),
           ),
         ),
       ),
     );
   }
+
+  /// The side margin: 16, or wider so the content is at most 720 across.
+  static double _side(double width) => width > 752 ? (width - 720) / 2 : 16;
 }
 
 class _TapRow extends StatelessWidget {
