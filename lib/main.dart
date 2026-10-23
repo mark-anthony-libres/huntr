@@ -8,6 +8,7 @@ import 'services/agreement_service.dart';
 import 'services/album_service.dart';
 import 'services/explore_service.dart';
 import 'services/feedback_service.dart';
+import 'services/nearby_service.dart';
 import 'services/story_service.dart';
 import 'services/presence/presence_service.dart';
 import 'services/location_service.dart';
@@ -97,6 +98,7 @@ void main() {
     presence: PresenceService(),
     feedback: const FeedbackService(),
     stories: const StoryService(),
+    nearby: const NearbyService(),
     locationAccess: LocationAccess(const GeolocatorPermissions()),
     blocks: blocks,
     taps: taps,
@@ -118,6 +120,7 @@ class HuntrApp extends StatelessWidget {
     this.presence,
     this.feedback,
     this.stories,
+    this.nearby,
     this.messaging,
     this.locate = locateDevice,
     this.locationAccess,
@@ -165,6 +168,9 @@ class HuntrApp extends StatelessWidget {
   /// Stories (My Day).
   final StoryService? stories;
 
+  /// Nearby's anonymous posts. Null: no Nearby tab content (tests).
+  final NearbyService? nearby;
+
   /// My direct messages on the backend. Null keeps the sample chats.
   final MessagingState? messaging;
 
@@ -203,6 +209,7 @@ class HuntrApp extends StatelessWidget {
               presence: presence,
               feedback: feedback,
               stories: stories,
+              nearby: nearby,
               child: ThemeFollower(
                 appearance: state.appearance,
                 builder: (context) => MaterialApp(

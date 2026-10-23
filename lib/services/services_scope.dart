@@ -4,6 +4,7 @@ import 'agreement_service.dart';
 import 'album_service.dart';
 import 'explore_service.dart';
 import 'feedback_service.dart';
+import 'nearby_service.dart';
 import 'story_service.dart';
 import 'presence/presence_service.dart';
 import 'photo_cache/photo_cache.dart';
@@ -26,6 +27,7 @@ class ServicesScope extends InheritedWidget {
     this.presence,
     this.feedback,
     this.stories,
+    this.nearby,
     required super.child,
   });
 
@@ -55,6 +57,9 @@ class ServicesScope extends InheritedWidget {
 
   /// Stories (My Day). Null hides them.
   final StoryService? stories;
+
+  /// Nearby's anonymous posts. Null: no Nearby (tests, sample data).
+  final NearbyService? nearby;
 
   static ServicesScope? _of(BuildContext context) =>
       context.getInheritedWidgetOfExactType<ServicesScope>();
@@ -93,6 +98,8 @@ class ServicesScope extends InheritedWidget {
 
   static StoryService? storiesOf(BuildContext context) => _of(context)?.stories;
 
+  static NearbyService? nearbyOf(BuildContext context) => _of(context)?.nearby;
+
   @override
   bool updateShouldNotify(ServicesScope oldWidget) =>
       profiles != oldWidget.profiles ||
@@ -105,5 +112,6 @@ class ServicesScope extends InheritedWidget {
       explore != oldWidget.explore ||
       feedback != oldWidget.feedback ||
       stories != oldWidget.stories ||
+      nearby != oldWidget.nearby ||
       presence != oldWidget.presence;
 }

@@ -14,6 +14,7 @@ import 'chat_screen.dart';
 import 'chats_screen.dart';
 import 'explore_screen.dart';
 import 'me_screen.dart';
+import 'nearby_screen.dart';
 import 'taps_screen.dart';
 import '../widgets/huntr_bottom_bar.dart';
 
@@ -26,9 +27,9 @@ class HomeShell extends StatefulWidget {
 
 class _HomeShellState extends State<HomeShell> {
   // the tabs, in order
-  static const _exploreTab = 0;
-  static const _tapsTab = 1;
-  static const _chatsTab = 2;
+  static const _exploreTab = 0; // Nearby is 1
+  static const _tapsTab = 2;
+  static const _chatsTab = 3;
 
   int _tab = _exploreTab;
   StreamSubscription<String>? _events;
@@ -221,6 +222,7 @@ class _HomeShellState extends State<HomeShell> {
         index: _tab,
         children: [
           const ExploreScreen(),
+          const NearbyScreen(),
           const TapsScreen(),
           ChatsScreen(onExplore: () => setState(() => _tab = _exploreTab)),
           const MeScreen(),
@@ -232,6 +234,9 @@ class _HomeShellState extends State<HomeShell> {
         items: [
           const HuntrBottomBarItem(
               icon: Icons.explore_outlined, label: 'Explore'),
+          // anonymous posts from people around
+          const HuntrBottomBarItem(
+              icon: Icons.location_on_outlined, label: 'Nearby'),
           HuntrBottomBarItem(
               icon: Icons.waving_hand_outlined,
               label: 'Taps',

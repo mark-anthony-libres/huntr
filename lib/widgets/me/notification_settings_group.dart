@@ -89,38 +89,71 @@ class _NotificationSettingsGroupState extends State<NotificationSettingsGroup> {
             : "Notifications aren't allowed for HUNTR here.")));
   }
 
+  /// Where this device stands: on (registered), not asked, blocked, or a
+  /// problem (with what went wrong) - each with what can be done.
+  Widget _deviceRow(PushNotifications push) {
+    final status = push.permission.value;
+    final problem = push.problem.value;
+    final on =
+        status == AuthorizationStatus.authorized && push.registered.value;
+    final (icon, title, subtitle, action) = problem != null
+        ? (
+            Icons.error_outline_rounded,
+            "Couldn't turn on notifications here",
+            problem,
+            'Try again'
+          )
+        : on
+            ? (
+                Icons.notifications_active_outlined,
+                'On for this device',
+                'You get notifications here',
+                null
+              )
+            : push.blocked
+                ? (
+                    Icons.notifications_off_outlined,
+                    'Blocked on this device',
+                    'Allow notifications for HUNTR in your browser or phone '
+                        'settings, then come back',
+                    null
+                  )
+                : (
+                    Icons.notifications_off_outlined,
+                    'Not on for this device',
+                    'Allow HUNTR to show notifications here',
+                    'Turn on'
+                  );
+    return SettingsRow(
+      key: const Key('notificationsDevice'),
+      icon: icon,
+      title: title,
+      subtitle: subtitle,
+      trailing: on
+          ? const Icon(Icons.check_circle_rounded, color: Colors.white)
+          : action == null
+              ? null
+              : FilledButton(
+                  key: const Key('notificationsAllow'),
+                  style: FilledButton.styleFrom(
+                      minimumSize: const Size(0, 38),
+                      padding: const EdgeInsets.symmetric(horizontal: 16)),
+                  onPressed: _enabling ? null : _allow,
+                  child: Text(action),
+                ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final chosen = AppScope.of(context).notifications;
     final push = PushNotifications.instance;
-    return ValueListenableBuilder<AuthorizationStatus?>(
-      valueListenable: push.permission,
-      builder: (context, status, _) => SettingsGroup(children: [
-        // this device: not asked yet, or blocked in its settings
-        if (PushNotifications.supported &&
-            status != null &&
-            status != AuthorizationStatus.authorized)
-          SettingsRow(
-            key: const Key('notificationsDevice'),
-            icon: Icons.notifications_off_outlined,
-            title: push.blocked
-                ? 'Blocked on this device'
-                : 'Not on for this device',
-            subtitle: push.blocked
-                ? 'Allow notifications for HUNTR in your browser or phone '
-                    'settings'
-                : 'Allow HUNTR to show notifications here',
-            trailing: push.blocked
-                ? null
-                : FilledButton(
-                    key: const Key('notificationsAllow'),
-                    style: FilledButton.styleFrom(
-                        minimumSize: const Size(0, 38),
-                        padding: const EdgeInsets.symmetric(horizontal: 16)),
-                    onPressed: _enabling ? null : _allow,
-                    child: const Text('Turn on'),
-                  ),
-          ),
+    return ListenableBuilder(
+      listenable:
+          Listenable.merge([push.permission, push.registered, push.problem]),
+      builder: (context, _) => SettingsGroup(children: [
+        // this device: on, not yet, blocked, or why it couldn't start
+        if (PushNotifications.supported) _deviceRow(push),
         SettingsRow(
           icon: Icons.waving_hand_outlined,
           title: 'Taps',

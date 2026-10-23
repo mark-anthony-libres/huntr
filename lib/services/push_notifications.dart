@@ -67,6 +67,19 @@ class PushNotifications {
   /// or not supported here).
   final permission = ValueNotifier<AuthorizationStatus?>(null);
 
+  /// This device is registered with the backend (it gets notifications).
+  final registered = ValueNotifier<bool>(false);
+
+  /// Why notifications couldn't be set up here (null: no problem), for
+  /// Settings to show - with a way to try again ([enable]).
+  final problem = ValueNotifier<String?>(null);
+
+  void _failed(String what, Object error) {
+    debugPrint('$what: $error');
+    final text = error is backend.BackendException ? error.message : '$error';
+    problem.value = text.length > 160 ? '${text.substring(0, 160)}…' : text;
+  }
+
   Future<void> _init() async {
     if (_ready) return;
     await Firebase.initializeApp(
@@ -95,6 +108,16 @@ class PushNotifications {
     _sessionToken = sessionToken;
     try {
       await _init();
+      // first: this device gets notifications (when allowed)
+      if (permission.value == AuthorizationStatus.authorized) {
+        await _register();
+      }
+    } catch (error) {
+      _failed('Push notifications not started', error);
+      return;
+    }
+    // then: where a tapped one leads (on its own: it never stops the above)
+    try {
       _opens ??= FirebaseMessaging.onMessageOpenedApp.listen((message) {
         final target = PushTarget.from(message.data);
         if (target != null) onOpen(target);
@@ -102,11 +125,8 @@ class PushNotifications {
       final first = await FirebaseMessaging.instance.getInitialMessage();
       final target = first == null ? null : PushTarget.from(first.data);
       if (target != null) onOpen(target);
-      if (permission.value == AuthorizationStatus.authorized) {
-        await _register();
-      }
     } catch (error) {
-      debugPrint('Push notifications not started: $error');
+      debugPrint('Tapped notifications not followed: $error');
     }
   }
 
@@ -121,6 +141,7 @@ class PushNotifications {
   /// must follow a tap), then registers this device. True when allowed.
   Future<bool> enable() async {
     if (!supported) return false;
+    problem.value = null;
     try {
       await _init();
       final settings = await FirebaseMessaging.instance.requestPermission();
@@ -131,7 +152,7 @@ class PushNotifications {
       await _register();
       return true;
     } catch (error) {
-      debugPrint('Push notifications not enabled: $error');
+      _failed('Push notifications not enabled', error);
       return false;
     }
   }
@@ -148,6 +169,8 @@ class PushNotifications {
         token: session,
         pushToken: pushToken,
         platform: _platform);
+    registered.value = true;
+    problem.value = null;
     _refreshes ??= FirebaseMessaging.instance.onTokenRefresh.listen((fresh) {
       _pushToken = fresh;
       final session = _sessionToken;
@@ -167,6 +190,7 @@ class PushNotifications {
   /// getting that account's notifications.
   Future<void> stop(String? sessionToken) async {
     _sessionToken = null;
+    registered.value = false;
     final pushToken = _pushToken;
     _pushToken = null;
     if (pushToken == null || sessionToken == null) return;

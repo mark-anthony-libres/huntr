@@ -3638,3 +3638,323 @@ Future<List<BlockedPerson>> fetchMyBlocks(
           BlockedPerson.fromJson(b as Map<String, dynamic>),
       ],
     );
+
+// ---- Nearby: anonymous posts around me ----
+
+/// Someone as they show in one Nearby post: a random name and animal (never
+/// who they are).
+class NearbyName {
+  const NearbyName({required this.name, required this.avatar});
+
+  factory NearbyName.fromJson(Map<String, dynamic> json) => NearbyName(
+      name: json['name'] as String, avatar: json['avatar'] as String);
+
+  final String name;
+
+  /// The animal (see anonymousAnimals).
+  final String avatar;
+}
+
+/// A Nearby post as I see it.
+class NearbyPost {
+  const NearbyPost({
+    required this.id,
+    required this.author,
+    required this.body,
+    required this.distanceM,
+    required this.createdAt,
+    required this.likeCount,
+    required this.liked,
+    required this.commentCount,
+    required this.mine,
+    this.radiusM,
+  });
+
+  factory NearbyPost.fromJson(Map<String, dynamic> json) => NearbyPost(
+        id: json['id'] as int,
+        author: NearbyName.fromJson(json),
+        body: json['body'] as String,
+        distanceM: json['distance_m'] as int?,
+        createdAt: DateTime.parse(json['created_at'] as String).toLocal(),
+        likeCount: json['like_count'] as int? ?? 0,
+        liked: json['liked'] as bool? ?? false,
+        commentCount: json['comment_count'] as int? ?? 0,
+        mine: json['mine'] as bool? ?? false,
+        radiusM: json['radius_m'] as int?,
+      );
+
+  final int id;
+  final NearbyName author;
+  final String body;
+
+  /// From me to where it was posted, to 10 m (mine too).
+  final int? distanceM;
+  final DateTime createdAt;
+  final int likeCount;
+  final bool liked;
+  final int commentCount;
+  final bool mine;
+
+  /// How far it reaches (mine only).
+  final int? radiusM;
+
+  NearbyPost copyWith({int? likeCount, bool? liked, int? commentCount}) =>
+      NearbyPost(
+        id: id,
+        author: author,
+        body: body,
+        distanceM: distanceM,
+        createdAt: createdAt,
+        likeCount: likeCount ?? this.likeCount,
+        liked: liked ?? this.liked,
+        commentCount: commentCount ?? this.commentCount,
+        mine: mine,
+        radiusM: radiusM,
+      );
+}
+
+/// A comment on a Nearby post (with its replies, when it's a top-level one).
+class NearbyComment {
+  const NearbyComment({
+    required this.id,
+    required this.parentId,
+    required this.author,
+    required this.body,
+    required this.distanceM,
+    required this.createdAt,
+    required this.likeCount,
+    required this.liked,
+    required this.mine,
+    required this.byAuthor,
+    this.replies = const [],
+  });
+
+  factory NearbyComment.fromJson(Map<String, dynamic> json) => NearbyComment(
+        id: json['id'] as int,
+        parentId: json['parent_id'] as int?,
+        author: NearbyName.fromJson(json),
+        body: json['body'] as String,
+        distanceM: json['distance_m'] as int?,
+        createdAt: DateTime.parse(json['created_at'] as String).toLocal(),
+        likeCount: json['like_count'] as int? ?? 0,
+        liked: json['liked'] as bool? ?? false,
+        mine: json['mine'] as bool? ?? false,
+        byAuthor: json['by_author'] as bool? ?? false,
+        replies: [
+          for (final r in json['replies'] as List? ?? const [])
+            NearbyComment.fromJson(r as Map<String, dynamic>),
+        ],
+      );
+
+  final int id;
+  final int? parentId;
+  final NearbyName author;
+  final String body;
+  final int? distanceM;
+  final DateTime createdAt;
+  final int likeCount;
+  final bool liked;
+  final bool mine;
+
+  /// Written by the post's author (shown by their name on it).
+  final bool byAuthor;
+  final List<NearbyComment> replies;
+}
+
+/// A post and its discussion: newest comments first, replies oldest first.
+class NearbyDiscussion {
+  const NearbyDiscussion({required this.post, required this.comments});
+
+  factory NearbyDiscussion.fromJson(Map<String, dynamic> json) =>
+      NearbyDiscussion(
+        post: NearbyPost.fromJson(json['post'] as Map<String, dynamic>),
+        comments: [
+          for (final c in json['comments'] as List)
+            NearbyComment.fromJson(c as Map<String, dynamic>),
+        ],
+      );
+
+  final NearbyPost post;
+  final List<NearbyComment> comments;
+}
+
+/// A page of the Nearby feed.
+class NearbyFeedPage {
+  const NearbyFeedPage({required this.posts, required this.nextOffset});
+
+  final List<NearbyPost> posts;
+  final int? nextOffset;
+}
+
+/// My location isn't known to the backend yet (Nearby needs it).
+class NearbyNoLocationException extends BackendException {
+  const NearbyNoLocationException(super.message);
+}
+
+Uri _nearby(String backendUrl, [String path = '']) =>
+    _endpoint(backendUrl, '/nearby$path');
+
+/// Nearby's 409 for "no location" is its own exception; others as they come.
+Future<T> _nearbyCall<T>(Future<T> Function() call) async {
+  try {
+    return await call();
+  } on BackendException catch (error) {
+    if (error is! SessionRejectedException &&
+        error.message.toLowerCase().contains('turn on your location')) {
+      throw NearbyNoLocationException(error.message);
+    }
+    rethrow;
+  }
+}
+
+/// GET .../nearby/posts: posts I may see, nearest ("nearby") or newest
+/// ("latest") first, optionally only within [withinM] of me.
+Future<NearbyFeedPage> fetchNearbyPosts(
+        {required String backendUrl,
+        required String token,
+        String sort = 'nearby',
+        int? withinM,
+        int offset = 0,
+        http.Client? client}) =>
+    _nearbyCall(() => _sendAuthorized(
+          client,
+          (httpClient) => httpClient.get(
+              _nearby(backendUrl, '/posts').replace(queryParameters: {
+                'sort': sort,
+                'offset': '$offset',
+                if (withinM != null) 'within_m': '$withinM',
+              }),
+              headers: _authorization(token)),
+          (data) => NearbyFeedPage(
+            posts: [
+              for (final p in data['posts'] as List)
+                NearbyPost.fromJson(p as Map<String, dynamic>),
+            ],
+            nextOffset: data['next_offset'] as int?,
+          ),
+        ));
+
+/// GET .../nearby/identity: a random name for the composer's preview.
+Future<NearbyName> fetchNearbyIdentity(
+        {required String backendUrl,
+        required String token,
+        http.Client? client}) =>
+    _sendAuthorized(
+      client,
+      (httpClient) => httpClient.get(_nearby(backendUrl, '/identity'),
+          headers: _authorization(token)),
+      NearbyName.fromJson,
+    );
+
+/// POST .../nearby/posts: my post, as [as] (the previewed name).
+Future<NearbyPost> createNearbyPost(
+        {required String backendUrl,
+        required String token,
+        required String body,
+        required int radiusM,
+        NearbyName? as,
+        http.Client? client}) =>
+    _nearbyCall(() => _sendAuthorized(
+          client,
+          (httpClient) => httpClient.post(_nearby(backendUrl, '/posts'),
+              headers: _json(token),
+              body: jsonEncode({
+                'body': body,
+                'radius_m': radiusM,
+                if (as != null) 'name': as.name,
+                if (as != null) 'avatar': as.avatar,
+              })),
+          NearbyPost.fromJson,
+        ));
+
+/// GET .../nearby/posts/{id}: the post and its discussion.
+Future<NearbyDiscussion> fetchNearbyDiscussion(
+        {required String backendUrl,
+        required String token,
+        required int postId,
+        http.Client? client}) =>
+    _nearbyCall(() => _sendAuthorized(
+          client,
+          (httpClient) => httpClient.get(_nearby(backendUrl, '/posts/$postId'),
+              headers: _authorization(token)),
+          NearbyDiscussion.fromJson,
+        ));
+
+/// POST .../nearby/posts/{id}/comments: my comment, or reply ([parentId]);
+/// the discussion as it is now.
+Future<NearbyDiscussion> commentOnNearbyPost(
+        {required String backendUrl,
+        required String token,
+        required int postId,
+        required String body,
+        int? parentId,
+        http.Client? client}) =>
+    _nearbyCall(() => _sendAuthorized(
+          client,
+          (httpClient) => httpClient.post(
+              _nearby(backendUrl, '/posts/$postId/comments'),
+              headers: _json(token),
+              body: jsonEncode({'body': body, 'parent_id': parentId})),
+          NearbyDiscussion.fromJson,
+        ));
+
+/// POST/DELETE .../like on a post (or one of its comments): (hearts, mine).
+Future<({int count, bool liked})> likeNearby(
+        {required String backendUrl,
+        required String token,
+        required int postId,
+        int? commentId,
+        required bool like,
+        http.Client? client}) =>
+    _sendAuthorized(
+      client,
+      (httpClient) {
+        final url = _nearby(
+            backendUrl,
+            commentId == null
+                ? '/posts/$postId/like'
+                : '/posts/$postId/comments/$commentId/like');
+        return like
+            ? httpClient.post(url, headers: _authorization(token))
+            : httpClient.delete(url, headers: _authorization(token));
+      },
+      (data) =>
+          (count: data['like_count'] as int, liked: data['liked'] as bool),
+    );
+
+/// DELETE my post, or ([commentId]) my comment.
+Future<void> deleteNearby(
+        {required String backendUrl,
+        required String token,
+        int? postId,
+        int? commentId,
+        http.Client? client}) =>
+    _sendAuthorized(
+      client,
+      (httpClient) => httpClient.delete(
+          _nearby(backendUrl,
+              commentId == null ? '/posts/$postId' : '/comments/$commentId'),
+          headers: _authorization(token)),
+      (_) {},
+    );
+
+/// Reports a post (or one of its comments); it's hidden from me after.
+Future<void> reportNearby(
+        {required String backendUrl,
+        required String token,
+        required int postId,
+        int? commentId,
+        required String reason,
+        http.Client? client}) =>
+    _sendAuthorized(
+      client,
+      (httpClient) => httpClient.post(
+          _nearby(
+              backendUrl,
+              commentId == null
+                  ? '/posts/$postId/report'
+                  : '/posts/$postId/comments/$commentId/report'),
+          headers: _json(token),
+          body: jsonEncode({'reason': reason})),
+      (_) {},
+    );
