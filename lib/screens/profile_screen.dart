@@ -13,6 +13,7 @@ import '../state/tap_state.dart';
 import '../theme.dart';
 import '../widgets/profile_tile.dart';
 import '../widgets/avatar.dart';
+import '../widgets/network_photo.dart';
 import '../widgets/share_sheet.dart';
 import 'chat_screen.dart';
 import '../widgets/profile/gradient_button.dart';
@@ -221,64 +222,44 @@ class ProfileScreen extends StatelessWidget {
             ),
           // their stories (mine, with Add Story, on my own profile)
           ProfileStories(profile: p, mine: _isPreview),
-          if (p.bio.isNotEmpty)
-            ProfileSection(
-                title: 'About',
-                child: Text(p.bio,
-                    style: const TextStyle(
-                        fontSize: 17, height: 1.5, color: Colors.white))),
-          if (p.lookingFor.isNotEmpty)
-            ProfileSection(
-              title: 'Looking for',
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  for (final choice in p.lookingFor)
-                    LookingForPill(choice: choice),
-                ],
+          // About, Stats, Looking for (and interests), divided
+          ..._divided([
+            if (p.bio.isNotEmpty)
+              ProfileSection(
+                  title: 'About',
+                  child: Text(p.bio,
+                      style: const TextStyle(
+                          fontSize: 17, height: 1.5, color: Colors.white))),
+            // their stats, in the units I chose (unset ones aren't shown)
+            if (p.stats.lines(app.myStats.units) case final lines
+                when lines.isNotEmpty)
+              ProfileSection(
+                title: 'Stats',
+                child: _StatsGrid(key: const Key('profileStats'), lines: lines),
               ),
-            ),
-          // their stats, in the units I chose (unset ones aren't shown)
-          if (p.stats.lines(app.myStats.units) case final lines
-              when lines.isNotEmpty)
-            ProfileSection(
-              title: 'Stats',
-              child: Column(
-                key: const Key('profileStats'),
-                children: [
-                  for (final (label, value) in lines)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 6),
-                      child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            SizedBox(
-                              width: 150,
-                              child: Text(label,
-                                  style: const TextStyle(
-                                      color: HuntrColors.muted, fontSize: 15)),
-                            ),
-                            Expanded(
-                              child: Text(value,
-                                  key: Key('profileStat-$label'),
-                                  style: const TextStyle(
-                                      color: Colors.white, fontSize: 15)),
-                            ),
-                          ]),
-                    ),
-                ],
+            if (p.lookingFor.isNotEmpty)
+              ProfileSection(
+                title: 'Looking for',
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    // exactly what they picked, all alike
+                    for (final choice in p.lookingFor)
+                      LookingForPill(choice: choice),
+                  ],
+                ),
               ),
-            ),
-          if (p.interests.isNotEmpty)
-            ProfileSection(
-              title: 'Interests',
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [for (final i in p.interests) Chip(label: Text(i))],
+            if (p.interests.isNotEmpty)
+              ProfileSection(
+                title: 'Interests',
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [for (final i in p.interests) Chip(label: Text(i))],
+                ),
               ),
-            ),
+          ]),
         ],
       ),
     );
@@ -368,43 +349,10 @@ class ProfileScreen extends StatelessWidget {
                   children: [
                     Flexible(
                       flex: 5,
-                      child: AspectRatio(
-                        aspectRatio: 4 / 5,
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(28),
-                          child: Stack(fit: StackFit.expand, children: [
-                            PhotoGallery(
-                                profile: p, firstIsAvatar: !_isPreview),
-                            // only a top shade, for the buttons
-                            const IgnorePointer(
-                              child: DecoratedBox(
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    begin: Alignment.topCenter,
-                                    end: Alignment.bottomCenter,
-                                    stops: [0, 0.22],
-                                    colors: [
-                                      Color(0x990F1014),
-                                      Colors.transparent
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const Positioned(
-                                top: 4,
-                                left: 4,
-                                child: _CircleButton(child: BackButton())),
-                            Positioned(
-                              top: 4,
-                              right: 0,
-                              child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: actions),
-                            ),
-                          ]),
-                        ),
-                      ),
+                      child: _WideGallery(
+                          profile: p,
+                          firstIsAvatar: !_isPreview,
+                          actions: actions),
                     ),
                     const SizedBox(width: 32),
                     Flexible(
@@ -817,4 +765,258 @@ class _CountsAsVisitState extends State<_CountsAsVisit> {
 
   @override
   Widget build(BuildContext context) => widget.child;
+}
+
+/// [sections] with a thin line between each.
+List<Widget> _divided(List<Widget> sections) => [
+      for (final (i, section) in sections.indexed) ...[
+        if (i > 0)
+          const Padding(
+            padding: EdgeInsets.only(bottom: 22),
+            child: Divider(height: 1, color: HuntrColors.border),
+          ),
+        section,
+      ],
+    ];
+
+/// Stats as a grid: an icon in a circle, the label over the value; two
+/// across where there's room.
+class _StatsGrid extends StatelessWidget {
+  const _StatsGrid({super.key, required this.lines});
+
+  final List<(String, String)> lines;
+
+  static const _icons = {
+    'Height': Icons.height_rounded,
+    'Weight': Icons.monitor_weight_outlined,
+    'Body Type': Icons.accessibility_new_rounded,
+    'Position': Icons.swap_vert_rounded,
+    'Ethnicity': Icons.public_rounded,
+    'Relationship Status': Icons.favorite_border_rounded,
+    'Tribes': Icons.groups_outlined,
+  };
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(builder: (context, box) {
+        const gap = 16.0;
+        final across = box.maxWidth >= 360 ? 2 : 1;
+        final width = (box.maxWidth - gap * (across - 1)) / across;
+        return Wrap(
+          spacing: gap,
+          runSpacing: 14,
+          children: [
+            for (final (label, value) in lines)
+              SizedBox(
+                width: width,
+                child: Row(children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: HuntrColors.surface,
+                      border: Border.all(color: HuntrColors.border),
+                    ),
+                    child: Icon(_icons[label] ?? Icons.info_outline_rounded,
+                        size: 20, color: Colors.white70),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(label,
+                              style: const TextStyle(
+                                  color: HuntrColors.muted, fontSize: 14)),
+                          const SizedBox(height: 2),
+                          Text(value,
+                              key: Key('profileStat-$label'),
+                              style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600)),
+                        ]),
+                  ),
+                ]),
+              ),
+          ],
+        );
+      });
+}
+
+/// Wide screens: the photo (back, favourite and more on it), and under it
+/// their photos as thumbnails - the one shown outlined; tap one to see it.
+class _WideGallery extends StatefulWidget {
+  const _WideGallery(
+      {required this.profile,
+      required this.firstIsAvatar,
+      required this.actions});
+
+  final Profile profile;
+  final bool firstIsAvatar;
+  final List<Widget> actions;
+
+  @override
+  State<_WideGallery> createState() => _WideGalleryState();
+}
+
+class _WideGalleryState extends State<_WideGallery> {
+  final _pages = PageController();
+  int _page = 0;
+
+  /// Thumbnails shown; past that, a "+N" tile.
+  static const _thumbs = 4;
+
+  @override
+  void dispose() {
+    _pages.dispose();
+    super.dispose();
+  }
+
+  void _show(int page) => _pages.animateToPage(page,
+      duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
+
+  @override
+  Widget build(BuildContext context) {
+    final urls = widget.profile.photoUrls;
+    // five fit; more: four and "+N"
+    final shown = urls.length <= _thumbs + 1 ? urls.length : _thumbs;
+    final rest = urls.length - shown;
+    final strip = urls.length > 1;
+    // the photo (4:5) and the strip under it fit the space: as wide as there
+    // is room for, but never taller than the window allows
+    return LayoutBuilder(builder: (context, box) {
+      const gap = 12.0, between = 10.0, tiles = _thumbs + 1.0, tile = 0.82;
+      // the strip's height for a photo this tall (its tiles share the width)
+      final perPhotoHeight = 0.8 / (tiles * tile);
+      final fixed = gap - between * (tiles - 1) / (tiles * tile);
+      var photoHeight = box.maxWidth * 5 / 4;
+      if (box.maxHeight.isFinite) {
+        final fits = strip
+            ? (box.maxHeight - fixed) / (1 + perPhotoHeight)
+            : box.maxHeight;
+        if (fits < photoHeight) photoHeight = fits;
+      }
+      final photoWidth = photoHeight * 4 / 5;
+      return SizedBox(
+        width: photoWidth,
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          SizedBox(
+            height: photoHeight,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(28),
+              child: Stack(fit: StackFit.expand, children: [
+                PhotoGallery(
+                    profile: widget.profile,
+                    firstIsAvatar: widget.firstIsAvatar,
+                    controller: _pages,
+                    onPageChanged: (i) => setState(() => _page = i)),
+                // only a top shade, for the buttons
+                const IgnorePointer(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        stops: [0, 0.22],
+                        colors: [Color(0x990F1014), Colors.transparent],
+                      ),
+                    ),
+                  ),
+                ),
+                const Positioned(
+                    top: 4, left: 4, child: _CircleButton(child: BackButton())),
+                Positioned(
+                  top: 4,
+                  right: 0,
+                  child: Row(
+                      mainAxisSize: MainAxisSize.min, children: widget.actions),
+                ),
+              ]),
+            ),
+          ),
+          if (strip) ...[
+            const SizedBox(height: gap),
+            Row(children: [
+              for (var i = 0; i < _thumbs + 1; i++) ...[
+                if (i > 0) const SizedBox(width: between),
+                Expanded(
+                  child: AspectRatio(
+                    aspectRatio: tile,
+                    child: i < shown
+                        ? _Thumb(
+                            key: Key('profileThumb-$i'),
+                            url: urls[i],
+                            selected: i == _page,
+                            onTap: () => _show(i))
+                        : i == shown && rest > 0
+                            ? _MoreThumb(rest: rest, onTap: () => _show(shown))
+                            : const SizedBox(),
+                  ),
+                ),
+              ],
+            ]),
+          ],
+        ]),
+      );
+    });
+  }
+}
+
+class _Thumb extends StatelessWidget {
+  const _Thumb(
+      {super.key,
+      required this.url,
+      required this.selected,
+      required this.onTap});
+
+  final String url;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.all(2),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+                color: selected ? HuntrColors.orange : HuntrColors.border,
+                width: 2),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: NetworkPhoto(url),
+          ),
+        ),
+      );
+}
+
+/// "+4": more photos than thumbnails.
+class _MoreThumb extends StatelessWidget {
+  const _MoreThumb({required this.rest, required this.onTap});
+
+  final int rest;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+        key: const Key('profileThumbMore'),
+        onTap: onTap,
+        child: Container(
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: HuntrColors.surface,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Colors.white24, width: 1.5),
+          ),
+          child: Text('+$rest',
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700)),
+        ),
+      );
 }

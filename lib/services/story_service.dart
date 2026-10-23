@@ -12,6 +12,10 @@ class StoryService {
   /// How long a story stays up.
   static const lifetime = Duration(hours: 24);
 
+  /// The longest file (the website on a computer) that can be trimmed to a
+  /// story; recordings are never longer than [maxLength] anyway.
+  static const maxSourceLength = Duration(minutes: 3);
+
   /// The most stories one person can have up at once (the backend's
   /// STORY_MAX_ACTIVE; it refuses more either way).
   static const maxActive = 10;

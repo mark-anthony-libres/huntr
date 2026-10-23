@@ -31,7 +31,7 @@ class ProfileTile extends StatelessWidget {
     // long names (up to 20 characters) a little smaller, and on two lines
     // when they need them, so they show in full
     final long = profile.name.characters.length > 12;
-    final nameSize = compact ? (long ? 12.5 : 13.5) : (long ? 17.0 : 20.0);
+    final nameSize = compact ? (long ? 12.5 : 13.5) : (long ? 16.0 : 18.0);
     return Semantics(
       button: true,
       label:
@@ -50,7 +50,11 @@ class ProfileTile extends StatelessWidget {
             children: [
               Hero(
                   tag: 'art-${profile.id}',
-                  child: ProfileArt(profile: profile, fontSize: 34)),
+                  // the stand-in picture up top, clear of the name below
+                  child: ProfileArt(
+                      profile: profile,
+                      fontSize: 34,
+                      alignment: const Alignment(0, -0.45))),
               // keeps the text readable on any photo
               const DecoratedBox(
                 decoration: BoxDecoration(
@@ -99,7 +103,9 @@ class ProfileTile extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // name, age and the verified mark run on together
+                    // "Name, 24" as on profiles: the age stays with the
+                    // name's last word (never alone on a line) and the
+                    // verified mark follows
                     Text.rich(
                       key: const Key('tileName'),
                       TextSpan(children: [
@@ -107,20 +113,19 @@ class ProfileTile extends StatelessWidget {
                           TextSpan(
                               text: profile.name,
                               style: const TextStyle(
-                                  fontWeight: FontWeight.w700,
+                                  fontWeight: FontWeight.w800,
                                   color: Colors.white)),
                         if (!profile.ageHidden)
                           TextSpan(
-                              text:
-                                  noName ? '${profile.age}' : ' ${profile.age}',
+                              text: noName
+                                  ? '${profile.age}'
+                                  : ',\u00A0${profile.age}',
                               style: TextStyle(
-                                  fontSize:
-                                      noName ? nameSize + 1.5 : nameSize - 1,
+                                  fontSize: noName ? nameSize + 2 : nameSize,
                                   fontWeight: noName
                                       ? FontWeight.w800
-                                      : FontWeight.w500,
-                                  color:
-                                      noName ? Colors.white : Colors.white70)),
+                                      : FontWeight.w600,
+                                  color: Colors.white)),
                         if (profile.verified)
                           WidgetSpan(
                             alignment: PlaceholderAlignment.middle,

@@ -12,6 +12,10 @@ import '../../state/app_state.dart';
 import '../../theme.dart';
 import '../avatar.dart';
 
+/// Explore's map is hidden unless built with MAP_ENABLED=true (env/*.json):
+/// no Map button, no "Show me on the map" setting.
+const mapEnabled = bool.fromEnvironment('MAP_ENABLED');
+
 /// Where the map's images come from, set when building (env/*.json):
 ///
 /// - MAPTILER_KEY: MapTiler's plain light map, Dataviz (for the live app;

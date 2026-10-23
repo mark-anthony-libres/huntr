@@ -23,6 +23,13 @@ class StoryCameraScreen extends StatefulWidget {
   /// The website on a computer (often without a camera) may also take a
   /// video file (still at most [StoryService.maxLength]); the apps and phone
   /// browsers only record.
+  /// A phone's browser (Chrome, Brave, Safari on a phone): if the browser
+  /// can't open the camera itself, the phone's camera app records instead.
+  static bool get phoneBrowser =>
+      kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.iOS);
+
   static bool get canChooseFile =>
       kIsWeb &&
       defaultTargetPlatform != TargetPlatform.android &&
@@ -96,9 +103,17 @@ class _StoryCameraScreenState extends State<StoryCameraScreen>
   /// Opening the camera now (never twice at once).
   bool _opening = false;
 
+  /// Retries made by themselves after a failed start (phones' browsers
+  /// often can't open a camera the moment another one was let go).
+  int _autoRetries = 0;
+
+  /// What the camera said when it failed (shown small, for support).
+  String? _problemCode;
+
   Future<void> _open() async {
     if (_opening) return;
     _opening = true;
+    var retry = false;
     setState(() {
       _starting = true;
       _problem = null;
@@ -126,11 +141,25 @@ class _StoryCameraScreenState extends State<StoryCameraScreen>
         _starting = false;
       });
     } on CameraException catch (error) {
+      debugPrint('Story camera failed: ${error.code} ${error.description}');
       if (!mounted) return;
-      setState(() {
-        _starting = false;
-        _problem = _explain(error);
-      });
+      final problem = _explain(error);
+      final code = error.code.toLowerCase();
+      if (problem.blocked == null &&
+          !code.contains('notfound') &&
+          !code.contains('nocamera') &&
+          _autoRetries < 2) {
+        // try again by itself, from the camera list, after a moment
+        _autoRetries++;
+        _cameras = const [];
+        retry = true;
+      } else {
+        setState(() {
+          _starting = false;
+          _problem = problem;
+          _problemCode = error.code;
+        });
+      }
     } catch (error) {
       // anything else (e.g. no camera support here): say so, never spin
       debugPrint('Story camera failed: $error');
@@ -138,9 +167,26 @@ class _StoryCameraScreenState extends State<StoryCameraScreen>
       setState(() {
         _starting = false;
         _problem = _explain(CameraException('Unavailable', '$error'));
+        _problemCode = '${error.runtimeType}';
       });
     } finally {
       _opening = false;
+    }
+    if (retry) {
+      await Future<void>.delayed(const Duration(milliseconds: 800));
+      if (mounted) await _open();
+    }
+  }
+
+  /// A phone's browser: record with the phone's own camera app (it opens
+  /// straight to recording - still nothing from the gallery).
+  Future<void> _recordWithPhone() async {
+    try {
+      final video = await ChatMediaPicker.instance
+          .recordVideo(maxDuration: StoryService.maxLength);
+      if (video != null && mounted) Navigator.of(context).pop(video);
+    } catch (error) {
+      debugPrint('Phone camera not opened: $error');
     }
   }
 
@@ -184,7 +230,10 @@ class _StoryCameraScreenState extends State<StoryCameraScreen>
     }
     return (
       title: "The camera didn't start",
-      body: 'It might be open in another app. Close it, then tap Try again.',
+      body: StoryCameraScreen.phoneBrowser
+          ? "Your browser couldn't open the camera here. Record with your "
+              "phone's camera instead, or tap Try again."
+          : 'It might be open in another app. Close it, then tap Try again.',
       blocked: null,
     );
   }
@@ -199,6 +248,8 @@ class _StoryCameraScreenState extends State<StoryCameraScreen>
 
   void _tryAgain() {
     _cameras = const [];
+    _autoRetries = 0;
+    _problemCode = null;
     _open();
   }
 
@@ -331,12 +382,34 @@ class _StoryCameraScreenState extends State<StoryCameraScreen>
                         textAlign: TextAlign.center,
                         style: const TextStyle(
                             color: Colors.white70, height: 1.4)),
+                    if (_problemCode case final code?) ...[
+                      const SizedBox(height: 6),
+                      Text('($code)',
+                          key: const Key('storyCameraCode'),
+                          style: const TextStyle(
+                              color: HuntrColors.muted, fontSize: 11)),
+                    ],
                     if (problem.blocked != null) ...[
                       const SizedBox(height: 18),
                       const _AllowSteps(),
                     ],
                     const SizedBox(height: 18),
-                    if (!_starting && problem.blocked != null && !kIsWeb) ...[
+                    // a phone's browser: its camera app always works
+                    if (StoryCameraScreen.phoneBrowser) ...[
+                      FilledButton.icon(
+                        key: const Key('storyPhoneCamera'),
+                        onPressed: _recordWithPhone,
+                        icon: const Icon(Icons.videocam_rounded),
+                        label: const Text("Record with phone's camera"),
+                      ),
+                      const SizedBox(height: 4),
+                      if (!_starting)
+                        TextButton(
+                            onPressed: _tryAgain,
+                            child: const Text('Try again')),
+                    ] else if (!_starting &&
+                        problem.blocked != null &&
+                        !kIsWeb) ...[
                       FilledButton.icon(
                         key: const Key('storyCameraSettings'),
                         onPressed: _openSettings,

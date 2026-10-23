@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../services/huntr_backend.dart';
 import '../../services/services_scope.dart';
 import '../../state/app_state.dart';
+import '../explore/explore_map.dart' show mapEnabled;
 import 'settings_group.dart';
 
 /// "Show my distance" and "Show when I'm online". Each change is saved to the
@@ -121,20 +122,22 @@ class _PrivacySettingsGroupState extends State<PrivacySettingsGroup> {
               _savingDistance ? null : (value) => _save(showDistance: value),
         ),
       ),
-      SettingsRow(
-        icon: Icons.map_outlined,
-        title: 'Show me on the map',
-        subtitle: app.showDistance
-            ? 'Others see you in your area, never your exact spot'
-            : 'Off while your distance is hidden',
-        trailing: Switch(
-          key: const Key('privacyShowOnMap'),
-          value: app.showOnMap && app.showDistance,
-          onChanged: _savingMap || !app.showDistance
-              ? null
-              : (value) => _save(showOnMap: value),
+      // only while the map is on (MAP_ENABLED)
+      if (mapEnabled)
+        SettingsRow(
+          icon: Icons.map_outlined,
+          title: 'Show me on the map',
+          subtitle: app.showDistance
+              ? 'Others see you in your area, never your exact spot'
+              : 'Off while your distance is hidden',
+          trailing: Switch(
+            key: const Key('privacyShowOnMap'),
+            value: app.showOnMap && app.showDistance,
+            onChanged: _savingMap || !app.showDistance
+                ? null
+                : (value) => _save(showOnMap: value),
+          ),
         ),
-      ),
       SettingsRow(
         icon: Icons.visibility_outlined,
         title: 'Show when I\'m online',

@@ -7,11 +7,11 @@ import '../photos/viewer_controls.dart';
 
 class _PhotoGalleryState extends State<PhotoGallery> {
   int _page = 0;
-  final _pages = PageController();
+  late final PageController _pages = widget.controller ?? PageController();
 
   @override
   void dispose() {
-    _pages.dispose();
+    if (widget.controller == null) _pages.dispose();
     super.dispose();
   }
 
@@ -38,7 +38,10 @@ class _PhotoGalleryState extends State<PhotoGallery> {
           child: PageView.builder(
         controller: _pages,
         itemCount: count,
-        onPageChanged: (i) => setState(() => _page = i),
+        onPageChanged: (i) {
+          setState(() => _page = i);
+          widget.onPageChanged?.call(i);
+        },
         itemBuilder: (_, i) => urls.isNotEmpty
             ? NetworkPhoto(urls[i])
             : i == 0 && (widget.firstIsAvatar || p.photos.isEmpty)
@@ -80,6 +83,29 @@ class _PhotoGalleryState extends State<PhotoGallery> {
               tooltip: 'Next photo',
               onPressed: () => _go(1, count)),
         ),
+      // which photo, of how many
+      if (count > 1)
+        Positioned(
+          left: 14,
+          bottom: 14,
+          child: IgnorePointer(
+            child: Container(
+              key: const Key('galleryCounter'),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.6),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                const Icon(Icons.photo_outlined, size: 17, color: Colors.white),
+                const SizedBox(width: 7),
+                Text('${_page + 1} / $count',
+                    style: const TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.w600)),
+              ]),
+            ),
+          ),
+        ),
       if (count > 1)
         Positioned(
           left: 16,
@@ -109,8 +135,16 @@ class _PhotoGalleryState extends State<PhotoGallery> {
 /// Swipeable public profile pictures with a page indicator.
 class PhotoGallery extends StatefulWidget {
   const PhotoGallery(
-      {super.key, required this.profile, this.firstIsAvatar = true});
+      {super.key,
+      required this.profile,
+      this.firstIsAvatar = true,
+      this.controller,
+      this.onPageChanged});
   final Profile profile;
+
+  /// Moves it from outside (e.g. a strip of thumbnails); its own otherwise.
+  final PageController? controller;
+  final ValueChanged<int>? onPageChanged;
 
   /// Other people's first page is their generated avatar; your own preview
   /// shows your real main photo instead.

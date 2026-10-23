@@ -10,11 +10,19 @@ import 'stories/story_ring.dart';
 /// Stands in for profile photos until uploads exist.
 class ProfileArt extends StatelessWidget {
   const ProfileArt(
-      {super.key, required this.profile, this.radius = 0, this.fontSize = 36});
+      {super.key,
+      required this.profile,
+      this.radius = 0,
+      this.fontSize = 36,
+      this.alignment = Alignment.center});
 
   final Profile profile;
   final double radius;
   final double fontSize;
+
+  /// Where the initials (or silhouette) sit, e.g. up top on a card whose
+  /// bottom holds text.
+  final Alignment alignment;
 
   @override
   Widget build(BuildContext context) {
@@ -40,7 +48,8 @@ class ProfileArt extends StatelessWidget {
               begin: Alignment.topLeft,
               end: Alignment.bottomRight),
         ),
-        child: Center(
+        child: Align(
+          alignment: alignment,
           child: profile.initials.isEmpty
               // no name: a person silhouette in a soft circle
               ? Container(

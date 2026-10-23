@@ -204,7 +204,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
                   onPressed: () => setState(() => _searching = true),
                 ),
                 const SizedBox(width: 6),
-                if (onBackend) ...[
+                if (onBackend && mapEnabled) ...[
                   IconButton.outlined(
                     key: const Key('exploreMapToggle'),
                     tooltip: _mapView ? 'List' : 'Map',
@@ -270,7 +270,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
     );
 
     // ---- the map: the same header and quick filters, then the map ----
-    if (_mapView && onBackend) {
+    if (_mapView && onBackend && mapEnabled) {
       return Scaffold(
         body: SafeArea(
           bottom: false,
