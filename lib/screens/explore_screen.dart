@@ -2,10 +2,20 @@ import 'package:flutter/material.dart';
 
 import '../models/models.dart';
 import '../state/app_state.dart';
+import '../services/huntr_backend.dart';
+import '../services/services_scope.dart';
 import '../theme.dart';
 import '../widgets/avatar.dart';
+import '../widgets/pill_chip.dart';
+import '../widgets/install_banner.dart';
 import '../widgets/profile_tile.dart';
-import 'profile_screen.dart';
+import '../widgets/stories/story_tray.dart';
+import '../widgets/explore/vibe_banner.dart';
+import 'profile_pager.dart';
+import '../widgets/explore/empty_explore.dart';
+import '../widgets/explore/explore_map.dart';
+import '../widgets/explore/filter_sheet.dart';
+import '../widgets/me/section_states.dart';
 
 class ExploreScreen extends StatefulWidget {
   const ExploreScreen({super.key});
@@ -18,15 +28,95 @@ class _ExploreScreenState extends State<ExploreScreen> {
   final _search = TextEditingController();
   bool _searching = false;
 
+  // ---- people nearby, from the backend ----
+  bool _started = false;
+  bool _loading = false;
+  String? _loadError;
+
+  /// Explore as a map instead of the list.
+  bool _mapView = false;
+
+  /// A fresh first page of Explore: the stories tray starts over too.
+  int _trayGeneration = 0;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_started || ServicesScope.exploreOf(context) == null) return;
+    _started = true;
+    _loadNearby();
+  }
+
+  /// The first page (or, with [more], the next one).
+  Future<void> _loadNearby({bool more = false}) async {
+    final explore = ServicesScope.exploreOf(context);
+    final app = AppScope.read(context);
+    final token = app.sessionToken;
+    final offset = more ? app.nearbyNextOffset : 0;
+    if (explore == null || token == null || offset == null || _loading) return;
+    setState(() {
+      _loading = true;
+      _loadError = null;
+    });
+    try {
+      final page = await explore.fetchNearby(token, offset: offset);
+      app.setNearby(page.people, nextOffset: page.nextOffset, append: more);
+      if (!more && mounted) setState(() => _trayGeneration++);
+    } on SessionRejectedException {
+      app.endSession();
+    } catch (error) {
+      if (mounted) {
+        setState(() => _loadError = error is BackendException
+            ? error.message
+            : 'Check your connection and try again.');
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  /// Near the end of the list: load the next page.
+  bool _onScroll(ScrollNotification notification) {
+    if (notification.metrics.extentAfter < 600) _loadNearby(more: true);
+    return false;
+  }
+
   @override
   void dispose() {
     _search.dispose();
     super.dispose();
   }
 
+  /// Their profile, in a pager over everyone shown (swipe to the next).
   void _open(Profile p) {
-    Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => ProfileScreen(profileId: p.id)));
+    final app = AppScope.read(context);
+    final people = app.visibleProfiles;
+    final index = people.indexWhere((other) => other.id == p.id);
+    final ids = index < 0 ? [p.id] : [for (final other in people) other.id];
+    Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => ProfilePager(
+            profileIds: ids,
+            initialIndex: index < 0 ? 0 : index,
+            onShow: (id) {
+              final shown = app.profileById(id);
+              if (shown != null) _loadPerson(shown);
+            })));
+    _loadPerson(p);
+  }
+
+  /// A real person's full profile (all their photos); the profile screen
+  /// shows the list's version until it arrives, and keeps it if this fails.
+  Future<void> _loadPerson(Profile p) async {
+    final explore = ServicesScope.exploreOf(context);
+    final app = AppScope.read(context);
+    final token = app.sessionToken;
+    final userId = p.backendId;
+    if (explore == null || token == null || userId == null) return;
+    try {
+      app.updateNearbyPerson(await explore.fetchPerson(token, userId));
+    } catch (error) {
+      debugPrint('Profile $userId could not be loaded: $error');
+    }
   }
 
   @override
@@ -34,222 +124,332 @@ class _ExploreScreenState extends State<ExploreScreen> {
     final app = AppScope.of(context);
     final f = app.filters;
     final people = app.visibleProfiles;
+    final onBackend = ServicesScope.exploreOf(context) != null;
+    // On the backend, nothing is shown until real people are loaded.
+    final waiting = onBackend && app.nearby == null;
     final favorites = app.favoriteProfiles;
     final text = Theme.of(context).textTheme;
     final width = MediaQuery.sizeOf(context).width;
-    final columns = width >= 900
-        ? 6
-        : width >= 600
-            ? 4
-            : 3;
+    // 2 cards across on phones, up to 5 on wide screens.
+    final columns = (width / 220).floor().clamp(2, 5);
+
+    final Widget header = Padding(
+      padding: const EdgeInsets.fromLTRB(20, 12, 12, 4),
+      child: _searching
+          ? Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    key: const Key('exploreSearch'),
+                    controller: _search,
+                    autofocus: true,
+                    textInputAction: TextInputAction.search,
+                    decoration: const InputDecoration(
+                      hintText: 'Search names, bios, interests',
+                      prefixIcon: Icon(Icons.search),
+                    ),
+                    onChanged: (v) => app.filters = f.copyWith(query: v),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () {
+                    _search.clear();
+                    app.filters = app.filters.copyWith(query: '');
+                    setState(() => _searching = false);
+                  },
+                  child: const Text('Cancel'),
+                ),
+              ],
+            )
+          : Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ShaderMask(
+                        shaderCallback: HuntrColors.accentGradient.createShader,
+                        child: Text('Explore',
+                            style: text.headlineLarge?.copyWith(
+                                fontWeight: FontWeight.w800,
+                                color: Colors.white)),
+                      ),
+                      const SizedBox(height: 2),
+                      Row(children: [
+                        const Icon(Icons.near_me_rounded,
+                            size: 16, color: HuntrColors.orange),
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                              // the count not until real
+                              // people are loaded
+                              waiting
+                                  ? 'Discover people near you'
+                                  : app.onlineCount == 1
+                                      ? '1 online near you'
+                                      : '${app.onlineCount} online near you',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: text.bodyMedium
+                                  ?.copyWith(color: HuntrColors.muted)),
+                        ),
+                      ]),
+                    ],
+                  ),
+                ),
+                IconButton.outlined(
+                  tooltip: 'Search',
+                  style: _roundButton,
+                  icon: const Icon(Icons.search),
+                  onPressed: () => setState(() => _searching = true),
+                ),
+                const SizedBox(width: 6),
+                if (onBackend) ...[
+                  IconButton.outlined(
+                    key: const Key('exploreMapToggle'),
+                    tooltip: _mapView ? 'List' : 'Map',
+                    style: _roundButton,
+                    icon: Icon(_mapView
+                        ? Icons.grid_view_rounded
+                        : Icons.map_outlined),
+                    onPressed: () => setState(() => _mapView = !_mapView),
+                  ),
+                  const SizedBox(width: 6),
+                ],
+                IconButton.outlined(
+                  tooltip: 'All filters',
+                  style: _roundButton,
+                  icon: Badge(
+                    isLabelVisible: !f.isDefault,
+                    smallSize: 8,
+                    child: const Icon(Icons.tune),
+                  ),
+                  onPressed: () => _showFilters(context),
+                ),
+              ],
+            ),
+    );
+    final Widget quickFilters = SizedBox(
+      height: 60,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        children: [
+          PillChip(
+            leading: const OnlineDot(size: 10),
+            label: 'Online now',
+            selected: f.onlineOnly,
+            onSelected: (v) => app.filters = f.copyWith(onlineOnly: v),
+          ),
+          const SizedBox(width: 8),
+          // every "looking for" choice, as on profiles
+          for (final l in LookingFor.values) ...[
+            PillChip(
+              icon: l.icon,
+              label: l.label,
+              selected: f.lookingFor.contains(l),
+              onSelected: (v) {
+                final next = {...f.lookingFor};
+                v ? next.add(l) : next.remove(l);
+                app.filters = f.copyWith(lookingFor: next);
+              },
+            ),
+            const SizedBox(width: 8),
+          ],
+          if (!f.isDefault)
+            ActionChip(
+              avatar: const Icon(Icons.close, size: 18),
+              label: const Text('Clear'),
+              onPressed: () {
+                _search.clear();
+                app.filters = const ExploreFilters();
+              },
+            ),
+        ],
+      ),
+    );
+
+    // ---- the map: the same header and quick filters, then the map ----
+    if (_mapView && onBackend) {
+      return Scaffold(
+        body: SafeArea(
+          bottom: false,
+          child: Column(children: [
+            header,
+            quickFilters,
+            Expanded(
+              child: ExploreMap(
+                  explore: ServicesScope.exploreOf(context)!, onOpen: _open),
+            ),
+          ]),
+        ),
+      );
+    }
 
     return Scaffold(
       body: SafeArea(
         bottom: false,
         child: RefreshIndicator(
-          onRefresh: app.refresh,
-          color: HuntrColors.amber,
-          child: CustomScrollView(
-            slivers: [
-              // ---- header ----
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 12, 12, 4),
-                  child: _searching
-                      ? Row(
-                          children: [
-                            Expanded(
-                              child: TextField(
-                                key: const Key('exploreSearch'),
-                                controller: _search,
-                                autofocus: true,
-                                textInputAction: TextInputAction.search,
-                                decoration: const InputDecoration(
-                                  hintText: 'Search names, bios, interests',
-                                  prefixIcon: Icon(Icons.search),
-                                ),
-                                onChanged: (v) =>
-                                    app.filters = f.copyWith(query: v),
-                              ),
-                            ),
-                            TextButton(
-                              onPressed: () {
-                                _search.clear();
-                                app.filters = app.filters.copyWith(query: '');
-                                setState(() => _searching = false);
-                              },
-                              child: const Text('Cancel'),
-                            ),
-                          ],
-                        )
-                      : Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  ShaderMask(
-                                    shaderCallback:
-                                        HuntrColors.accentGradient.createShader,
-                                    child: Text('Explore',
-                                        style: text.headlineMedium?.copyWith(
-                                            fontWeight: FontWeight.w800,
-                                            color: Colors.white)),
-                                  ),
-                                  Row(children: [
-                                    const OnlineDot(size: 9),
-                                    const SizedBox(width: 6),
-                                    Text(
-                                        '${app.onlineCount} people online near you',
-                                        style: text.bodySmall?.copyWith(
-                                            color: HuntrColors.muted)),
-                                  ]),
-                                ],
-                              ),
-                            ),
-                            IconButton(
-                              tooltip: 'Search',
-                              icon: const Icon(Icons.search),
-                              onPressed: () =>
-                                  setState(() => _searching = true),
-                            ),
-                            IconButton(
-                              tooltip: 'All filters',
-                              icon: Badge(
-                                isLabelVisible: !f.isDefault,
-                                smallSize: 8,
-                                child: const Icon(Icons.tune),
-                              ),
-                              onPressed: () => _showFilters(context),
-                            ),
-                          ],
-                        ),
-                ),
-              ),
+          onRefresh: onBackend ? _loadNearby : app.refresh,
+          color: HuntrColors.orange,
+          child: NotificationListener<ScrollNotification>(
+            onNotification: onBackend ? _onScroll : null,
+            child: CustomScrollView(
+              slivers: [
+                // ---- header ----
+                SliverToBoxAdapter(child: header),
 
-              // ---- quick filters ----
-              SliverToBoxAdapter(
-                child: SizedBox(
-                  height: 52,
-                  child: ListView(
-                    scrollDirection: Axis.horizontal,
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                    children: [
-                      FilterChip(
-                        avatar: const OnlineDot(size: 10),
-                        label: const Text('Online now'),
-                        selected: f.onlineOnly,
-                        showCheckmark: false,
-                        onSelected: (v) =>
-                            app.filters = f.copyWith(onlineOnly: v),
-                      ),
-                      const SizedBox(width: 8),
-                      FilterChip(
-                        avatar: const Icon(Icons.near_me_outlined, size: 18),
-                        label: const Text('Within 5 km'),
-                        selected: f.maxDistanceKm != null,
-                        showCheckmark: false,
-                        onSelected: (v) => app.filters = v
-                            ? f.copyWith(maxDistanceKm: 5)
-                            : f.copyWith(clearDistance: true),
-                      ),
-                      const SizedBox(width: 8),
-                      for (final l in [
-                        LookingFor.chat,
-                        LookingFor.friends,
-                        LookingFor.dates
-                      ]) ...[
-                        FilterChip(
-                          avatar: Icon(l.icon, size: 18),
-                          label: Text(l.label),
-                          selected: f.lookingFor.contains(l),
-                          showCheckmark: false,
-                          onSelected: (v) {
-                            final next = {...f.lookingFor};
-                            v ? next.add(l) : next.remove(l);
-                            app.filters = f.copyWith(lookingFor: next);
-                          },
-                        ),
-                        const SizedBox(width: 8),
+                // ---- the website: get the app (nothing in the apps) ----
+                const SliverToBoxAdapter(child: InstallBanner()),
+
+                // ---- stories: Add Story, Your Story, then people nearby ----
+                if (onBackend && !waiting)
+                  if ((
+                    ServicesScope.storiesOf(context),
+                    ServicesScope.exploreOf(context)
+                  )
+                      case (final stories?, final explore?))
+                    SliverToBoxAdapter(
+                      child: StoryTray(
+                          key: ValueKey('tray-$_trayGeneration'),
+                          service: stories,
+                          explore: explore),
+                    ),
+
+                // ---- quick filters ----
+                SliverToBoxAdapter(child: quickFilters),
+
+                // ---- people who want what I want ----
+                if (!waiting && f.isDefault && app.showVibeBanner)
+                  SliverToBoxAdapter(
+                    child: VibeBanner(
+                      people: [
+                        for (final p in people)
+                          if (p.lookingFor
+                              .intersection(app.myLookingFor)
+                              .isNotEmpty)
+                            p,
                       ],
-                      if (!f.isDefault)
-                        ActionChip(
-                          avatar: const Icon(Icons.close, size: 18),
-                          label: const Text('Clear'),
-                          onPressed: () {
-                            _search.clear();
-                            app.filters = const ExploreFilters();
-                          },
-                        ),
-                    ],
+                      onTap: () => app.filters =
+                          f.copyWith(lookingFor: {...app.myLookingFor}),
+                      onHide: () => app.showVibeBanner = false,
+                    ),
                   ),
-                ),
-              ),
 
-              // ---- favorites row ----
-              if (favorites.isNotEmpty && f.isDefault) ...[
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 10, 20, 8),
-                    child: Text('Your favorites',
-                        style: text.titleSmall
-                            ?.copyWith(color: HuntrColors.muted)),
+                // ---- favorites row ----
+                if (favorites.isNotEmpty && f.isDefault) ...[
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 10, 20, 8),
+                      child: Text('Your favorites',
+                          style: text.titleSmall
+                              ?.copyWith(color: HuntrColors.muted)),
+                    ),
                   ),
-                ),
-                SliverToBoxAdapter(
-                  child: SizedBox(
-                    height: 86,
-                    child: ListView.separated(
-                      scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      itemCount: favorites.length,
-                      separatorBuilder: (_, __) => const SizedBox(width: 14),
-                      itemBuilder: (_, i) {
-                        final p = favorites[i];
-                        return InkWell(
-                          borderRadius: BorderRadius.circular(40),
-                          onTap: () => _open(p),
-                          child: Column(children: [
-                            Avatar(profile: p, size: 58),
-                            const SizedBox(height: 4),
-                            Text(p.name, style: text.labelSmall),
-                          ]),
-                        );
+                  SliverToBoxAdapter(
+                    child: SizedBox(
+                      height: 86,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        itemCount: favorites.length,
+                        separatorBuilder: (_, __) => const SizedBox(width: 14),
+                        itemBuilder: (_, i) {
+                          final p = favorites[i];
+                          return InkWell(
+                            borderRadius: BorderRadius.circular(40),
+                            onTap: () => _open(p),
+                            child: Column(children: [
+                              Avatar(profile: p, size: 58),
+                              const SizedBox(height: 4),
+                              Text(p.name, style: text.labelSmall),
+                            ]),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                ],
+
+                // ---- grid ----
+                if (waiting && _loadError != null)
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                    sliver: SliverToBoxAdapter(
+                      child: LoadFailedCard(
+                        title: "Couldn't load people nearby",
+                        message: _loadError!,
+                        onRetry: _loadNearby,
+                        retryKey: const Key('exploreRetry'),
+                      ),
+                    ),
+                  )
+                else if (waiting)
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
+                    sliver: SliverGrid.builder(
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: columns,
+                        mainAxisSpacing: 12,
+                        crossAxisSpacing: 12,
+                        childAspectRatio: 0.82,
+                      ),
+                      itemCount: columns * 3,
+                      itemBuilder: (_, __) => const _TilePlaceholder(),
+                    ),
+                  )
+                else if (people.isEmpty)
+                  SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: EmptyExplore(
+                      filtered: !f.isDefault,
+                      onClear: () {
+                        _search.clear();
+                        app.filters = const ExploreFilters();
                       },
+                      onRefresh: onBackend ? _loadNearby : null,
+                    ),
+                  )
+                else
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
+                    sliver: SliverGrid.builder(
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: columns,
+                        mainAxisSpacing: 12,
+                        crossAxisSpacing: 12,
+                        childAspectRatio: 0.82,
+                      ),
+                      itemCount: people.length,
+                      itemBuilder: (_, i) => ProfileTile(
+                        profile: people[i],
+                        favorite: app.isFavorite(people[i].id),
+                        onTap: () => _open(people[i]),
+                      ),
                     ),
                   ),
-                ),
-              ],
 
-              // ---- grid ----
-              if (people.isEmpty)
-                SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: _EmptyExplore(onClear: () {
-                    _search.clear();
-                    app.filters = const ExploreFilters();
-                  }),
-                )
-              else
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 24),
-                  sliver: SliverGrid.builder(
-                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: columns,
-                      mainAxisSpacing: 8,
-                      crossAxisSpacing: 8,
-                      childAspectRatio: 0.78,
+                // ---- the next page, as you reach the end ----
+                if (onBackend && !waiting && _loading)
+                  const SliverToBoxAdapter(
+                    child: Padding(
+                      padding: EdgeInsets.only(bottom: 24),
+                      child: Center(child: CircularProgressIndicator()),
                     ),
-                    itemCount: people.length,
-                    itemBuilder: (_, i) => ProfileTile(
-                      profile: people[i],
-                      favorite: app.isFavorite(people[i].id),
-                      onTap: () => _open(people[i]),
+                  )
+                else if (onBackend && !waiting && _loadError != null)
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                      child: LoadFailedCard(
+                        title: "Couldn't load more people",
+                        message: _loadError!,
+                        onRetry: () => _loadNearby(more: true),
+                      ),
                     ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -260,142 +460,32 @@ class _ExploreScreenState extends State<ExploreScreen> {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      builder: (_) => const _FilterSheet(),
+      builder: (_) => const FilterSheet(),
     );
   }
 }
 
-class _EmptyExplore extends StatelessWidget {
-  const _EmptyExplore({required this.onClear});
-  final VoidCallback onClear;
+/// The round, outlined search and filter buttons.
+/// Search, map and filters: compact, so the title beside them has room.
+final _roundButton = IconButton.styleFrom(
+  fixedSize: const Size(40, 40),
+  minimumSize: const Size(40, 40),
+  padding: EdgeInsets.zero,
+  iconSize: 20,
+  side: const BorderSide(color: Color(0xFF353944), width: 1.2),
+  backgroundColor: HuntrColors.night.withValues(alpha: 0.4),
+);
+
+/// A grey tile while people nearby load.
+class _TilePlaceholder extends StatelessWidget {
+  const _TilePlaceholder();
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(32),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.travel_explore, size: 56, color: HuntrColors.muted),
-          const SizedBox(height: 12),
-          Text('Nobody matches these filters',
-              style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 4),
-          const Text('Try widening the distance or age range.',
-              style: TextStyle(color: HuntrColors.muted)),
-          const SizedBox(height: 16),
-          OutlinedButton(
-              onPressed: onClear, child: const Text('Clear filters')),
-        ],
-      ),
-    );
-  }
-}
-
-class _FilterSheet extends StatefulWidget {
-  const _FilterSheet();
-
-  @override
-  State<_FilterSheet> createState() => _FilterSheetState();
-}
-
-class _FilterSheetState extends State<_FilterSheet> {
-  late ExploreFilters f;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    f = AppScope.read(context).filters;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final text = Theme.of(context).textTheme;
-    final dist = f.maxDistanceKm ?? 25;
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Filters',
-                style: text.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
-            const SizedBox(height: 12),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('Online now only'),
-              value: f.onlineOnly,
-              onChanged: (v) => setState(() => f = f.copyWith(onlineOnly: v)),
-            ),
-            const SizedBox(height: 8),
-            Text(
-                'Distance: ${f.maxDistanceKm == null ? 'Any' : 'up to ${dist.round()} km'}',
-                style: text.titleSmall),
-            Slider(
-              value: dist,
-              min: 1,
-              max: 25,
-              divisions: 24,
-              label: dist >= 25 ? 'Any' : '${dist.round()} km',
-              onChanged: (v) => setState(() => f = v >= 25
-                  ? f.copyWith(clearDistance: true)
-                  : f.copyWith(maxDistanceKm: v)),
-            ),
-            Text(
-                'Age: ${f.ageRange.start.round()} - ${f.ageRange.end.round()}${f.ageRange.end >= 60 ? '+' : ''}',
-                style: text.titleSmall),
-            RangeSlider(
-              values: f.ageRange,
-              min: 18,
-              max: 60,
-              divisions: 42,
-              onChanged: (v) => setState(() => f = f.copyWith(ageRange: v)),
-            ),
-            const SizedBox(height: 4),
-            Text('Looking for', style: text.titleSmall),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final l in LookingFor.values)
-                  FilterChip(
-                    avatar: Icon(l.icon, size: 18),
-                    label: Text(l.label),
-                    showCheckmark: false,
-                    selected: f.lookingFor.contains(l),
-                    onSelected: (v) {
-                      final next = {...f.lookingFor};
-                      v ? next.add(l) : next.remove(l);
-                      setState(() => f = f.copyWith(lookingFor: next));
-                    },
-                  ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            Row(
-              children: [
-                TextButton(
-                  onPressed: () =>
-                      setState(() => f = ExploreFilters(query: f.query)),
-                  child: const Text('Reset'),
-                ),
-                const Spacer(),
-                FilledButton(
-                  onPressed: () {
-                    AppScope.read(context).filters = f;
-                    Navigator.pop(context);
-                  },
-                  child: const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 16),
-                    child: Text('Show results'),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: HuntrColors.surface,
+        borderRadius: BorderRadius.circular(18),
       ),
     );
   }

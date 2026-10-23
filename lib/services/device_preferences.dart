@@ -1,0 +1,30 @@
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+
+/// Choices remembered on this device between launches (not on the account):
+/// they stay after the app is closed, also when signed out.
+abstract class DevicePreferences {
+  /// Whether "Find your vibe" shows on Explore; null until it was changed.
+  Future<bool?> readShowVibeBanner();
+  Future<void> saveShowVibeBanner(bool show);
+}
+
+/// Kept in the platform's secure storage, like the session token (the one
+/// storage the app already uses on every platform, web included).
+class SecureDevicePreferences implements DevicePreferences {
+  const SecureDevicePreferences();
+
+  static const _showVibeBannerKey = 'huntr_show_vibe_banner';
+  static const _storage = FlutterSecureStorage();
+
+  @override
+  Future<bool?> readShowVibeBanner() async =>
+      switch (await _storage.read(key: _showVibeBannerKey)) {
+        'true' => true,
+        'false' => false,
+        _ => null,
+      };
+
+  @override
+  Future<void> saveShowVibeBanner(bool show) =>
+      _storage.write(key: _showVibeBannerKey, value: '$show');
+}

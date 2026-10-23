@@ -1,0 +1,18 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Connect phone (wireless debugging)",
+      "detail": "adb connect (asks for the port only if needed) + adb reverse tcp:18000",
+      "type": "process",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy", "Bypass",
+        "-File", "${workspaceFolder}/tool/connect_phone.ps1"
+      ],
+      "presentation": { "reveal": "always", "focus": true, "panel": "dedicated", "clear": true },
+      "problemMatcher": []
+    }
+  ]
+}

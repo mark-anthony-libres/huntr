@@ -1,12 +1,29 @@
 import 'package:flutter/material.dart';
 
 import '../models/models.dart';
-import '../state/app_state.dart';
+import '../services/huntr_backend.dart';
+import '../services/location_service.dart';
 import '../theme.dart';
+import '../widgets/onboarding/choice_card.dart';
 
-/// Three short steps: what Huntr is, who you are, what you're looking for.
+/// Four short steps: what Huntr is, who you are, what you're looking for,
+/// and where you are.
 class OnboardingScreen extends StatefulWidget {
-  const OnboardingScreen({super.key});
+  const OnboardingScreen({
+    super.key,
+    required this.onFinished,
+    this.locate = locateDevice,
+    this.displayNameMaxLength,
+  });
+
+  /// Saves the answers. Throwing keeps the user on the last step with the
+  /// error's message shown.
+  final Future<void> Function(OnboardingAnswers answers) onFinished;
+
+  final LocateDevice locate;
+
+  /// The backend's display name limit; null when no backend is used.
+  final int? displayNameMaxLength;
 
   @override
   State<OnboardingScreen> createState() => _OnboardingScreenState();
@@ -19,6 +36,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   int _age = 24;
   bool _confirmedAdult = false;
   final Set<LookingFor> _looking = {LookingFor.chat, LookingFor.friends};
+  GeoPoint? _location;
+  bool _locating = false;
+  bool _saving = false;
+  String? _error;
+
+  static const _lastPage = 3;
 
   @override
   void dispose() {
@@ -29,19 +52,53 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   bool get _canContinue => switch (_page) {
         0 => true,
-        1 => _name.text.trim().isNotEmpty && _confirmedAdult,
-        _ => _looking.isNotEmpty,
+        1 => _confirmedAdult,
+        2 => _looking.isNotEmpty,
+        _ => _location != null && !_saving,
       };
 
-  void _next() {
+  Future<void> _findLocation() async {
+    setState(() {
+      _locating = true;
+      _error = null;
+    });
+    try {
+      final location = await widget.locate();
+      if (mounted) setState(() => _location = location);
+    } on LocationException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } finally {
+      if (mounted) setState(() => _locating = false);
+    }
+  }
+
+  Future<void> _next() async {
     FocusScope.of(context).unfocus();
-    if (_page < 2) {
-      _pages.nextPage(
+    if (_page < _lastPage) {
+      await _pages.nextPage(
           duration: const Duration(milliseconds: 350),
           curve: Curves.easeOutCubic);
-    } else {
-      AppScope.read(context).completeOnboarding(
-          name: _name.text, age: _age, lookingFor: _looking);
+      return;
+    }
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      await widget.onFinished(OnboardingAnswers(
+        displayName: _name.text,
+        age: _age,
+        location: _location!,
+        lookingFor: _looking,
+      ));
+    } catch (e) {
+      if (mounted) {
+        setState(() => _error = e is BackendException
+            ? e.message
+            : 'Your profile could not be saved. Please try again.');
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
     }
   }
 
@@ -55,7 +112,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             Padding(
               padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
               child: Row(
-                children: List.generate(3, (i) {
+                children: List.generate(_lastPage + 1, (i) {
                   return Expanded(
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 250),
@@ -85,15 +142,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Container(
-                          width: 76,
+                        Image.asset(
+                          'assets/huntr_logo.png',
                           height: 76,
-                          decoration: BoxDecoration(
-                            gradient: HuntrColors.accentGradient,
-                            borderRadius: BorderRadius.circular(22),
-                          ),
-                          child: const Icon(Icons.radar,
-                              size: 40, color: Colors.black),
+                          fit: BoxFit.contain,
+                          alignment: Alignment.centerLeft,
+                          semanticLabel: 'Huntr logo',
                         ),
                         const SizedBox(height: 28),
                         Text('Meet people\nright around you.',
@@ -125,8 +179,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         key: const Key('onboardName'),
                         controller: _name,
                         textCapitalization: TextCapitalization.words,
-                        decoration:
-                            const InputDecoration(hintText: 'Your first name'),
+                        maxLength: widget.displayNameMaxLength,
+                        decoration: const InputDecoration(
+                          labelText: 'Display name (optional)',
+                          hintText: 'Your display name',
+                        ),
                         onChanged: (_) => setState(() {}),
                       ),
                       const SizedBox(height: 28),
@@ -167,7 +224,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       for (final l in LookingFor.values)
                         Padding(
                           padding: const EdgeInsets.only(bottom: 10),
-                          child: _ChoiceCard(
+                          child: ChoiceCard(
                             icon: l.icon,
                             label: l.label,
                             selected: _looking.contains(l),
@@ -178,18 +235,59 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         ),
                     ],
                   ),
+
+                  // 4. location
+                  ListView(
+                    padding: const EdgeInsets.all(28),
+                    children: [
+                      const SizedBox(height: 24),
+                      Text('Where are you?',
+                          style: text.headlineSmall
+                              ?.copyWith(fontWeight: FontWeight.w800)),
+                      const SizedBox(height: 6),
+                      const Text(
+                          'Huntr shows you people nearby, so it needs your '
+                          'location.',
+                          style: TextStyle(color: HuntrColors.muted)),
+                      const SizedBox(height: 20),
+                      ChoiceCard(
+                        key: const Key('onboardLocation'),
+                        icon: _location == null
+                            ? Icons.my_location
+                            : Icons.location_on,
+                        label: _locating
+                            ? 'Finding your location...'
+                            : _location == null
+                                ? 'Share my location'
+                                : 'Location found',
+                        selected: _location != null,
+                        onTap: _locating ? () {} : _findLocation,
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),
+            if (_error != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(28, 0, 28, 4),
+                child: Text(
+                  _error!,
+                  key: const Key('onboardError'),
+                  style: const TextStyle(color: Color(0xFFFF9B8A)),
+                ),
+              ),
             Padding(
               padding: const EdgeInsets.fromLTRB(24, 8, 24, 20),
               child: Row(
                 children: [
                   if (_page > 0)
                     TextButton(
-                      onPressed: () => _pages.previousPage(
-                          duration: const Duration(milliseconds: 300),
-                          curve: Curves.easeOut),
+                      onPressed: _saving
+                          ? null
+                          : () => _pages.previousPage(
+                              duration: const Duration(milliseconds: 300),
+                              curve: Curves.easeOut),
                       child: const Text('Back'),
                     ),
                   const Spacer(),
@@ -200,59 +298,17 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       padding: const EdgeInsets.symmetric(horizontal: 20),
                       child: Text(_page == 0
                           ? 'Get started'
-                          : _page == 1
+                          : _page < _lastPage
                               ? 'Continue'
-                              : 'Start exploring'),
+                              : _saving
+                                  ? 'Saving...'
+                                  : 'Start exploring'),
                     ),
                   ),
                 ],
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ChoiceCard extends StatelessWidget {
-  const _ChoiceCard(
-      {required this.icon,
-      required this.label,
-      required this.selected,
-      required this.onTap});
-  final IconData icon;
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: selected
-          ? HuntrColors.amber.withValues(alpha: 0.14)
-          : HuntrColors.surface,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(
-            color: selected ? HuntrColors.amber : Colors.transparent,
-            width: 1.5),
-      ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-          child: Row(children: [
-            Icon(icon, color: selected ? HuntrColors.amber : HuntrColors.muted),
-            const SizedBox(width: 14),
-            Expanded(
-                child: Text(label,
-                    style: const TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.w600))),
-            Icon(selected ? Icons.check_circle : Icons.circle_outlined,
-                color: selected ? HuntrColors.amber : HuntrColors.muted),
-          ]),
         ),
       ),
     );

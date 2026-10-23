@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../data/sample_data.dart';
-import '../models/models.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
-import 'photo.dart';
+import 'share/album_option.dart';
+import 'share/none_option.dart';
 
 /// What the user picked in [showShareSheet].
 class ShareChoice {
@@ -104,7 +104,7 @@ class _ShareSheetState extends State<_ShareSheet> {
               for (final a in albums)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 8),
-                  child: _AlbumOption(
+                  child: AlbumOption(
                     key: Key('pick-${a.id}'),
                     album: a,
                     selected: _albumId == a.id,
@@ -112,7 +112,7 @@ class _ShareSheetState extends State<_ShareSheet> {
                   ),
                 ),
               if (albums.isNotEmpty)
-                _NoneOption(
+                NoneOption(
                     selected: _albumId == null,
                     onTap: () => setState(() => _albumId = null)),
               if (widget.withNote) ...[
@@ -152,86 +152,6 @@ class _ShareSheetState extends State<_ShareSheet> {
           ),
         ),
       ),
-    );
-  }
-}
-
-class _AlbumOption extends StatelessWidget {
-  const _AlbumOption(
-      {super.key,
-      required this.album,
-      required this.selected,
-      required this.onTap});
-  final Album album;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: selected
-          ? HuntrColors.amber.withValues(alpha: 0.12)
-          : HuntrColors.surfaceHigh,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(
-            color: selected ? HuntrColors.amber : Colors.transparent,
-            width: 1.5),
-      ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(10),
-          child: Row(children: [
-            SizedBox(
-              width: 56,
-              height: 56,
-              child: album.photos.isEmpty
-                  ? Container(
-                      decoration: BoxDecoration(
-                          color: HuntrColors.surface,
-                          borderRadius: BorderRadius.circular(12)),
-                      child: const Icon(Icons.photo_library_outlined,
-                          color: HuntrColors.muted),
-                    )
-                  : PhotoArt(photo: album.photos.first, iconSize: 22),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(album.name,
-                        style: const TextStyle(fontWeight: FontWeight.w700)),
-                    Text('${album.photos.length} photos',
-                        style: const TextStyle(color: HuntrColors.muted)),
-                  ]),
-            ),
-            Icon(selected ? Icons.radio_button_checked : Icons.radio_button_off,
-                color: selected ? HuntrColors.amber : HuntrColors.muted),
-          ]),
-        ),
-      ),
-    );
-  }
-}
-
-class _NoneOption extends StatelessWidget {
-  const _NoneOption({required this.selected, required this.onTap});
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 10),
-      leading: const Icon(Icons.block, color: HuntrColors.muted),
-      title: const Text('Don\'t share an album'),
-      trailing: Icon(
-          selected ? Icons.radio_button_checked : Icons.radio_button_off,
-          color: selected ? HuntrColors.amber : HuntrColors.muted),
-      onTap: onTap,
     );
   }
 }

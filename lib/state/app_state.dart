@@ -5,6 +5,7 @@ import 'package:flutter/widgets.dart';
 
 import '../data/sample_data.dart';
 import '../models/models.dart';
+import '../services/device_preferences.dart';
 
 /// All app state for the prototype. Swap the sample data and the simulated replies for a real
 /// backend later; screens only talk to this class.
@@ -13,7 +14,11 @@ class AppState extends ChangeNotifier {
     List<Profile>? profiles,
     this.replyDelay = const Duration(milliseconds: 1400),
     this.acceptDelay = const Duration(seconds: 4),
+    this.onSessionEnd,
+    this.devicePreferences,
+    bool sampleAlbums = true,
   }) : _profiles = profiles ?? buildSampleProfiles() {
+    if (sampleAlbums) myAlbums.addAll(_sampleAlbums());
     _seedConversations();
     _seedRequests();
   }
@@ -29,8 +34,59 @@ class AppState extends ChangeNotifier {
   final _rnd = Random(3);
   int _msgSeq = 0;
 
+  // ---- session ----
+  /// Backend session token. Nothing past the sign-in screen is shown without it.
+  String? sessionToken;
+
+  bool get signedIn => sessionToken != null;
+
+  /// A new user must accept the agreement before onboarding. Kept for this
+  /// session only; acceptance isn't recorded on the backend yet.
+  bool agreementAccepted = false;
+
+  void startSession(String token) {
+    sessionToken = token;
+    notifyListeners();
+  }
+
+  void acceptAgreement() {
+    agreementAccepted = true;
+    notifyListeners();
+  }
+
+  /// Runs whenever the session ends (e.g. clears my photos on the device).
+  final Future<void> Function()? onSessionEnd;
+
+  /// Back to sign-in, e.g. when the backend rejects the token.
+  void endSession() {
+    unawaited(onSessionEnd?.call());
+    sessionToken = null;
+    profilePhotos = const [];
+    maxProfilePhotos = null;
+    if (albumLimits != null) myAlbums.clear(); // they came from the backend
+    nearby = null;
+    nearbyNextOffset = null;
+    myUserId = null;
+    myStats = const ProfileStats();
+    anonymousMessaging = true;
+    myIsNew = false;
+    albumLimits = null;
+    onboarded = false;
+    agreementAccepted = false;
+    notifyListeners();
+  }
+
   // ---- me ----
   bool onboarded = false;
+
+  /// Where I am: set at onboarding, then refreshed each time the app opens.
+  GeoPoint? myLocation;
+
+  void updateMyLocation(GeoPoint location) {
+    myLocation = location;
+    notifyListeners();
+  }
+
   String myName = '';
   int myAge = 25;
   String myBio = '';
@@ -38,57 +94,133 @@ class AppState extends ChangeNotifier {
   bool showDistance = true;
   bool showOnline = true;
 
-  // ---- my photos and albums ----
-  /// My public profile pictures. The first one is the main picture.
-  final List<AlbumPhoto> myPhotos = [
-    const AlbumPhoto(id: 'me-pic0', hue: 28, subject: PhotoSubject.selfie),
-    const AlbumPhoto(id: 'me-pic1', hue: 190, subject: PhotoSubject.travel),
-  ];
+  /// On Explore's map (blurred), while showing my distance too.
+  bool showOnMap = true;
 
+  /// I may send anonymous messages (Settings); the backend enforces it.
+  bool anonymousMessaging = true;
+
+  void setAnonymousMessaging(bool enabled) {
+    anonymousMessaging = enabled;
+    notifyListeners();
+  }
+
+  /// My stats: height, weight, body type, position, ..., Show Age, and
+  /// the units I see heights and weights in.
+  ProfileStats myStats = const ProfileStats();
+
+  void setMyStats(ProfileStats stats) {
+    myStats = stats;
+    notifyListeners();
+  }
+
+  /// The sexual position my profile shows (null: do not show).
+  SexualPosition? get mySexualPosition => myStats.sexualPosition;
+
+  /// My profile as other people see it (for "View profile").
+  /// My user id and whether my account is new, from the backend (for my
+  /// profile as others see it).
+  int? myUserId;
+  bool myIsNew = false;
+
+  /// Built by the same rules as other people's profiles, so the preview
+  /// matches what they see: no alias means no name, the same avatar colour,
+  /// and the "New" badge.
+  Profile get myPublicProfile => Profile(
+        id: 'me',
+        // a real user: my photos show (as others see them)
+        backendId: myUserId,
+        name: myName.trim(),
+        isNew: myIsNew,
+        age: myAge,
+        distanceKm: 0,
+        bio: myBio,
+        interests: const [],
+        lookingFor: myLookingFor,
+        // as others see it: no age when I hide it
+        ageHidden: !myStats.showAge,
+        stats: myStats,
+        // others only see the green dot when it's turned on
+        online: showOnline,
+        lastActive: DateTime.now(),
+        hue: myUserId == null ? 28 : avatarHueFor(myUserId!),
+        photoUrls: [for (final photo in profilePhotos) photo.url],
+      );
+
+  // ---- my profile photos (from the backend) ----
+  /// My profile photos, default first. Loaded from the backend; never edited
+  /// here directly.
+  List<ProfilePhoto> profilePhotos = const [];
+
+  /// The most profile photos allowed, as set by the backend (null until loaded).
+  int? maxProfilePhotos;
+
+  ProfilePhoto? get defaultPhoto {
+    for (final photo in profilePhotos) {
+      if (photo.isDefault) return photo;
+    }
+    return null;
+  }
+
+  void setProfilePhotos(List<ProfilePhoto> photos, {required int maxPhotos}) {
+    profilePhotos = List.unmodifiable(photos);
+    maxProfilePhotos = maxPhotos;
+    notifyListeners();
+  }
+
+  // ---- my albums ----
   /// My private albums. One of them is sent when I send or accept a chat request.
-  final List<Album> myAlbums = [
-    Album(
-        id: 'me-al0',
-        name: 'Private',
-        photos: const [
-          AlbumPhoto(id: 'me-al0-0', hue: 330, subject: PhotoSubject.selfie),
-          AlbumPhoto(id: 'me-al0-1', hue: 300, subject: PhotoSubject.nightOut),
-          AlbumPhoto(id: 'me-al0-2', hue: 20, subject: PhotoSubject.gym),
-        ].toList()),
-    Album(
-        id: 'me-al1',
-        name: 'Weekend',
-        photos: const [
-          AlbumPhoto(id: 'me-al1-0', hue: 200, subject: PhotoSubject.beach),
-          AlbumPhoto(id: 'me-al1-1', hue: 120, subject: PhotoSubject.hike),
-        ].toList()),
-  ];
+  /// From the backend (see [setMyAlbums]); sample albums when there is none.
+  final List<Album> myAlbums = [];
+
+  /// What my albums may hold, as set by the backend (null until loaded, and
+  /// for sample albums).
+  AlbumLimits? albumLimits;
+
+  /// My albums as loaded from the backend.
+  void setMyAlbums(List<Album> albums, AlbumLimits limits) {
+    myAlbums
+      ..clear()
+      ..addAll(albums);
+    albumLimits = limits;
+    notifyListeners();
+  }
+
+  /// One of my albums as the backend returned it after a change.
+  void replaceMyAlbum(Album album) {
+    final index = myAlbums.indexWhere((a) => a.id == album.id);
+    if (index < 0) {
+      myAlbums.add(album);
+    } else {
+      myAlbums[index] = album;
+    }
+    notifyListeners();
+  }
+
+  static List<Album> _sampleAlbums() => [
+        Album(
+            id: 'me-al0',
+            name: 'Private',
+            photos: const [
+              AlbumPhoto(
+                  id: 'me-al0-0', hue: 330, subject: PhotoSubject.selfie),
+              AlbumPhoto(
+                  id: 'me-al0-1', hue: 300, subject: PhotoSubject.nightOut),
+              AlbumPhoto(id: 'me-al0-2', hue: 20, subject: PhotoSubject.gym),
+            ].toList()),
+        Album(
+            id: 'me-al1',
+            name: 'Weekend',
+            photos: const [
+              AlbumPhoto(id: 'me-al1-0', hue: 200, subject: PhotoSubject.beach),
+              AlbumPhoto(id: 'me-al1-1', hue: 120, subject: PhotoSubject.hike),
+            ].toList()),
+      ];
   int _photoSeq = 0;
   int _albumSeq = 0;
 
-  static const maxProfilePhotos = 6;
-
   AlbumPhoto _newPhoto(PhotoSubject s) => AlbumPhoto(
       id: 'me-new${_photoSeq++}', hue: _rnd.nextDouble() * 360, subject: s);
-
-  void addProfilePhoto(PhotoSubject s) {
-    if (myPhotos.length >= maxProfilePhotos) return;
-    myPhotos.add(_newPhoto(s));
-    notifyListeners();
-  }
-
-  void removeProfilePhoto(String id) {
-    if (myPhotos.length <= 1) return; // always keep a main picture
-    myPhotos.removeWhere((p) => p.id == id);
-    notifyListeners();
-  }
-
-  void makeMainPhoto(String id) {
-    final i = myPhotos.indexWhere((p) => p.id == id);
-    if (i <= 0) return;
-    myPhotos.insert(0, myPhotos.removeAt(i));
-    notifyListeners();
-  }
 
   Album? myAlbumById(String? id) {
     for (final a in myAlbums) {
@@ -123,6 +255,14 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Without a backend: moves an album's photo from [from] to [to].
+  void movePhotoInAlbum(String albumId, int from, int to) {
+    final photos = myAlbumById(albumId)?.photos;
+    if (photos == null) return;
+    photos.insert(to, photos.removeAt(from));
+    notifyListeners();
+  }
+
   void removePhotoFromAlbum(String albumId, String photoId) {
     myAlbumById(albumId)?.photos.removeWhere((p) => p.id == photoId);
     notifyListeners();
@@ -141,19 +281,33 @@ class AppState extends ChangeNotifier {
   void completeOnboarding(
       {required String name,
       required int age,
-      required Set<LookingFor> lookingFor}) {
+      required Set<LookingFor> lookingFor,
+      String bio = '',
+      GeoPoint? location}) {
     myName = name.trim();
     myAge = age;
     myLookingFor = lookingFor;
+    myBio = bio.trim();
+    myLocation = location;
     onboarded = true;
     notifyListeners();
   }
 
-  void updateMe({String? name, String? bio, bool? distance, bool? online}) {
+  void updateMe(
+      {String? name,
+      String? bio,
+      int? age,
+      Set<LookingFor>? lookingFor,
+      bool? distance,
+      bool? online,
+      bool? onMap}) {
     if (name != null) myName = name.trim();
     if (bio != null) myBio = bio.trim();
+    if (age != null) myAge = age;
+    if (lookingFor != null) myLookingFor = lookingFor;
     if (distance != null) showDistance = distance;
     if (online != null) showOnline = online;
+    if (onMap != null) showOnMap = onMap;
     notifyListeners();
   }
 
@@ -165,19 +319,73 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  List<Profile> get visibleProfiles => _profiles
-      .where((p) => !_blocked.contains(p.id) && _filters.matches(p))
-      .toList();
+  /// Choices kept on this device between launches (none in tests).
+  final DevicePreferences? devicePreferences;
+
+  /// "Find your vibe" on Explore. Hidden by swiping it away, tapping Hide, or
+  /// the switch in Settings; remembered on this device ([devicePreferences]).
+  bool _showVibeBanner = true;
+  bool get showVibeBanner => _showVibeBanner;
+  set showVibeBanner(bool show) {
+    if (_showVibeBanner == show) return;
+    _showVibeBanner = show;
+    notifyListeners();
+    unawaited(devicePreferences?.saveShowVibeBanner(show).catchError(
+        (Object error) => debugPrint('Vibe banner choice not saved: $error')));
+  }
+
+  /// What this device remembers, when the app starts.
+  Future<void> loadDevicePreferences() async {
+    try {
+      final show = await devicePreferences?.readShowVibeBanner();
+      if (show != null && show != _showVibeBanner) {
+        _showVibeBanner = show;
+        notifyListeners();
+      }
+    } catch (error) {
+      debugPrint('Device preferences not loaded: $error');
+    }
+  }
+
+  /// Real people nearby, nearest first (from the backend). While null,
+  /// Explore shows the sample profiles.
+  List<Profile>? nearby;
+
+  /// Where the next page of [nearby] starts; null when there is no more.
+  int? nearbyNextOffset;
+
+  void setNearby(List<Profile> people,
+      {required int? nextOffset, bool append = false}) {
+    nearby = [if (append) ...?nearby, ...people];
+    nearbyNextOffset = nextOffset;
+    notifyListeners();
+  }
+
+  /// A person nearby as loaded on their own (e.g. with all their photos).
+  void updateNearbyPerson(Profile person) {
+    final people = nearby;
+    if (people == null) return;
+    nearby = [for (final p in people) p.id == person.id ? person : p];
+    notifyListeners();
+  }
+
+  List<Profile> get _explored => nearby ?? _profiles;
+
+  List<Profile> get visibleProfiles => _explored.where(showsInExplore).toList();
+
+  /// Explore shows them (list or map): not blocked, and matching my filters.
+  bool showsInExplore(Profile p) =>
+      !_blocked.contains(p.id) && _filters.matches(p);
 
   List<Profile> get favoriteProfiles => _profiles
       .where((p) => _favorites.contains(p.id) && !_blocked.contains(p.id))
       .toList();
 
   int get onlineCount =>
-      _profiles.where((p) => p.online && !_blocked.contains(p.id)).length;
+      _explored.where((p) => p.online && !_blocked.contains(p.id)).length;
 
   Profile? profileById(String id) {
-    for (final p in _profiles) {
+    for (final p in [...?nearby, ..._profiles]) {
       if (p.id == id) return p;
     }
     return null;
@@ -188,6 +396,11 @@ class AppState extends ChangeNotifier {
   void toggleFavorite(String id) {
     _favorites.contains(id) ? _favorites.remove(id) : _favorites.add(id);
     notifyListeners();
+  }
+
+  /// Back in the lists after an unblock (they show again once loaded).
+  void unblock(String id) {
+    if (_blocked.remove(id)) notifyListeners();
   }
 
   void block(String id) {

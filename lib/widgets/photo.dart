@@ -3,7 +3,9 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 
 import '../models/models.dart';
+import '../services/photo_cache/photo_cache.dart';
 import '../theme.dart';
+import 'photos/cached_photo_image.dart';
 
 /// Placeholder picture for an album photo: a soft gradient "scene" with the subject's icon.
 class PhotoArt extends StatelessWidget {
@@ -21,6 +23,16 @@ class PhotoArt extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final stored = photo.stored;
+    if (stored != null) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(radius),
+        child: Stack(fit: StackFit.expand, children: [
+          CachedPhotoImage(stored, collection: PhotoCollection.album),
+          if (stored.isVideo) VideoBadge(durationMs: stored.durationMs),
+        ]),
+      );
+    }
     final a = HSLColor.fromAHSL(1, photo.hue, 0.5, 0.5).toColor();
     final b =
         HSLColor.fromAHSL(1, (photo.hue + 60) % 360, 0.55, 0.24).toColor();
@@ -64,6 +76,39 @@ class PhotoArt extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// Marks a video: a play icon, and its length in the corner.
+class VideoBadge extends StatelessWidget {
+  const VideoBadge({super.key, required this.durationMs});
+  final int? durationMs;
+
+  @override
+  Widget build(BuildContext context) {
+    final seconds = ((durationMs ?? 0) / 1000).round();
+    return Stack(fit: StackFit.expand, children: [
+      Center(
+        child: Container(
+          padding: const EdgeInsets.all(6),
+          decoration: const BoxDecoration(
+              color: Colors.black54, shape: BoxShape.circle),
+          child: const Icon(Icons.play_arrow_rounded,
+              color: Colors.white, semanticLabel: 'Video'),
+        ),
+      ),
+      if (durationMs != null)
+        Positioned(
+          left: 8,
+          bottom: 6,
+          child: Text(
+              '${seconds ~/ 60}:${(seconds % 60).toString().padLeft(2, '0')}',
+              style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  shadows: [Shadow(blurRadius: 4)])),
+        ),
+    ]);
   }
 }
 

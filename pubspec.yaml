@@ -7,8 +7,25 @@ environment:
   sdk: ^3.5.0
 
 dependencies:
+  audioplayers: ^6.8.1
+  camera: ^0.12.1
   flutter:
     sdk: flutter
+  flutter_map: ^8.3.2
+  flutter_markdown_plus: ^1.0.12
+  flutter_secure_storage: ^11.2.0
+  geolocator: ^14.1.1
+  google_sign_in: ^7.2.0
+  google_sign_in_web: ^1.1.3
+  http: ^1.6.0
+  image_picker: ^1.2.4
+  latlong2: ^0.10.1
+  package_info_plus: ^10.2.2
+  path_provider: ^2.1.6
+  pointer_interceptor: ^0.10.1+3
+  url_launcher: ^6.3.3
+  video_player: ^2.14.1
+  web: ^1.1.1
 
 dev_dependencies:
   flutter_test:
@@ -17,3 +34,24 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/huntr_logo.png
+    - assets/google_g_logo.png
+    - assets/google_oauth.json
+    # the in-app sound for an incoming message
+    - assets/sounds/message.wav
+
+  # The app's font (Google Fonts, Open Font License:
+  # assets/fonts/plus_jakarta_sans/OFL.txt).
+  fonts:
+    - family: PlusJakartaSans
+      fonts:
+        - asset: assets/fonts/plus_jakarta_sans/PlusJakartaSans-Regular.ttf
+        - asset: assets/fonts/plus_jakarta_sans/PlusJakartaSans-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/plus_jakarta_sans/PlusJakartaSans-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/plus_jakarta_sans/PlusJakartaSans-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/plus_jakarta_sans/PlusJakartaSans-ExtraBold.ttf
+          weight: 800

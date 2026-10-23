@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- HuntrColors.night: the icon's and the splash screen's background -->
+    <color name="ic_launcher_background">#0C0C0F</color>
+    <color name="splash_background">#0C0C0F</color>
+</resources>

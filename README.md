@@ -86,6 +86,28 @@ flutter run --release --dart-define-from-file=env/prod.json -d <device>
 
 Release builds are currently signed with the debug key (`android/app/build.gradle.kts`). Before publishing to the Play Store, create a release keystore, sign with it, and add its SHA-1 to the Android OAuth client (see below).
 
+### Map images (Explore's map)
+
+Without a key, development builds use OpenStreetMap's map, made plain (grey and near white). Its rules don't allow it for a live app, so production uses MapTiler's plain light Dataviz map:
+
+1. Create a free account at https://cloud.maptiler.com and copy your API key (the free plan includes 100,000 map image loads a month).
+2. In MapTiler's dashboard, restrict the key to `huntr.online`, `www.huntr.online` and the app id `com.marklibres.huntr` (it ships inside the app, so anyone could copy it otherwise).
+3. Add it to `env/prod.json`: `"MAPTILER_KEY": "your-key"`, then rebuild (web and Android).
+
+Any other provider works with `MAP_TILE_URL` (and `MAP_TILE_ATTRIBUTION`) instead.
+
+### Forcing an update
+
+Every app (Android, iOS and the website) asks the backend `GET /app/version` at start and when it comes back to the screen. If its build number (the `+N` in `pubspec.yaml`'s `version: 0.1.0+N`) is lower than `APP_LATEST_BUILD`, it shows "Time to update HUNTR" and can't be used until updated: Google Play on Android, the App Store on iOS, a reload on the website.
+
+To release:
+
+1. Raise the `+N` in `pubspec.yaml` and build.
+2. Publish everywhere: Google Play, the App Store, and `tool/deploy_web.sh`. Wait until the new build is live in both stores.
+3. Only then set `APP_LATEST_BUILD=N` in the backend's `.env` and restart it. Setting it earlier blocks people with nothing to update to.
+
+`APP_PLAY_STORE_URL` (Google Play page, set by default) and `APP_APP_STORE_URL` (set it once HUNTR is in the App Store) are where the Update button goes. `APP_LATEST_BUILD=0` turns it off.
+
 ## Google OAuth setup
 
 Google client IDs are public app configuration, not secrets. Set them once in `assets/google_oauth.json`; you can then launch the app normally without adding OAuth defines to every `flutter run` command.

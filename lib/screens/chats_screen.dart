@@ -6,6 +6,10 @@ import '../theme.dart';
 import '../widgets/avatar.dart';
 import 'chat_screen.dart';
 import 'profile_screen.dart';
+import '../widgets/chats/empty_chats.dart';
+import '../flows/accept_with_album.dart';
+import '../state/messaging_state.dart';
+import '../widgets/chats/conversation_list.dart';
 
 String timeLabel(DateTime t, DateTime now) {
   final d = now.difference(t);
@@ -33,6 +37,12 @@ class _ChatsScreenState extends State<ChatsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // with the backend: my real conversations (no requests)
+    final messaging = MessagingScope.of(context);
+    if (messaging != null) {
+      return ConversationList(
+          messaging: messaging, onExplore: widget.onExplore);
+    }
     final app = AppScope.of(context);
     final now = DateTime.now();
     final text = Theme.of(context).textTheme;
@@ -93,7 +103,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
                     avatar: incoming.isEmpty
                         ? null
                         : const Icon(Icons.circle,
-                            size: 10, color: HuntrColors.amber),
+                            size: 10, color: HuntrColors.orange),
                     label: Text(
                         'Requests${incoming.isNotEmpty ? ' (${incoming.length})' : ''}'),
                     selected: _showRequests,
@@ -144,7 +154,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
               if (all.isEmpty)
                 SliverFillRemaining(
                   hasScrollBody: false,
-                  child: _EmptyChats(onExplore: widget.onExplore),
+                  child: EmptyChats(onExplore: widget.onExplore),
                 )
               else if (list.isEmpty)
                 const SliverFillRemaining(
@@ -203,7 +213,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: c.typing
-                                ? HuntrColors.amber
+                                ? HuntrColors.orange
                                 : (unread ? Colors.white : HuntrColors.muted),
                             fontWeight:
                                 unread ? FontWeight.w600 : FontWeight.w400,
@@ -216,13 +226,13 @@ class _ChatsScreenState extends State<ChatsScreen> {
                             Text(timeLabel(last.sentAt, now),
                                 style: text.labelSmall?.copyWith(
                                     color: unread
-                                        ? HuntrColors.amber
+                                        ? HuntrColors.orange
                                         : HuntrColors.muted)),
                             const SizedBox(height: 6),
                             if (unread)
                               Badge(
                                 label: Text('${c.unread}'),
-                                backgroundColor: HuntrColors.amber,
+                                backgroundColor: HuntrColors.orange,
                                 textColor: Colors.black,
                               )
                             else if (last.fromMe)
@@ -232,7 +242,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
                                       : Icons.done,
                                   size: 16,
                                   color: last.status == MessageStatus.read
-                                      ? HuntrColors.amber
+                                      ? HuntrColors.orange
                                       : HuntrColors.muted),
                           ],
                         ),
@@ -307,7 +317,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
                           child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('${p.name}, ${p.age}',
+                                Text(p.nameAndAge,
                                     style: const TextStyle(
                                         fontWeight: FontWeight.w700)),
                                 Text(
@@ -387,32 +397,5 @@ class _ChatsScreenState extends State<ChatsScreen> {
   void _open(BuildContext context, Profile p) {
     Navigator.of(context)
         .push(MaterialPageRoute(builder: (_) => ChatScreen(profileId: p.id)));
-  }
-}
-
-class _EmptyChats extends StatelessWidget {
-  const _EmptyChats({required this.onExplore});
-  final VoidCallback onExplore;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(32),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.forum_outlined, size: 56, color: HuntrColors.muted),
-          const SizedBox(height: 12),
-          Text('No chats yet', style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 4),
-          const Text('Say hi to someone nearby to start a conversation.',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: HuntrColors.muted)),
-          const SizedBox(height: 16),
-          FilledButton(
-              onPressed: onExplore, child: const Text('Explore people')),
-        ],
-      ),
-    );
   }
 }

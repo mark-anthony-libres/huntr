@@ -1,0 +1,32 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Huntr (Chrome :7357)",
+      "request": "launch",
+      "type": "dart",
+      "deviceId": "chrome",
+      "args": [
+        "--web-hostname", "localhost",
+        "--web-port", "7357",
+        "--dart-define-from-file=env/dev.json"
+      ]
+    },
+    {
+      "name": "Huntr (phone, wireless debugging)",
+      "request": "launch",
+      "type": "dart",
+      "preLaunchTask": "Connect phone (wireless debugging)",
+      // the phone, by its Wi-Fi IP (the port after it changes each time;
+      // Flutter matches the start of the device id)
+      "deviceId": "192.168.254.150",
+      "args": ["--dart-define-from-file=env/phone.json"]
+    },
+    {
+      "name": "Huntr (Android emulator)",
+      "request": "launch",
+      "type": "dart",
+      "args": ["--dart-define-from-file=env/android.json"]
+    }
+  ]
+}

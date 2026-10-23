@@ -18,21 +18,85 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta name="description" content="HUNTR: meet people near you.">
+  <meta name="theme-color" content="#0C0C0F">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="huntr">
+  <meta name="apple-mobile-web-app-title" content="HUNTR">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>huntr</title>
+  <title>HUNTR</title>
   <link rel="manifest" href="manifest.json">
+
+  <!-- Landing loader: shown from the first paint until Flutter draws its
+       first frame (no white page while the app downloads). -->
+  <style>
+    html, body { margin: 0; height: 100%; background: #0C0C0F; }
+    #huntr-loading {
+      position: fixed; inset: 0; z-index: 9999;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      background: radial-gradient(circle at 50% 42%, #2A1508 0%, #0C0C0F 60%);
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      transition: opacity 280ms ease-out;
+    }
+    #huntr-loading.done { opacity: 0; pointer-events: none; }
+    #huntr-loading img {
+      width: 96px; height: 96px; border-radius: 24px;
+      box-shadow: 0 0 48px rgba(255, 122, 26, 0.35);
+      animation: huntr-pulse 1.6s ease-in-out infinite;
+    }
+    #huntr-loading .name {
+      margin-top: 22px; font-size: 30px; font-weight: 800; letter-spacing: 6px;
+      background: linear-gradient(135deg, #FF7A1A, #FF4F1A);
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+    }
+    #huntr-loading .bar {
+      position: relative; overflow: hidden;
+      width: 160px; height: 4px; margin-top: 26px; border-radius: 4px;
+      background: rgba(255, 255, 255, 0.08);
+    }
+    #huntr-loading .bar::after {
+      content: ""; position: absolute; top: 0; bottom: 0; width: 40%; border-radius: 4px;
+      background: linear-gradient(90deg, #FF7A1A, #FF4F1A);
+      animation: huntr-slide 1.1s ease-in-out infinite;
+    }
+    #huntr-loading .hint { margin-top: 14px; font-size: 13px; color: #9A9FAD; }
+    @keyframes huntr-pulse { 50% { transform: scale(1.06); } }
+    @keyframes huntr-slide { 0% { left: -40%; } 100% { left: 100%; } }
+    @media (prefers-reduced-motion: reduce) {
+      #huntr-loading img, #huntr-loading .bar::after { animation: none; }
+    }
+
+    /* Videos (stories, chat media) are controlled by the app, not the
+       browser: taps go to HUNTR (next story, pause, ...), and there is no
+       right-click "Save video as" or picture-in-picture on them. */
+    video {
+      pointer-events: none;
+    }
+  </style>
 </head>
 <body>
+  <div id="huntr-loading" role="status" aria-label="Loading HUNTR">
+    <img src="icons/Icon-192.png" alt="">
+    <div class="name">HUNTR</div>
+    <div class="bar"></div>
+    <div class="hint">Loading…</div>
+  </div>
+  <script>
+    // Flutter has drawn: fade the loader out, then remove it.
+    window.addEventListener('flutter-first-frame', function () {
+      var loading = document.getElementById('huntr-loading');
+      if (!loading) return;
+      loading.classList.add('done');
+      setTimeout(function () { loading.remove(); }, 300);
+    });
+  </script>
   <!--
     You can customize the "flutter_bootstrap.js" script.
     This is useful to provide a custom configuration to the Flutter loader
@@ -41,6 +105,22 @@
     For more details:
     * https://docs.flutter.dev/platform-integration/web/initialization
   -->
+  <script>
+    // Installing HUNTR as an app (the browser's install offer). The browser
+    // offers it before the app has loaded, so it's kept here until the
+    // app's own "Get the HUNTR app" banner asks for it.
+    window.huntrInstall = { prompt: null, installed: false };
+    window.addEventListener('beforeinstallprompt', function (event) {
+      event.preventDefault(); // HUNTR shows its own banner instead
+      window.huntrInstall.prompt = event;
+      if (window.huntrInstallChanged) window.huntrInstallChanged();
+    });
+    window.addEventListener('appinstalled', function () {
+      window.huntrInstall.prompt = null;
+      window.huntrInstall.installed = true;
+      if (window.huntrInstallChanged) window.huntrInstallChanged();
+    });
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

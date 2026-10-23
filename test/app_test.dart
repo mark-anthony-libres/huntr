@@ -1,26 +1,64 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:huntr/config/google_oauth_config.dart';
 import 'package:huntr/main.dart';
 import 'package:huntr/models/models.dart';
 import 'package:huntr/state/app_state.dart';
 
 void main() {
+  test('Google OAuth configuration loads from the app asset', () async {
+    final config = await GoogleOAuthConfig.load();
+
+    expect(config.webClientId, endsWith('.apps.googleusercontent.com'));
+    expect(config.androidServerClientId, config.webClientId);
+    expect(config.iosClientId, isEmpty);
+    expect(config.backendUrl, isNotEmpty);
+    expect(config.isConfigured, isTrue);
+  });
+
   AppState onboardedState() {
-    final s = AppState(replyDelay: const Duration(milliseconds: 200));
+    final s = AppState(replyDelay: const Duration(milliseconds: 200))
+      ..startSession('test-session-token');
     s.completeOnboarding(name: 'Mark', age: 27, lookingFor: {LookingFor.chat});
     return s;
   }
 
-  testWidgets('onboarding needs a name and the 18+ confirmation',
+  testWidgets('without a session only sign-in is shown, even if onboarded',
       (tester) async {
-    await tester.pumpWidget(HuntrApp(state: AppState()));
+    final state = AppState()
+      ..completeOnboarding(
+          name: 'Mark', age: 27, lookingFor: {LookingFor.chat});
+    await tester.pumpWidget(HuntrApp(state: state));
+    await tester.pumpAndSettle();
+    expect(find.text('Sign in with Google'), findsOneWidget);
+    expect(find.text('Explore'), findsNothing);
+    expect(find.text('Meet people\nright around you.'), findsNothing);
+  });
+
+  testWidgets('a session opens onboarding', (tester) async {
+    final state = AppState()..startSession('test-session-token');
+    await tester.pumpWidget(HuntrApp(state: state));
+    await tester.pumpAndSettle();
+    expect(find.text('Meet people\nright around you.'), findsOneWidget);
+    expect(find.text('Sign in with Google'), findsNothing);
+  });
+
+  testWidgets(
+      'onboarding needs the 18+ confirmation and a location; display name is optional',
+      (tester) async {
+    final state = AppState()..startSession('test-session-token');
+    await tester.pumpWidget(HuntrApp(
+      state: state,
+      locate: () async => const GeoPoint(latitude: 14.6, longitude: 121),
+    ));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('onboardNext')));
     await tester.pumpAndSettle();
 
     final next = find.byKey(const Key('onboardNext'));
     expect(tester.widget<FilledButton>(next).onPressed, isNull);
 
-    await tester.enterText(find.byKey(const Key('onboardName')), 'Mark');
+    // no display name entered: it stays empty, with no fallback to the account name
     await tester.tap(find.byKey(const Key('onboardAdult')));
     await tester.pump();
     expect(tester.widget<FilledButton>(next).onPressed, isNotNull);
@@ -29,7 +67,55 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(next);
     await tester.pumpAndSettle();
+
+    // location step: can't finish until the location is found
+    expect(tester.widget<FilledButton>(next).onPressed, isNull);
+    await tester.tap(find.byKey(const Key('onboardLocation')));
+    await tester.pumpAndSettle();
+    expect(find.text('Location found'), findsOneWidget);
+
+    await tester.tap(next);
+    await tester.pumpAndSettle();
     expect(find.text('Explore'), findsWidgets);
+    expect(state.myName, isEmpty);
+    expect(state.myLocation?.latitude, 14.6);
+  });
+
+  testWidgets('sign-in buttons disclose provider behavior and social privacy',
+      (tester) async {
+    await tester.pumpWidget(HuntrApp(state: AppState()));
+    await tester.pumpAndSettle();
+    expect(find.text('Sign in with Google'), findsOneWidget);
+    expect(find.text('Sign in with Facebook'), findsOneWidget);
+    expect(find.bySemanticsLabel('Google logo'), findsOneWidget);
+    expect(find.byKey(const Key('googleLogo')), findsOneWidget);
+    expect(find.byKey(const Key('facebookLogo')), findsOneWidget);
+    expect(find.text('Find your\nkind of connection.'), findsOneWidget);
+    expect(
+        find.text(
+            'Meet people nearby, make a connection,\nand see where it goes.'),
+        findsOneWidget);
+    expect(
+        find.text('We never post anything to social media.'), findsOneWidget);
+    expect(
+      find.text('Facebook sign-in coming soon'),
+      findsOneWidget,
+    );
+    expect(AppScope.read(tester.element(find.byType(Scaffold))).onboarded,
+        isFalse);
+
+    await tester.ensureVisible(find.byKey(const Key('signInFacebook')));
+    await tester.tap(find.byKey(const Key('signInFacebook')));
+    await tester.pumpAndSettle();
+    // Facebook is not available and must not get anyone past sign-in.
+    expect(
+        find.text('Facebook sign-in is not available yet. '
+            'Please sign in with Google.'),
+        findsOneWidget);
+    expect(find.text('Meet people\nright around you.'), findsNothing);
+    final app = AppScope.read(tester.element(find.byType(Scaffold).first));
+    expect(app.signedIn, isFalse);
+    expect(app.onboarded, isFalse);
   });
 
   testWidgets('explore shows people and the online filter narrows the grid',
@@ -50,7 +136,8 @@ void main() {
       (tester) async {
     final state = AppState(
         replyDelay: const Duration(milliseconds: 200),
-        acceptDelay: const Duration(seconds: 30));
+        acceptDelay: const Duration(seconds: 30))
+      ..startSession('test-session-token');
     state.completeOnboarding(
         name: 'Mark', age: 27, lookingFor: {LookingFor.chat});
     await tester.pumpWidget(HuntrApp(state: state));
@@ -145,12 +232,8 @@ void main() {
         p.albumById(req.albumId)!.name);
   });
 
-  test('profile photos and albums can be managed', () {
+  test('albums can be managed', () {
     final state = AppState();
-    state.addProfilePhoto(PhotoSubject.gym);
-    final added = state.myPhotos.last.id;
-    state.makeMainPhoto(added);
-    expect(state.myPhotos.first.id, added);
     final a = state.createAlbum('Gym');
     state.addPhotoToAlbum(a.id, PhotoSubject.gym);
     expect(state.myAlbumById(a.id)!.photos, hasLength(1));

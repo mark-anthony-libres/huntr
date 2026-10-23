@@ -1,22 +1,78 @@
+import 'dart:async';
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 
+import '../state/block_state.dart';
+import '../widgets/block_gate.dart';
 import '../models/models.dart';
+import '../services/huntr_backend.dart';
 import '../state/app_state.dart';
+import '../state/messaging_state.dart';
+import '../state/tap_state.dart';
 import '../theme.dart';
+import '../widgets/profile_tile.dart';
 import '../widgets/avatar.dart';
-import '../widgets/photo.dart';
 import '../widgets/share_sheet.dart';
 import 'chat_screen.dart';
+import '../widgets/profile/gradient_button.dart';
+import '../widgets/profile/status_pill.dart';
+import '../widgets/profile/profile_meta.dart';
+import '../widgets/profile/profile_section.dart';
+import '../widgets/profile/looking_for_pill.dart';
+import '../widgets/profile/photo_gallery.dart';
+import '../flows/accept_with_album.dart';
+import '../widgets/stories/profile_stories.dart';
 
 class ProfileScreen extends StatelessWidget {
-  const ProfileScreen({super.key, required this.profileId});
+  const ProfileScreen({super.key, required String this.profileId})
+      : previewProfile = null,
+        person = null,
+        onMessage = null,
+        showDistance = true;
 
-  final String profileId;
+  /// Someone's profile from outside Explore (e.g. a chat): they may not be in
+  /// the nearby list. [onMessage] replaces opening a new chat (going back to
+  /// the one it came from).
+  ProfileScreen.person(
+      {super.key, required Profile this.person, this.onMessage})
+      : profileId = person.id,
+        previewProfile = null,
+        showDistance = true;
+
+  /// Your own profile exactly as other people see it, without the actions
+  /// that only make sense on someone else's profile.
+  const ProfileScreen.preview(
+      {super.key, required Profile profile, this.showDistance = true})
+      : profileId = null,
+        person = null,
+        onMessage = null,
+        previewProfile = profile;
+
+  final String? profileId;
+  final Profile? previewProfile;
+  final Profile? person;
+  final VoidCallback? onMessage;
+
+  /// In a preview: whether others can see your distance.
+  final bool showDistance;
+
+  bool get _isPreview => previewProfile != null;
 
   @override
   Widget build(BuildContext context) {
+    if (_isPreview) return _page(context);
+    final p = person ?? AppScope.of(context).profileById(profileId!);
+    // a block shows only that (checked again each time this opens); each
+    // opening is one visit in their Viewers
+    return _CountsAsVisit(
+        userId: p?.backendId,
+        child: BlockGate(userId: p?.backendId, child: Builder(builder: _page)));
+  }
+
+  Widget _page(BuildContext context) {
     final app = AppScope.of(context);
-    final p = app.profileById(profileId);
+    final p = previewProfile ?? person ?? app.profileById(profileId!);
     if (p == null) {
       return const Scaffold(
           body: Center(child: Text('This profile is no longer available.')));
@@ -27,23 +83,22 @@ class ProfileScreen extends StatelessWidget {
     final conn = app.connectionWith(p.id);
     final request = app.requestWith(p.id);
 
-    return Scaffold(
-      body: CustomScrollView(
-        slivers: [
-          SliverAppBar(
-            expandedHeight: height * 0.52,
-            pinned: true,
-            stretch: true,
-            backgroundColor: HuntrColors.night,
-            actions: [
-              IconButton(
+    // Wide screens (web, tablets): photo card left, details right.
+    final wide = MediaQuery.sizeOf(context).width >= 900;
+    final List<Widget> actions = _isPreview
+        ? const []
+        : [
+            _CircleButton(
+              child: IconButton(
                 tooltip: fav ? 'Remove from favorites' : 'Add to favorites',
                 icon: Icon(
                     fav ? Icons.star_rounded : Icons.star_outline_rounded,
-                    color: fav ? HuntrColors.amber : null),
+                    color: fav ? HuntrColors.orange : null),
                 onPressed: () => app.toggleFavorite(p.id),
               ),
-              PopupMenuButton<String>(
+            ),
+            _CircleButton(
+              child: PopupMenuButton<String>(
                 tooltip: 'More',
                 onSelected: (v) => v == 'block'
                     ? _confirmBlock(context, p)
@@ -60,193 +115,341 @@ class ProfileScreen extends StatelessWidget {
                           leading: Icon(Icons.block), title: Text('Block'))),
                 ],
               ),
+            ),
+            const SizedBox(width: 8),
+          ];
+    final Widget gallery = Stack(
+      fit: StackFit.expand,
+      children: [
+        PhotoGallery(profile: p, firstIsAvatar: !_isPreview),
+        const IgnorePointer(
+            child: DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              stops: [0, 0.25, 0.7, 1],
+              colors: [
+                Color(0x990F1014),
+                Colors.transparent,
+                Colors.transparent,
+                HuntrColors.night
+              ],
+            ),
+          ),
+        )),
+      ],
+    );
+    final Widget details = Padding(
+      padding: EdgeInsets.fromLTRB(20, 24, 20, wide ? 24 : 120),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Flexible(
+                child: Text(p.nameAndAge,
+                    style: text.headlineLarge?.copyWith(
+                        fontSize: 40,
+                        height: 1.1,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white)),
+              ),
+              if (p.verified) ...[
+                const SizedBox(width: 8),
+                const Tooltip(
+                    message: 'Verified',
+                    child: Icon(Icons.verified, color: HuntrColors.orange)),
+              ],
+              if (p.isNew) ...[
+                const SizedBox(width: 12),
+                const NewBadge(),
+              ],
             ],
-            flexibleSpace: FlexibleSpaceBar(
-              stretchModes: const [StretchMode.zoomBackground],
-              background: Stack(
-                fit: StackFit.expand,
+          ),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 20,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              ProfileMeta(
+                icon: p.online ? null : Icons.schedule,
+                leading: p.online ? const OnlineDot(size: 10) : null,
+                label: p.activeLabel(DateTime.now()),
+                color: p.online ? HuntrColors.online : HuntrColors.muted,
+              ),
+              ProfileMeta(
+                  icon: Icons.near_me_outlined,
+                  label: _isPreview
+                      ? (showDistance
+                          ? 'Distance shown to others'
+                          : 'Distance hidden')
+                      : p.distanceLabel),
+              if (p.pronouns != null)
+                ProfileMeta(icon: Icons.person_outline, label: p.pronouns!),
+              if (p.heightCm != null)
+                ProfileMeta(icon: Icons.height, label: '${p.heightCm} cm'),
+            ],
+          ),
+          const SizedBox(height: 28),
+          if (!_isPreview && conn == Connection.incoming)
+            Container(
+              margin: const EdgeInsets.only(bottom: 22),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: HuntrColors.orange.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                    color: HuntrColors.orange.withValues(alpha: 0.5)),
+              ),
+              child: Row(children: [
+                const Icon(Icons.mark_chat_unread_outlined,
+                    color: HuntrColors.orange),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    (request?.note == null
+                            ? '${p.name} wants to chat with you.'
+                            : '${p.name} wants to chat: "${request!.note}"') +
+                        (p.albumById(request?.albumId) == null
+                            ? ''
+                            : '\nAccept to receive their "${p.albumById(request?.albumId)!.name}" album.'),
+                  ),
+                ),
+              ]),
+            ),
+          // their stories (mine, with Add Story, on my own profile)
+          ProfileStories(profile: p, mine: _isPreview),
+          if (p.bio.isNotEmpty)
+            ProfileSection(
+                title: 'About',
+                child: Text(p.bio,
+                    style: const TextStyle(
+                        fontSize: 17, height: 1.5, color: Colors.white))),
+          if (p.lookingFor.isNotEmpty)
+            ProfileSection(
+              title: 'Looking for',
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
                 children: [
-                  _PhotoGallery(profile: p),
-                  const IgnorePointer(
-                      child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        stops: [0, 0.25, 0.7, 1],
-                        colors: [
-                          Color(0x990F1014),
-                          Colors.transparent,
-                          Colors.transparent,
-                          HuntrColors.night
-                        ],
-                      ),
-                    ),
-                  )),
+                  for (final choice in p.lookingFor)
+                    LookingForPill(choice: choice),
                 ],
               ),
             ),
-          ),
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 4, 20, 120),
+          // their stats, in the units I chose (unset ones aren't shown)
+          if (p.stats.lines(app.myStats.units) case final lines
+              when lines.isNotEmpty)
+            ProfileSection(
+              title: 'Stats',
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                key: const Key('profileStats'),
                 children: [
-                  Row(
-                    children: [
-                      Flexible(
-                        child: Text('${p.name}, ${p.age}',
-                            style: text.headlineMedium
-                                ?.copyWith(fontWeight: FontWeight.w800)),
+                  for (final (label, value) in lines)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            SizedBox(
+                              width: 150,
+                              child: Text(label,
+                                  style: const TextStyle(
+                                      color: HuntrColors.muted, fontSize: 15)),
+                            ),
+                            Expanded(
+                              child: Text(value,
+                                  key: Key('profileStat-$label'),
+                                  style: const TextStyle(
+                                      color: Colors.white, fontSize: 15)),
+                            ),
+                          ]),
+                    ),
+                ],
+              ),
+            ),
+          if (p.interests.isNotEmpty)
+            ProfileSection(
+              title: 'Interests',
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [for (final i in p.interests) Chip(label: Text(i))],
+              ),
+            ),
+        ],
+      ),
+    );
+    // ---- the next step for this connection, always in reach of the thumb ----
+    final Widget bottomBar = SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+        child: _isPreview
+            ? const _PreviewNotice()
+            : p.backendId != null
+                // opened from my Unmatched list: only taking them off it
+                ? p.unmatched
+                    ? _RemoveUnmatchButton(profile: p)
+                    : Row(children: [
+                        if (TapScope.of(context) != null) ...[
+                          _TapButton(profile: p),
+                          const SizedBox(width: 10),
+                        ],
+                        Expanded(
+                            child: _MessageButton(
+                                profile: p, onMessage: onMessage)),
+                      ])
+                : switch (conn) {
+                    Connection.none => GradientButton(
+                        key: const Key('sendRequest'),
+                        icon: Icons.send_rounded,
+                        label: 'Send chat request',
+                        onPressed: () => _requestSheet(context, p),
                       ),
-                      if (p.verified) ...[
+                    Connection.outgoing => Row(children: [
+                        const Expanded(
+                          child: StatusPill(
+                              icon: Icons.hourglass_top_rounded,
+                              label: 'Request sent · waiting'),
+                        ),
                         const SizedBox(width: 8),
-                        const Tooltip(
-                            message: 'Verified',
-                            child:
-                                Icon(Icons.verified, color: HuntrColors.amber)),
-                      ],
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  Wrap(
-                    spacing: 14,
-                    runSpacing: 6,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      _Meta(
-                        icon: p.online ? null : Icons.schedule,
-                        leading: p.online ? const OnlineDot(size: 10) : null,
-                        label: p.activeLabel(DateTime.now()),
-                        color:
-                            p.online ? HuntrColors.online : HuntrColors.muted,
-                      ),
-                      _Meta(
-                          icon: Icons.near_me_outlined, label: p.distanceLabel),
-                      if (p.pronouns != null)
-                        _Meta(icon: Icons.person_outline, label: p.pronouns!),
-                      if (p.heightCm != null)
-                        _Meta(icon: Icons.height, label: '${p.heightCm} cm'),
-                    ],
-                  ),
-                  const SizedBox(height: 22),
-                  if (conn == Connection.incoming)
-                    Container(
-                      margin: const EdgeInsets.only(bottom: 22),
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: HuntrColors.amber.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                            color: HuntrColors.amber.withValues(alpha: 0.5)),
-                      ),
-                      child: Row(children: [
-                        const Icon(Icons.mark_chat_unread_outlined,
-                            color: HuntrColors.amber),
+                        TextButton(
+                            onPressed: () => app.cancelRequest(p.id),
+                            child: const Text('Cancel')),
+                      ]),
+                    Connection.incoming => Row(children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            style: OutlinedButton.styleFrom(
+                                minimumSize: const Size(48, 52),
+                                shape: const StadiumBorder()),
+                            onPressed: () {
+                              app.declineRequest(p.id);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                      content: Text(
+                                          'Request from ${p.name} declined')));
+                            },
+                            child: const Text('Decline'),
+                          ),
+                        ),
                         const SizedBox(width: 12),
                         Expanded(
-                          child: Text(
-                            (request?.note == null
-                                    ? '${p.name} wants to chat with you.'
-                                    : '${p.name} wants to chat: "${request!.note}"') +
-                                (p.albumById(request?.albumId) == null
-                                    ? ''
-                                    : '\nAccept to receive their "${p.albumById(request?.albumId)!.name}" album.'),
+                          flex: 2,
+                          child: GradientButton(
+                            key: const Key('acceptRequest'),
+                            icon: Icons.check_rounded,
+                            label: 'Accept',
+                            onPressed: () => acceptWithAlbum(context, p),
                           ),
                         ),
                       ]),
+                    Connection.connected => GradientButton(
+                        icon: Icons.chat_bubble_rounded,
+                        label: 'Message',
+                        onPressed: () => _openChat(context, p),
+                      ),
+                  },
+      ),
+    );
+
+    if (wide) {
+      return Scaffold(
+        body: SafeArea(
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 1180),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Flexible(
+                      flex: 5,
+                      child: AspectRatio(
+                        aspectRatio: 4 / 5,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(28),
+                          child: Stack(fit: StackFit.expand, children: [
+                            PhotoGallery(
+                                profile: p, firstIsAvatar: !_isPreview),
+                            // only a top shade, for the buttons
+                            const IgnorePointer(
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
+                                    stops: [0, 0.22],
+                                    colors: [
+                                      Color(0x990F1014),
+                                      Colors.transparent
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const Positioned(
+                                top: 4,
+                                left: 4,
+                                child: _CircleButton(child: BackButton())),
+                            Positioned(
+                              top: 4,
+                              right: 0,
+                              child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: actions),
+                            ),
+                          ]),
+                        ),
+                      ),
                     ),
-                  _Section(
-                      title: 'About',
-                      child: Text(p.bio,
-                          style: text.bodyLarge?.copyWith(height: 1.45))),
-                  _Section(
-                    title: 'Looking for',
-                    child: Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        for (final l in p.lookingFor)
-                          Chip(
-                              avatar: Icon(l.icon,
-                                  size: 18, color: HuntrColors.amber),
-                              label: Text(l.label)),
-                      ],
+                    const SizedBox(width: 32),
+                    Flexible(
+                      flex: 6,
+                      // the details scroll; the next step (Tap, Message)
+                      // stays in view under them
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Expanded(
+                              child: SingleChildScrollView(child: details)),
+                          bottomBar,
+                        ],
+                      ),
                     ),
-                  ),
-                  _Section(
-                    title: 'Interests',
-                    child: Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        for (final i in p.interests) Chip(label: Text(i))
-                      ],
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
+        ),
+      );
+    }
+
+    return Scaffold(
+      body: CustomScrollView(
+        slivers: [
+          SliverAppBar(
+            expandedHeight: height * 0.52,
+            pinned: true,
+            stretch: true,
+            backgroundColor: HuntrColors.night,
+            automaticallyImplyLeading: false,
+            leadingWidth: 72,
+            leading: const _CircleButton(child: BackButton()),
+            actions: actions,
+            flexibleSpace: FlexibleSpaceBar(
+              stretchModes: const [StretchMode.zoomBackground],
+              background: gallery,
+            ),
+          ),
+          SliverToBoxAdapter(child: details),
         ],
       ),
-
-      // ---- the next step for this connection, always in reach of the thumb ----
-      bottomNavigationBar: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-          child: switch (conn) {
-            Connection.none => _GradientButton(
-                key: const Key('sendRequest'),
-                icon: Icons.send_rounded,
-                label: 'Send chat request',
-                onPressed: () => _requestSheet(context, p),
-              ),
-            Connection.outgoing => Row(children: [
-                const Expanded(
-                  child: _StatusPill(
-                      icon: Icons.hourglass_top_rounded,
-                      label: 'Request sent · waiting'),
-                ),
-                const SizedBox(width: 8),
-                TextButton(
-                    onPressed: () => app.cancelRequest(p.id),
-                    child: const Text('Cancel')),
-              ]),
-            Connection.incoming => Row(children: [
-                Expanded(
-                  child: OutlinedButton(
-                    style: OutlinedButton.styleFrom(
-                        minimumSize: const Size(48, 52),
-                        shape: const StadiumBorder()),
-                    onPressed: () {
-                      app.declineRequest(p.id);
-                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                          content: Text('Request from ${p.name} declined')));
-                    },
-                    child: const Text('Decline'),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  flex: 2,
-                  child: _GradientButton(
-                    key: const Key('acceptRequest'),
-                    icon: Icons.check_rounded,
-                    label: 'Accept',
-                    onPressed: () => acceptWithAlbum(context, p),
-                  ),
-                ),
-              ]),
-            Connection.connected => _GradientButton(
-                icon: Icons.chat_bubble_rounded,
-                label: 'Message',
-                onPressed: () => _openChat(context, p),
-              ),
-          },
-        ),
-      ),
+      bottomNavigationBar: bottomBar,
     );
   }
 
@@ -274,23 +477,25 @@ class ProfileScreen extends StatelessWidget {
   }
 
   Future<void> _confirmBlock(BuildContext context, Profile p) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('Block ${p.name}?'),
-        content: const Text(
-            'They won\'t be able to see you or message you, and your chat with them is deleted.'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel')),
-          FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Block')),
-        ],
-      ),
-    );
-    if (ok != true || !context.mounted) return;
+    if (!await confirmBlock(context) || !context.mounted) return;
+    final blocks = BlockScope.read(context);
+    final id = p.backendId;
+    if (blocks != null && id != null) {
+      // a real person: the backend blocks it (this screen then shows only
+      // the block); the chat stays, closed
+      try {
+        await blocks.block(id);
+        if (!context.mounted) return;
+        AppScope.read(context).block(p.id);
+        unawaited(MessagingScope.read(context)?.refresh());
+      } on BackendException catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text(e.message)));
+        }
+      }
+      return;
+    }
     AppScope.read(context).block(p.id);
     Navigator.of(context).popUntil((r) => r.isFirst);
     ScaffoldMessenger.of(context)
@@ -333,194 +538,283 @@ class ProfileScreen extends StatelessWidget {
   }
 }
 
-class _GradientButton extends StatelessWidget {
-  const _GradientButton(
-      {super.key,
-      required this.icon,
-      required this.label,
-      required this.onPressed});
-  final IconData icon;
-  final String label;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: const BoxDecoration(
-          gradient: HuntrColors.accentGradient,
-          borderRadius: BorderRadius.all(Radius.circular(30))),
-      child: FilledButton.icon(
-        style: FilledButton.styleFrom(
-            backgroundColor: Colors.transparent,
-            foregroundColor: Colors.black,
-            minimumSize: const Size.fromHeight(52)),
-        icon: Icon(icon),
-        label: Text(label),
-        onPressed: onPressed,
-      ),
-    );
-  }
-}
-
-class _StatusPill extends StatelessWidget {
-  const _StatusPill({required this.icon, required this.label});
-  final IconData icon;
-  final String label;
+/// Shown in place of the action bar when previewing your own profile.
+class _PreviewNotice extends StatelessWidget {
+  const _PreviewNotice();
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 52,
+      key: const Key('profilePreviewNotice'),
+      height: 58,
       alignment: Alignment.center,
+      padding: const EdgeInsets.symmetric(horizontal: 18),
       decoration: BoxDecoration(
-          color: HuntrColors.surfaceHigh,
-          borderRadius: BorderRadius.circular(30)),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(icon, size: 18, color: HuntrColors.amber),
-        const SizedBox(width: 8),
-        Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
+        color: HuntrColors.orange.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(30),
+        border: Border.all(color: HuntrColors.orange, width: 1.4),
+      ),
+      child: const Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(Icons.visibility_outlined, size: 22, color: HuntrColors.orange),
+        SizedBox(width: 10),
+        Flexible(
+          child: Text.rich(
+            TextSpan(children: [
+              TextSpan(
+                  text: 'Preview',
+                  style: TextStyle(fontWeight: FontWeight.w700)),
+              TextSpan(text: ' · This is how others see your profile'),
+            ]),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 15, color: Colors.white),
+          ),
+        ),
       ]),
     );
   }
 }
 
-class _Meta extends StatelessWidget {
-  const _Meta(
-      {this.icon,
-      this.leading,
-      required this.label,
-      this.color = HuntrColors.muted});
-  final IconData? icon;
-  final Widget? leading;
-  final String label;
-  final Color color;
+/// A dark round backdrop so header buttons stay visible over any photo.
+class _CircleButton extends StatelessWidget {
+  const _CircleButton({required this.child});
 
-  @override
-  Widget build(BuildContext context) {
-    return Row(mainAxisSize: MainAxisSize.min, children: [
-      leading ?? Icon(icon, size: 16, color: color),
-      const SizedBox(width: 5),
-      Text(label, style: TextStyle(color: color)),
-    ]);
-  }
-}
-
-class _Section extends StatelessWidget {
-  const _Section({required this.title, required this.child});
-  final String title;
   final Widget child;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 22),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(title.toUpperCase(),
-            style: Theme.of(context)
-                .textTheme
-                .labelMedium
-                ?.copyWith(color: HuntrColors.muted, letterSpacing: 1.2)),
-        const SizedBox(height: 10),
-        child,
-      ]),
+      padding: const EdgeInsets.all(6),
+      child: DecoratedBox(
+        decoration: const BoxDecoration(
+            color: Color(0xB3000000), shape: BoxShape.circle),
+        child: IconTheme.merge(
+            data: const IconThemeData(color: Colors.white), child: child),
+      ),
     );
   }
 }
 
-/// Approve [p]'s request after picking which of my albums to send back. Shared with the Chats screen.
-Future<void> acceptWithAlbum(BuildContext context, Profile p) async {
-  final choice = await showShareSheet(
-    context,
-    title: 'Accept ${p.name}\'s request',
-    subtitle:
-        'Pick an album to send to ${p.name}. Their chosen album is sent to you, and the chat opens.',
-    actionLabel: 'Accept & share',
-    actionIcon: Icons.check_rounded,
-  );
-  if (choice == null || !context.mounted) return;
-  AppScope.read(context).acceptRequest(p, albumId: choice.albumId);
-  Navigator.of(context)
-      .push(MaterialPageRoute(builder: (_) => ChatScreen(profileId: p.id)));
-}
+/// On a profile opened from my Unmatched Users list, instead of Message.
+class _RemoveUnmatchButton extends StatefulWidget {
+  const _RemoveUnmatchButton({required this.profile});
 
-/// Swipeable public profile pictures with a page indicator.
-class _PhotoGallery extends StatefulWidget {
-  const _PhotoGallery({required this.profile});
   final Profile profile;
 
   @override
-  State<_PhotoGallery> createState() => _PhotoGalleryState();
+  State<_RemoveUnmatchButton> createState() => _RemoveUnmatchButtonState();
 }
 
-class _PhotoGalleryState extends State<_PhotoGallery> {
-  int _page = 0;
-  final _pages = PageController();
+class _RemoveUnmatchButtonState extends State<_RemoveUnmatchButton> {
+  bool _removing = false;
 
-  @override
-  void dispose() {
-    _pages.dispose();
-    super.dispose();
-  }
-
-  void _go(int delta, int count) {
-    final next = (_page + delta).clamp(0, count - 1);
-    if (next != _page) {
-      _pages.animateToPage(next,
-          duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
+  Future<void> _remove() async {
+    final messaging = MessagingScope.read(context);
+    if (_removing || messaging == null) return;
+    final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _removing = true);
+    try {
+      await messaging.removeUnmatch(userId: widget.profile.backendId);
+      messenger.showSnackBar(const SnackBar(
+          content: Text('Welcome back! 💛 They’re off your Unmatched list.')));
+      navigator.pop(true);
+    } on BackendException catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(e.message)));
+      if (mounted) setState(() => _removing = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final p = widget.profile;
-    final count = p.photos.isEmpty ? 1 : p.photos.length;
-    return Stack(fit: StackFit.expand, children: [
-      PageView.builder(
-        controller: _pages,
-        itemCount: count,
-        onPageChanged: (i) => setState(() => _page = i),
-        itemBuilder: (_, i) => i == 0
-            ? Hero(
-                tag: 'art-${p.id}',
-                child: ProfileArt(profile: p, fontSize: 110))
-            : PhotoArt(photo: p.photos[i], radius: 0, iconSize: 96),
-      ),
-      // tap the left or right side to move between photos
-      if (count > 1)
-        Positioned.fill(
-          child: Row(children: [
-            Expanded(
-                child: GestureDetector(
-                    behavior: HitTestBehavior.translucent,
-                    onTap: () => _go(-1, count))),
-            Expanded(
-                child: GestureDetector(
-                    behavior: HitTestBehavior.translucent,
-                    onTap: () => _go(1, count))),
-          ]),
-        ),
-      if (count > 1)
-        Positioned(
-          left: 16,
-          right: 16,
-          top: MediaQuery.paddingOf(context).top + 6,
-          child: IgnorePointer(
-            child: Row(children: [
-              for (var i = 0; i < count; i++)
-                Expanded(
-                  child: Container(
-                    height: 3,
-                    margin: const EdgeInsets.symmetric(horizontal: 2),
-                    decoration: BoxDecoration(
-                      color: Colors.white
-                          .withValues(alpha: i == _page ? 0.95 : 0.35),
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-            ]),
-          ),
-        ),
-    ]);
+    return GradientButton(
+      key: const Key('removeUnmatchButton'),
+      icon: Icons.person_add_alt_1_rounded,
+      label: _removing ? 'Removing…' : 'Remove from Unmatch List',
+      onPressed: _remove,
+    );
   }
+}
+
+/// On a real person's profile, beside Message: one tap and they get it in
+/// their Taps inbox (no chat starts until they reply). Highlighted as
+/// "Tapped" while my tap is still waiting for their answer.
+class _TapButton extends StatefulWidget {
+  const _TapButton({required this.profile});
+
+  final Profile profile;
+
+  @override
+  State<_TapButton> createState() => _TapButtonState();
+}
+
+class _TapButtonState extends State<_TapButton> {
+  bool _sending = false;
+
+  /// My tap to them is still waiting for their answer (null: not known).
+  bool? _waiting;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkWaiting();
+  }
+
+  Future<void> _checkWaiting() async {
+    final taps = TapScope.read(context);
+    final userId = widget.profile.backendId;
+    if (taps == null || userId == null) return;
+    final app = AppScope.read(context);
+    try {
+      final waiting = await taps.isWaiting(userId);
+      if (mounted) setState(() => _waiting = waiting);
+    } on SessionRejectedException {
+      app.endSession();
+    } catch (error) {
+      // the button stays a plain Tap; tapping still works
+      debugPrint('Tap status not loaded: $error');
+    }
+  }
+
+  Future<void> _tap() async {
+    final taps = TapScope.read(context);
+    final userId = widget.profile.backendId;
+    if (_sending || taps == null || userId == null) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final app = AppScope.read(context);
+    setState(() => _sending = true);
+    String message;
+    try {
+      await taps.send(userId);
+      if (mounted) setState(() => _waiting = true);
+      message = 'Tap sent 👋 ${widget.profile.name} will see it in their Taps.';
+    } on SessionRejectedException {
+      return app.endSession();
+    } on BackendException catch (e) {
+      message = e.message;
+      // e.g. my earlier tap is still waiting: show it on the button
+      unawaited(_checkWaiting());
+    } catch (_) {
+      message = "Your tap didn't go through. Check your connection and try "
+          'again.';
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tapped = _waiting == true;
+    return OutlinedButton.icon(
+      key: const Key('tapButton'),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: HuntrColors.orange,
+        backgroundColor:
+            tapped ? HuntrColors.orange.withValues(alpha: 0.16) : null,
+        side: BorderSide(color: HuntrColors.orange, width: tapped ? 2 : 1),
+        minimumSize: const Size(0, 52),
+        shape: const StadiumBorder(),
+      ),
+      icon: _sending
+          ? const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2))
+          : Icon(
+              tapped ? Icons.check_circle_rounded : Icons.waving_hand_rounded),
+      label: Text(tapped ? 'Tapped' : 'Tap'),
+      onPressed: _tap,
+    );
+  }
+}
+
+/// On a real person's profile: our direct conversation, or (no conversation
+/// yet) my anonymous one with them - the backend decides; it's started the
+/// first time.
+class _MessageButton extends StatefulWidget {
+  const _MessageButton({required this.profile, this.onMessage});
+
+  final Profile profile;
+  final VoidCallback? onMessage;
+
+  @override
+  State<_MessageButton> createState() => _MessageButtonState();
+}
+
+class _MessageButtonState extends State<_MessageButton> {
+  bool _opening = false;
+
+  Future<void> _open() async {
+    if (widget.onMessage != null) return widget.onMessage!();
+    final messaging = MessagingScope.read(context);
+    if (_opening || messaging == null) return;
+    setState(() => _opening = true);
+    int? id;
+    String? error;
+    try {
+      id = await messaging.messageTarget(widget.profile);
+    } on BackendException catch (e) {
+      error = e.message;
+    } catch (_) {
+      error = "Couldn't open the chat. Check your connection and try again.";
+    }
+    if (!mounted) return;
+    setState(() => _opening = false);
+    if (id != null) {
+      await Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => ChatScreen.conversation(
+              conversationId: id!, other: widget.profile)));
+    } else if (error != null) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(error)));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GradientButton(
+      key: const Key('messageButton'),
+      icon: Icons.chat_bubble_rounded,
+      label: _opening ? 'Opening chat…' : 'Message',
+      onPressed: _open,
+    );
+  }
+}
+
+/// Opening someone's profile is one visit in their Viewers: recorded once
+/// for as long as this screen is open (rebuilds don't add any), with an id
+/// that makes a repeated request count once too. Not my own profile.
+class _CountsAsVisit extends StatefulWidget {
+  const _CountsAsVisit({required this.userId, required this.child});
+
+  final int? userId;
+  final Widget child;
+
+  @override
+  State<_CountsAsVisit> createState() => _CountsAsVisitState();
+}
+
+class _CountsAsVisitState extends State<_CountsAsVisit> {
+  static final _random = Random.secure();
+
+  /// This opening.
+  final String _visitId = List.generate(
+      16, (_) => _random.nextInt(256).toRadixString(16).padLeft(2, '0')).join();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final userId = widget.userId;
+      if (!mounted || userId == null) return;
+      if (userId == AppScope.read(context).myUserId) return;
+      TapScope.read(context)?.recordView(userId, _visitId);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }
