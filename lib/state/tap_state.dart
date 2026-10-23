@@ -6,7 +6,8 @@ import '../services/huntr_backend.dart';
 import '../services/tap_service.dart';
 
 /// My Tap inbox, kept up to date: loaded when signed in, again when a tap
-/// arrives (the backend's `tap.new`), when a block or unmatch changes (their
+/// arrives (the backend's `tap.new`) or leaves (`taps.changed`: someone I
+/// tapped answered mine to them), when a block or unmatch changes (their
 /// taps are hidden) and after the live connection comes back. Also how I tap
 /// someone. The backend enforces every rule; this only shows them.
 ///
@@ -25,8 +26,27 @@ class TapState extends ChangeNotifier {
   bool _loading = false;
   String? _error;
 
-  /// The taps waiting for me, newest first (null: not loaded yet).
-  List<ReceivedTap>? get taps => _taps;
+  /// The taps waiting for me (null: not loaded yet): latest tapped first,
+  /// or ([byCount]) most taps first, then latest.
+  List<ReceivedTap>? get taps {
+    final taps = _taps;
+    if (taps == null || !_byCount) return taps;
+    return [...taps]..sort((a, b) => a.count != b.count
+        ? b.count.compareTo(a.count)
+        : b.receivedAt.compareTo(a.receivedAt));
+  }
+
+  bool _byCount = false;
+
+  /// The inbox sorted by how many taps (false: by the latest, the default).
+  bool get byCount => _byCount;
+
+  void sortByCount(bool byCount) {
+    if (_byCount == byCount) return;
+    _byCount = byCount;
+    notifyListeners();
+  }
+
   bool get loading => _loading;
 
   /// Why the inbox couldn't load (null: it did, or hasn't tried).
@@ -50,6 +70,45 @@ class TapState extends ChangeNotifier {
 
   /// More viewers to load as the list is scrolled.
   bool get moreViewers => _viewersNext != null;
+
+  int _newViewers = 0;
+
+  /// People who viewed my profile since I last opened Viewers (its badge).
+  int get newViewers => _newViewers;
+
+  /// The new viewers' count from the backend (with the inbox, and when
+  /// someone views me).
+  Future<void> refreshNewViewers() async {
+    final current = token();
+    if (current == null) return;
+    try {
+      final count = await service.fetchNewViewerCount(current);
+      if (count == _newViewers) return;
+      _newViewers = count;
+      notifyListeners();
+    } on SessionRejectedException {
+      onSessionRejected?.call();
+    } catch (error) {
+      debugPrint('New viewers not counted: $error');
+    }
+  }
+
+  /// I opened Viewers: nobody in it is new anymore.
+  Future<void> markViewersSeen() async {
+    final current = token();
+    if (current == null) return;
+    if (_newViewers != 0) {
+      _newViewers = 0;
+      notifyListeners();
+    }
+    try {
+      await service.markViewersSeen(current);
+    } on SessionRejectedException {
+      onSessionRejected?.call();
+    } catch (error) {
+      debugPrint('Viewers not marked seen: $error');
+    }
+  }
 
   /// The first page again, or ([more]) the next one.
   Future<void> refreshViewers({bool more = false}) async {
@@ -96,9 +155,11 @@ class TapState extends ChangeNotifier {
     }
   }
 
+  /// The inbox (and the new viewers' count) again.
   Future<void> refresh() async {
     final current = token();
     if (current == null) return;
+    unawaited(refreshNewViewers());
     _loading = true;
     notifyListeners();
     try {
@@ -119,13 +180,15 @@ class TapState extends ChangeNotifier {
   /// A live event: refreshes the inbox when it concerns taps.
   void handleEvent(Map<String, dynamic> event) {
     switch (event['type']) {
-      case 'tap.new':
+      case 'tap.new' || 'taps.changed':
         unawaited(refresh());
       case 'block.changed' || 'unmatch.changed':
         unawaited(refresh());
         if (_viewers != null) unawaited(refreshViewers());
-      // someone viewed my profile: the list, if it's been opened
+      // someone viewed my profile: the badge, and the list if it's been
+      // opened
       case 'profile.viewed':
+        unawaited(refreshNewViewers());
         if (_viewers != null) unawaited(refreshViewers());
     }
   }
@@ -142,13 +205,9 @@ class TapState extends ChangeNotifier {
     }
   }
 
-  /// I tap them (it goes to their Taps inbox). Throws what the backend says,
-  /// e.g. that my earlier tap is still waiting.
+  /// I tap them (it goes to their Taps inbox, or counts up my waiting tap
+  /// there). Throws what the backend says, e.g. too soon after the last.
   Future<void> send(int userId) => service.send(_token(), userId);
-
-  /// My tap to them is still waiting for their answer (their profile shows
-  /// it as tapped).
-  Future<bool> isWaiting(int userId) => service.isWaiting(_token(), userId);
 
   /// My response: the backend starts (or continues) our direct conversation;
   /// the tap leaves my inbox. Throws what the backend says.

@@ -154,7 +154,8 @@ class _HomeShellState extends State<HomeShell> {
           HuntrBottomBarItem(
               icon: Icons.waving_hand_outlined,
               label: 'Taps',
-              badge: taps?.unreadCount ?? 0),
+              // unread taps and new viewers, both under Taps
+              badge: (taps?.unreadCount ?? 0) + (taps?.newViewers ?? 0)),
           HuntrBottomBarItem(
               icon: Icons.chat_bubble_outline, label: 'Chats', badge: unread),
           const HuntrBottomBarItem(icon: Icons.person_outline, label: 'Me'),

@@ -462,7 +462,8 @@ class ReceivedTap {
       required this.sender,
       required this.answers,
       required this.isRead,
-      required this.receivedAt});
+      required this.receivedAt,
+      this.count = 1});
 
   factory ReceivedTap.fromJson(Map<String, dynamic> json) => ReceivedTap(
         id: json['id'] as int,
@@ -472,21 +473,30 @@ class ReceivedTap {
             TapAnswer.fromJson(a as Map<String, dynamic>),
         ],
         isRead: json['is_read'] as bool? ?? false,
-        receivedAt: DateTime.parse(json['created_at'] as String).toLocal(),
+        receivedAt: DateTime.parse(
+                (json['last_tapped_at'] ?? json['created_at']) as String)
+            .toLocal(),
+        count: json['count'] as int? ?? 1,
       );
 
   final int id;
   final Profile sender;
   final List<TapAnswer> answers;
   final bool isRead;
+
+  /// When they last tapped.
   final DateTime receivedAt;
+
+  /// How many times they've tapped since I last answered (1: once).
+  final int count;
 
   ReceivedTap read() => ReceivedTap(
       id: id,
       sender: sender,
       answers: answers,
       isRead: true,
-      receivedAt: receivedAt);
+      receivedAt: receivedAt,
+      count: count);
 }
 
 /// After responding to a tap: the direct conversation and my message.
@@ -566,6 +576,33 @@ Future<void> recordProfileView(
       (_) {},
     );
 
+/// GET .../profile-views/new-count: how many people viewed my profile
+/// since I last opened Viewers.
+Future<int> fetchNewProfileViewerCount(
+        {required String backendUrl,
+        required String token,
+        http.Client? client}) =>
+    _sendAuthorized(
+      client,
+      (httpClient) => httpClient.get(
+          _endpoint(backendUrl, '/profile-views/new-count'),
+          headers: _authorization(token)),
+      (data) => data['count'] as int,
+    );
+
+/// POST .../profile-views/seen: I opened Viewers (its badge clears).
+Future<void> markProfileViewersSeen(
+        {required String backendUrl,
+        required String token,
+        http.Client? client}) =>
+    _sendAuthorized(
+      client,
+      (httpClient) => httpClient.post(
+          _endpoint(backendUrl, '/profile-views/seen'),
+          headers: _authorization(token)),
+      (_) {},
+    );
+
 /// GET .../profile-views: who viewed my profile (only ever mine).
 Future<ViewerPage> fetchProfileViewers(
         {required String backendUrl,
@@ -599,19 +636,6 @@ Future<void> sendTap(
           headers: _json(token),
           body: jsonEncode({'recipient_id': recipientId})),
       (_) {},
-    );
-
-/// GET .../taps/sent/{id}: my tap to them is still waiting for an answer.
-Future<bool> fetchTapWaiting(
-        {required String backendUrl,
-        required String token,
-        required int recipientId,
-        http.Client? client}) =>
-    _sendAuthorized(
-      client,
-      (httpClient) => httpClient.get(_taps(backendUrl, '/sent/$recipientId'),
-          headers: _authorization(token)),
-      (data) => data['waiting'] as bool,
     );
 
 /// POST .../taps/{id}/read: I opened it.

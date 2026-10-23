@@ -17,9 +17,9 @@ import 'chat_screen.dart';
 import 'chats_screen.dart' show timeLabel;
 import 'profile_screen.dart';
 
-/// The Taps tab: the taps waiting for me, newest first (opening one marks
-/// it read; responding starts our chat), and beside them, Viewers: who
-/// viewed my profile in the last 24 hours.
+/// The Taps tab: the taps waiting for me, latest first or most taps first
+/// (opening one marks it read; responding starts our chat), and beside
+/// them, Viewers: who viewed my profile in the last 24 hours.
 class TapsScreen extends StatefulWidget {
   const TapsScreen({super.key});
 
@@ -32,8 +32,12 @@ class _TapsScreenState extends State<TapsScreen> {
 
   void _show({required bool viewers}) {
     setState(() => _viewersTab = viewers);
-    // fresh each time it's opened
-    if (viewers) TapScope.read(context)?.refreshViewers();
+    // fresh each time it's opened; its badge clears
+    if (viewers) {
+      final taps = TapScope.read(context);
+      taps?.refreshViewers();
+      taps?.markViewersSeen();
+    }
   }
 
   @override
@@ -48,7 +52,9 @@ class _TapsScreenState extends State<TapsScreen> {
         child: RefreshIndicator(
           color: HuntrColors.orange,
           onRefresh: () =>
-              (_viewersTab ? taps?.refreshViewers() : taps?.refresh()) ??
+              (_viewersTab
+                  ? taps?.refreshViewers().then((_) => taps.markViewersSeen())
+                  : taps?.refresh()) ??
               Future.value(),
           child: ListView(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
@@ -74,10 +80,12 @@ class _TapsScreenState extends State<TapsScreen> {
                         icon: Icons.waving_hand_outlined,
                         label: 'Taps',
                         badge: taps?.unreadCount ?? 0),
-                    const PillTab(
-                        key: Key('viewersTab'),
+                    PillTab(
+                        key: const Key('viewersTab'),
                         icon: Icons.visibility_outlined,
-                        label: 'Viewers'),
+                        label: 'Viewers',
+                        // new since I last looked (none while looking)
+                        badge: _viewersTab ? 0 : taps?.newViewers ?? 0),
                   ],
                 ),
               ),
@@ -107,7 +115,33 @@ class _TapsScreenState extends State<TapsScreen> {
                     message: "When someone taps you, they'll show up here. "
                         'Say hi back to start a chat.',
                   )
-                else
+                else ...[
+                  // Recent (the default) or Most taps
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Row(children: [
+                      for (final (byCount, label, key) in [
+                        (false, 'Recent', 'tapsSortRecent'),
+                        (true, 'Most taps', 'tapsSortCount'),
+                      ])
+                        Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: ChoiceChip(
+                            key: Key(key),
+                            label: Text(label),
+                            selected: taps!.byCount == byCount,
+                            showCheckmark: false,
+                            selectedColor:
+                                HuntrColors.orange.withValues(alpha: 0.18),
+                            side: BorderSide(
+                                color: taps.byCount == byCount
+                                    ? HuntrColors.orange
+                                    : HuntrColors.border),
+                            onSelected: (_) => taps.sortByCount(byCount),
+                          ),
+                        ),
+                    ]),
+                  ),
                   for (final tap in list)
                     _TapRow(
                       tap: tap,
@@ -115,6 +149,7 @@ class _TapsScreenState extends State<TapsScreen> {
                       onTap: () => Navigator.of(context).push(MaterialPageRoute(
                           builder: (_) => TapDetailScreen(tap: tap))),
                     ),
+                ],
               ],
             ],
           ),
@@ -163,7 +198,9 @@ class _TapRow extends StatelessWidget {
                     Row(children: [
                       Expanded(
                         child: Text(
-                          '${tap.sender.name} tapped you 👋',
+                          tap.count > 1
+                              ? '${tap.sender.name} tapped you ${tap.count} times 👋'
+                              : '${tap.sender.name} tapped you 👋',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
@@ -187,6 +224,24 @@ class _TapRow extends StatelessWidget {
                   ],
                 ),
               ),
+              // how many taps, when more than one
+              if (tap.count > 1) ...[
+                const SizedBox(width: 10),
+                Container(
+                  key: Key('tapCount-${tap.id}'),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    gradient: HuntrColors.accentGradient,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text('×${tap.count}',
+                      style: const TextStyle(
+                          color: Colors.black,
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w800)),
+                ),
+              ],
               if (unread) ...[
                 const SizedBox(width: 10),
                 Container(

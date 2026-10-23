@@ -6,12 +6,40 @@ import '../../theme.dart';
 
 /// A reaction just sent, played once over the story: the emoji pops up big
 /// in an orange glow, little copies fly out around it, and it all floats
-/// away. Give it a new key to play it again.
+/// away. Give it a new key to play it again. With [wave] the big one waves
+/// side to side (a tap's 👋).
 class ReactionBurst extends StatefulWidget {
-  const ReactionBurst({super.key, required this.emoji, this.onDone});
+  const ReactionBurst(
+      {super.key, required this.emoji, this.onDone, this.wave = false});
 
   final String emoji;
   final VoidCallback? onDone;
+  final bool wave;
+
+  /// Plays [emoji] once over everything (centred on the screen), e.g. a tap
+  /// just sent from a profile.
+  static void show(BuildContext context, String emoji, {bool wave = false}) {
+    final overlay = Overlay.maybeOf(context, rootOverlay: true);
+    if (overlay == null) return;
+    late final OverlayEntry entry;
+    entry = OverlayEntry(
+      builder: (_) => Positioned.fill(
+        // over everything, outside any page: the text needs its own style
+        // (without one, Flutter marks it with a yellow underline)
+        child: Material(
+          type: MaterialType.transparency,
+          child: Center(
+            child: ReactionBurst(
+                key: const Key('reactionBurstOverlay'),
+                emoji: emoji,
+                wave: wave,
+                onDone: () => entry.remove()),
+          ),
+        ),
+      ),
+    );
+    overlay.insert(entry);
+  }
 
   @override
   State<ReactionBurst> createState() => _ReactionBurstState();
@@ -96,13 +124,21 @@ class _ReactionBurstState extends State<ReactionBurst>
                               style: const TextStyle(fontSize: 22)),
                         ),
                       ),
-                    // the big one
-                    Transform.scale(
-                      scale: _size.value,
-                      child: Text(widget.emoji,
-                          style: const TextStyle(fontSize: 110, shadows: [
-                            Shadow(color: Colors.black54, blurRadius: 18),
-                          ])),
+                    // the big one (waving: rocks from its wrist, slowing)
+                    Transform.rotate(
+                      angle: widget.wave
+                          ? math.sin(_play.value * 6 * math.pi) *
+                              0.45 *
+                              (1 - _play.value)
+                          : 0,
+                      alignment: const Alignment(0.3, 0.7),
+                      child: Transform.scale(
+                        scale: _size.value,
+                        child: Text(widget.emoji,
+                            style: const TextStyle(fontSize: 110, shadows: [
+                              Shadow(color: Colors.black54, blurRadius: 18),
+                            ])),
+                      ),
                     ),
                   ]),
                 ),

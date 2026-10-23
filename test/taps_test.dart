@@ -46,12 +46,6 @@ class _FakeTaps extends TapService {
     calls.add('send $recipientId');
   }
 
-  /// My tap to them is waiting (the profile's Tapped state).
-  bool waiting = false;
-
-  @override
-  Future<bool> isWaiting(String token, int recipientId) async => waiting;
-
   @override
   Future<void> markRead(String token, int tapId) async =>
       calls.add('read $tapId');

@@ -24,6 +24,7 @@ import '../widgets/profile/looking_for_pill.dart';
 import '../widgets/profile/photo_gallery.dart';
 import '../flows/accept_with_album.dart';
 import '../widgets/stories/profile_stories.dart';
+import '../widgets/stories/reaction_burst.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key, required String this.profileId})
@@ -585,8 +586,9 @@ class _RemoveUnmatchButtonState extends State<_RemoveUnmatchButton> {
 }
 
 /// On a real person's profile, beside Message: one tap and they get it in
-/// their Taps inbox (no chat starts until they reply). Highlighted as
-/// "Tapped" while my tap is still waiting for their answer.
+/// their Taps inbox (no chat starts until they reply). Always "Tap": each
+/// one goes (counted up on their side) with a big wave; presses within
+/// [_gap] of the last one are ignored, so a burst is one tap.
 class _TapButton extends StatefulWidget {
   const _TapButton({required this.profile});
 
@@ -597,51 +599,40 @@ class _TapButton extends StatefulWidget {
 }
 
 class _TapButtonState extends State<_TapButton> {
+  /// The backend allows one tap per person each 2 seconds too.
+  static const _gap = Duration(seconds: 2);
+
   bool _sending = false;
 
-  /// My tap to them is still waiting for their answer (null: not known).
-  bool? _waiting;
+  /// Running for [_gap] after each tap: presses meanwhile are ignored.
+  Timer? _cooling;
 
   @override
-  void initState() {
-    super.initState();
-    _checkWaiting();
-  }
-
-  Future<void> _checkWaiting() async {
-    final taps = TapScope.read(context);
-    final userId = widget.profile.backendId;
-    if (taps == null || userId == null) return;
-    final app = AppScope.read(context);
-    try {
-      final waiting = await taps.isWaiting(userId);
-      if (mounted) setState(() => _waiting = waiting);
-    } on SessionRejectedException {
-      app.endSession();
-    } catch (error) {
-      // the button stays a plain Tap; tapping still works
-      debugPrint('Tap status not loaded: $error');
-    }
+  void dispose() {
+    _cooling?.cancel();
+    super.dispose();
   }
 
   Future<void> _tap() async {
     final taps = TapScope.read(context);
     final userId = widget.profile.backendId;
+    // a burst of presses: only the first
     if (_sending || taps == null || userId == null) return;
+    if (_cooling?.isActive ?? false) return;
+    _cooling = Timer(_gap, () {});
     final messenger = ScaffoldMessenger.of(context);
     final app = AppScope.read(context);
     setState(() => _sending = true);
     String message;
     try {
       await taps.send(userId);
-      if (mounted) setState(() => _waiting = true);
+      // a big wave: it went
+      if (mounted) ReactionBurst.show(context, '👋', wave: true);
       message = 'Tap sent 👋 ${widget.profile.name} will see it in their Taps.';
     } on SessionRejectedException {
       return app.endSession();
     } on BackendException catch (e) {
       message = e.message;
-      // e.g. my earlier tap is still waiting: show it on the button
-      unawaited(_checkWaiting());
     } catch (_) {
       message = "Your tap didn't go through. Check your connection and try "
           'again.';
@@ -650,19 +641,19 @@ class _TapButtonState extends State<_TapButton> {
     }
     messenger
       ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
+      // gone by the time the next tap is allowed (it sits over the button)
+      ..showSnackBar(SnackBar(
+          content: Text(message),
+          duration: const Duration(milliseconds: 1800)));
   }
 
   @override
   Widget build(BuildContext context) {
-    final tapped = _waiting == true;
     return OutlinedButton.icon(
       key: const Key('tapButton'),
       style: OutlinedButton.styleFrom(
         foregroundColor: HuntrColors.orange,
-        backgroundColor:
-            tapped ? HuntrColors.orange.withValues(alpha: 0.16) : null,
-        side: BorderSide(color: HuntrColors.orange, width: tapped ? 2 : 1),
+        side: const BorderSide(color: HuntrColors.orange),
         minimumSize: const Size(0, 52),
         shape: const StadiumBorder(),
       ),
@@ -671,9 +662,8 @@ class _TapButtonState extends State<_TapButton> {
               width: 18,
               height: 18,
               child: CircularProgressIndicator(strokeWidth: 2))
-          : Icon(
-              tapped ? Icons.check_circle_rounded : Icons.waving_hand_rounded),
-      label: Text(tapped ? 'Tapped' : 'Tap'),
+          : const Icon(Icons.waving_hand_rounded),
+      label: const Text('Tap'),
       onPressed: _tap,
     );
   }

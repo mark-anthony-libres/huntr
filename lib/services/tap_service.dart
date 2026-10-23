@@ -15,10 +15,6 @@ class TapService {
   Future<void> send(String token, int recipientId) async => backend.sendTap(
       backendUrl: await _url(), token: token, recipientId: recipientId);
 
-  Future<bool> isWaiting(String token, int recipientId) async =>
-      backend.fetchTapWaiting(
-          backendUrl: await _url(), token: token, recipientId: recipientId);
-
   /// I opened their profile (one [visitId] per opening).
   Future<void> recordView(String token, int userId, String visitId) async =>
       backend.recordProfileView(
@@ -26,6 +22,13 @@ class TapService {
           token: token,
           userId: userId,
           visitId: visitId);
+
+  /// How many people viewed my profile since I last opened Viewers.
+  Future<int> fetchNewViewerCount(String token) async => backend
+      .fetchNewProfileViewerCount(backendUrl: await _url(), token: token);
+
+  Future<void> markViewersSeen(String token) async =>
+      backend.markProfileViewersSeen(backendUrl: await _url(), token: token);
 
   Future<ViewerPage> fetchViewers(String token, {int offset = 0}) async =>
       backend.fetchProfileViewers(
