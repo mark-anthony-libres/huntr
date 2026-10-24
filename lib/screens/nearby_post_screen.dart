@@ -442,27 +442,31 @@ class _CommentTile extends StatelessWidget {
         Expanded(
           child:
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text.rich(
-              TextSpan(children: [
-                TextSpan(
-                    text: comment.author.name,
-                    style: const TextStyle(fontWeight: FontWeight.w700)),
-                if (comment.byAuthor)
-                  TextSpan(
-                      text: '  · Author',
-                      style: TextStyle(
-                          color: HuntrColors.orange,
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w700)),
-                TextSpan(
-                    text:
-                        '  ·  ${nearbyMeta(distanceM: comment.distanceM, at: comment.createdAt, now: now, mine: comment.mine)}',
-                    style: const TextStyle(
-                        color: HuntrColors.muted, fontSize: 12.5)),
-              ]),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
+            // the name line opens their anonymous profile too
+            nearbyAuthorTap(
+                key: Key('nearbyCommentName-${comment.id}'),
+                onTap: onAuthor,
+                child: Text.rich(
+                  TextSpan(children: [
+                    TextSpan(
+                        text: comment.author.name,
+                        style: const TextStyle(fontWeight: FontWeight.w700)),
+                    if (comment.byAuthor)
+                      TextSpan(
+                          text: '  · Author',
+                          style: TextStyle(
+                              color: HuntrColors.orange,
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w700)),
+                    TextSpan(
+                        text:
+                            '  ·  ${nearbyMeta(distanceM: comment.distanceM, at: comment.createdAt, now: now, mine: comment.mine)}',
+                        style: const TextStyle(
+                            color: HuntrColors.muted, fontSize: 12.5)),
+                  ]),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                )),
             const SizedBox(height: 3),
             Text(comment.body,
                 style: const TextStyle(fontSize: 15, height: 1.35)),
