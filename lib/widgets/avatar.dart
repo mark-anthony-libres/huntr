@@ -6,8 +6,8 @@ import 'anonymous_avatar.dart';
 import 'network_photo.dart';
 import 'stories/story_ring.dart';
 
-/// A generated portrait: a soft two-tone gradient from the person's hue, with their initials.
-/// Stands in for profile photos until uploads exist.
+/// Someone's picture: their first photo, their animal when they're
+/// anonymous to me, or (no photo) [DefaultPortrait].
 class ProfileArt extends StatelessWidget {
   const ProfileArt(
       {super.key,
@@ -20,7 +20,7 @@ class ProfileArt extends StatelessWidget {
   final double radius;
   final double fontSize;
 
-  /// Where the initials (or silhouette) sit, e.g. up top on a card whose
+  /// Where the silhouette sits (no photo), e.g. up top on a card whose
   /// bottom holds text.
   final Alignment alignment;
 
@@ -36,48 +36,64 @@ class ProfileArt extends StatelessWidget {
         child: NetworkPhoto(profile.photoUrls.first),
       );
     }
-    final a = HSLColor.fromAHSL(1, profile.hue, 0.55, 0.42).toColor();
-    final b =
-        HSLColor.fromAHSL(1, (profile.hue + 40) % 360, 0.6, 0.22).toColor();
+    // no photo: the default picture, a dark head-and-shoulders silhouette
     return ClipRRect(
       borderRadius: BorderRadius.circular(radius),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-              colors: [a, b],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight),
-        ),
-        child: Align(
-          alignment: alignment,
-          child: profile.initials.isEmpty
-              // no name: a person silhouette in a soft circle
-              ? Container(
-                  width: fontSize * 2,
-                  height: fontSize * 2,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.white.withValues(alpha: 0.12),
-                    border:
-                        Border.all(color: Colors.white.withValues(alpha: 0.18)),
-                  ),
-                  child: Icon(Icons.person_rounded,
-                      size: fontSize * 1.35,
-                      color: Colors.white.withValues(alpha: 0.85)),
-                )
-              : Text(
-                  profile.initials,
-                  style: TextStyle(
-                    fontSize: fontSize,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -1,
-                    color: Colors.white.withValues(alpha: 0.88),
-                  ),
-                ),
-        ),
-      ),
+      child: DefaultPortrait(alignment: alignment),
     );
   }
+}
+
+/// The picture of someone without a photo: a black head and shoulders on
+/// grey, sized to the narrower side; in a taller space the head sits at
+/// [alignment] and the shoulders run down to the bottom edge.
+class DefaultPortrait extends StatelessWidget {
+  const DefaultPortrait({super.key, this.alignment = Alignment.center});
+
+  final Alignment alignment;
+
+  static const background = Color(0xFF4A4A4A);
+
+  @override
+  Widget build(BuildContext context) => ColoredBox(
+        key: const Key('defaultPortrait'),
+        color: background,
+        child: SizedBox.expand(
+          child: CustomPaint(painter: _SilhouettePainter(alignment)),
+        ),
+      );
+}
+
+class _SilhouettePainter extends CustomPainter {
+  const _SilhouettePainter(this.alignment);
+
+  final Alignment alignment;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.clipRect(Offset.zero & size);
+    final side = size.shortestSide;
+    // the square the figure is drawn in, placed by [alignment]
+    final origin =
+        alignment.inscribe(Size.square(side), Offset.zero & size).topLeft;
+    final paint = Paint()..color = Colors.black;
+    // the head
+    canvas.drawCircle(
+        origin + Offset(side * 0.5, side * 0.35), side * 0.28, paint);
+    // the shoulders, running off the bottom (of the space, when taller)
+    final top = origin.dy + side * 0.665;
+    final bottom = (size.height - top) < side * 0.6
+        ? origin.dy + side * 1.45
+        : size.height + side * 0.45;
+    canvas.drawOval(
+        Rect.fromLTRB(
+            origin.dx + side * 0.06, top, origin.dx + side * 0.94, bottom),
+        paint);
+  }
+
+  @override
+  bool shouldRepaint(_SilhouettePainter oldDelegate) =>
+      oldDelegate.alignment != alignment;
 }
 
 /// Someone's round picture (with their online dot). When they have a story,

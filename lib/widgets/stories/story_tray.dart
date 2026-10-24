@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../models/models.dart';
@@ -123,14 +125,18 @@ class _StoryTrayState extends State<StoryTray> {
             key: const Key('trayAddStory'),
             label: 'Add Story',
             onTap: _add,
-            avatar: Container(
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: HuntrColors.surface,
-                border: Border.all(color: HuntrColors.border, width: 1.5),
+            // a dashed ring in the accent, a + inside: none yet, add one
+            avatar: CustomPaint(
+              painter: _DashedRing(color: HuntrColors.orange),
+              child: Padding(
+                padding: const EdgeInsets.all(5),
+                child: Container(
+                  decoration: const BoxDecoration(
+                      shape: BoxShape.circle, color: HuntrColors.surface),
+                  child: const Icon(Icons.add_rounded,
+                      color: Colors.white, size: 30),
+                ),
               ),
-              child:
-                  const Icon(Icons.add_rounded, color: Colors.white, size: 30),
             ),
           ),
           if (mine.isNotEmpty)
@@ -211,4 +217,30 @@ class _TrayItem extends StatelessWidget {
           ),
         ),
       );
+}
+
+/// A ring of short dashes round a circle (Add Story).
+class _DashedRing extends CustomPainter {
+  const _DashedRing({required this.color});
+
+  final Color color;
+
+  static const _dashes = 16;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.5
+      ..strokeCap = StrokeCap.round;
+    final rect = (Offset.zero & size).deflate(1.5);
+    const sweep = 2 * math.pi / _dashes;
+    for (var i = 0; i < _dashes; i++) {
+      canvas.drawArc(rect, i * sweep, sweep * 0.55, false, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_DashedRing oldDelegate) => oldDelegate.color != color;
 }
