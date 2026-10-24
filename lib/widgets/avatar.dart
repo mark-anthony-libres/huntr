@@ -39,43 +39,59 @@ class ProfileArt extends StatelessWidget {
     // no photo: the default picture, a dark head-and-shoulders silhouette
     return ClipRRect(
       borderRadius: BorderRadius.circular(radius),
-      child: DefaultPortrait(alignment: alignment),
+      child: DefaultPortrait(alignment: alignment, hue: profile.hue),
     );
   }
 }
 
-/// The picture of someone without a photo, in the theme's colours: a soft
-/// dark gradient tinted with the accent, a faint glow, and a light
+/// The picture of someone without a photo: a soft two-tone gradient in
+/// their own colour (as before photos) or the theme's, a faint glow, and a light
 /// head-and-shoulders silhouette fading out at the shoulders - smaller in
 /// big spaces (an Explore card), filling small ones (an avatar). In a
 /// taller space the figure sits at [alignment].
 class DefaultPortrait extends StatelessWidget {
-  const DefaultPortrait({super.key, this.alignment = Alignment.center});
+  const DefaultPortrait(
+      {super.key, this.alignment = Alignment.center, this.hue});
 
   final Alignment alignment;
 
+  /// The person's own colour (0-360, the same every time for them); null:
+  /// the theme's accent.
+  final double? hue;
+
   @override
   Widget build(BuildContext context) {
-    final accent = HuntrColors.orange;
+    final hue = this.hue;
+    // their colour, as a soft two-tone gradient; or the theme's
+    final (Color top, Color bottom, Color tint) = hue == null
+        ? (
+            Color.lerp(HuntrColors.surfaceHigh, HuntrColors.orange, 0.10)!,
+            Color.lerp(HuntrColors.night, HuntrColors.orange, 0.22)!,
+            HuntrColors.orange,
+          )
+        : (
+            HSLColor.fromAHSL(1, hue, 0.45, 0.36).toColor(),
+            HSLColor.fromAHSL(1, (hue + 40) % 360, 0.5, 0.16).toColor(),
+            HSLColor.fromAHSL(1, hue, 0.6, 0.62).toColor(),
+          );
     return DecoratedBox(
       key: const Key('defaultPortrait'),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [
-            Color.lerp(HuntrColors.surfaceHigh, accent, 0.10)!,
-            Color.lerp(HuntrColors.night, accent, 0.22)!,
-          ],
+          colors: [top, bottom],
         ),
       ),
       child: SizedBox.expand(
         child: CustomPaint(
           painter: _SilhouettePainter(
             alignment: alignment,
-            figure: Color.lerp(const Color(0xFFB9BCC6), accent, 0.35)!
-                .withValues(alpha: 0.55),
-            glow: accent.withValues(alpha: 0.22),
+            figure: Color.lerp(const Color(0xFFE4E6EC), tint, 0.25)!
+                .withValues(alpha: 0.6),
+            glow: hue == null
+                ? HuntrColors.orange.withValues(alpha: 0.22)
+                : Colors.white.withValues(alpha: 0.10),
           ),
         ),
       ),
