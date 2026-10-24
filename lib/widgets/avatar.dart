@@ -44,56 +44,91 @@ class ProfileArt extends StatelessWidget {
   }
 }
 
-/// The picture of someone without a photo: a black head and shoulders on
-/// grey, sized to the narrower side; in a taller space the head sits at
-/// [alignment] and the shoulders run down to the bottom edge.
+/// The picture of someone without a photo, in the theme's colours: a soft
+/// dark gradient tinted with the accent, a faint glow, and a light
+/// head-and-shoulders silhouette fading out at the shoulders - smaller in
+/// big spaces (an Explore card), filling small ones (an avatar). In a
+/// taller space the figure sits at [alignment].
 class DefaultPortrait extends StatelessWidget {
   const DefaultPortrait({super.key, this.alignment = Alignment.center});
 
   final Alignment alignment;
 
-  static const background = Color(0xFF4A4A4A);
-
   @override
-  Widget build(BuildContext context) => ColoredBox(
-        key: const Key('defaultPortrait'),
-        color: background,
-        child: SizedBox.expand(
-          child: CustomPaint(painter: _SilhouettePainter(alignment)),
+  Widget build(BuildContext context) {
+    final accent = HuntrColors.orange;
+    return DecoratedBox(
+      key: const Key('defaultPortrait'),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color.lerp(HuntrColors.surfaceHigh, accent, 0.10)!,
+            Color.lerp(HuntrColors.night, accent, 0.22)!,
+          ],
         ),
-      );
+      ),
+      child: SizedBox.expand(
+        child: CustomPaint(
+          painter: _SilhouettePainter(
+            alignment: alignment,
+            figure: Color.lerp(const Color(0xFFB9BCC6), accent, 0.35)!
+                .withValues(alpha: 0.55),
+            glow: accent.withValues(alpha: 0.22),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _SilhouettePainter extends CustomPainter {
-  const _SilhouettePainter(this.alignment);
+  const _SilhouettePainter(
+      {required this.alignment, required this.figure, required this.glow});
 
   final Alignment alignment;
+  final Color figure;
+  final Color glow;
 
   @override
   void paint(Canvas canvas, Size size) {
     canvas.clipRect(Offset.zero & size);
-    final side = size.shortestSide;
-    // the square the figure is drawn in, placed by [alignment]
+    final shortest = size.shortestSide;
+    // big spaces: a smaller figure with room round it; avatars: filled
+    final side = shortest < 96 ? shortest : shortest * 0.62;
     final origin =
         alignment.inscribe(Size.square(side), Offset.zero & size).topLeft;
-    final paint = Paint()..color = Colors.black;
-    // the head
+    final head = origin + Offset(side * 0.5, side * 0.36);
+    // the glow behind the head
     canvas.drawCircle(
-        origin + Offset(side * 0.5, side * 0.35), side * 0.28, paint);
-    // the shoulders, running off the bottom (of the space, when taller)
-    final top = origin.dy + side * 0.665;
-    final bottom = (size.height - top) < side * 0.6
-        ? origin.dy + side * 1.45
-        : size.height + side * 0.45;
+      head,
+      side * 0.62,
+      Paint()
+        ..shader = RadialGradient(colors: [glow, glow.withValues(alpha: 0)])
+            .createShader(Rect.fromCircle(center: head, radius: side * 0.62)),
+    );
+    canvas.drawCircle(head, side * 0.24, Paint()..color = figure);
+    // the shoulders: wide, fading out downwards into the background
+    final body = Rect.fromLTRB(origin.dx + side * 0.04, origin.dy + side * 0.68,
+        origin.dx + side * 0.96, origin.dy + side * 1.75);
     canvas.drawOval(
-        Rect.fromLTRB(
-            origin.dx + side * 0.06, top, origin.dx + side * 0.94, bottom),
-        paint);
+      body,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [figure, figure.withValues(alpha: 0)],
+          stops: const [0.15, 0.62],
+        ).createShader(body),
+    );
   }
 
   @override
   bool shouldRepaint(_SilhouettePainter oldDelegate) =>
-      oldDelegate.alignment != alignment;
+      oldDelegate.alignment != alignment ||
+      oldDelegate.figure != figure ||
+      oldDelegate.glow != glow;
 }
 
 /// Someone's round picture (with their online dot). When they have a story,
