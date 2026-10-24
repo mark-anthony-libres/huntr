@@ -1217,6 +1217,7 @@ class ChatMessage {
     this.reactions = const [],
     this.replyTo,
     this.revealedAvatar,
+    this.revealedMutual = false,
     this.tapAnswers = const [],
     this.gif,
     this.storyId,
@@ -1256,6 +1257,9 @@ class ChatMessage {
             : ReplyPreview.fromJson(json['reply_to'] as Map<String, dynamic>),
         revealedAvatar: (json['revealed_as']
             as Map<String, dynamic>?)?['avatar'] as String?,
+        revealedMutual: (json['revealed_as']
+                as Map<String, dynamic>?)?['mutual'] as bool? ??
+            false,
         tapAnswers: [
           for (final a in json['tap'] as List<dynamic>? ?? const [])
             TapAnswer.fromJson(a as Map<String, dynamic>),
@@ -1287,6 +1291,9 @@ class ChatMessage {
 
   /// A reveal: the animal the sender was shown as while anonymous.
   final String? revealedAvatar;
+
+  /// A reveal where both showed their profiles (a mutual chat).
+  final bool revealedMutual;
 
   /// A tap card: answers to questions, on taps sent while Tap had them.
   final List<TapAnswer> tapAnswers;
@@ -1363,6 +1370,7 @@ class ChatMessage {
           location: location,
           liveLocation: liveLocation,
           revealedAvatar: revealedAvatar,
+          revealedMutual: revealedMutual,
           tapAnswers: tapAnswers,
           gif: gif,
           storyId: storyId,
@@ -1986,27 +1994,55 @@ class ConversationSummary {
 /// Who is anonymous in an anonymous conversation, and as what.
 class AnonymousInfo {
   const AnonymousInfo(
-      {required this.iAmAnonymous, required this.name, required this.avatar});
+      {required this.iAmAnonymous,
+      required this.name,
+      required this.avatar,
+      this.mutual = false,
+      this.myName,
+      this.myAvatar});
 
   factory AnonymousInfo.fromJson(Map<String, dynamic> json) => AnonymousInfo(
         iAmAnonymous: json['i_am_anonymous'] as bool? ?? false,
         name: json['name'] as String? ?? 'Anonymous',
         avatar: json['avatar'] as String? ?? 'fox',
+        mutual: json['mutual'] as bool? ?? false,
+        myName: json['my_name'] as String?,
+        myAvatar: json['my_avatar'] as String?,
       );
 
   /// I write anonymously here (they don't know who I am); otherwise they do.
   final bool iAmAnonymous;
 
-  /// The anonymous side's name and animal (the same for both).
+  /// The anonymous side's name and animal (in a mutual chat: the one who
+  /// started it).
   final String name;
   final String avatar;
+
+  /// Both anonymous to each other (a chat from Threads): either may ask to
+  /// show both profiles, and nothing stops the chat meanwhile.
+  final bool mutual;
+
+  /// How they see me, when I'm anonymous to them.
+  final String? myName;
+  final String? myAvatar;
+
+  /// My anonymous name here.
+  String get shownAs => myName ?? name;
+
+  /// They're anonymous to me (I only know them by their anonymous name).
+  bool get theyAreAnonymous => mutual || !iAmAnonymous;
+
+  /// Only I'm anonymous: a mask over their real picture.
+  bool get onlyMeMasked => iAmAnonymous && !mutual;
 }
 
 enum RevealStatus { pending, accepted, declined, expired }
 
-/// A request to see the anonymous sender's profile.
+/// A request to see the anonymous sender's profile (in a mutual chat: to
+/// show both, asked by either).
 class RevealRequest {
-  const RevealRequest({required this.status, this.expiresAt});
+  const RevealRequest(
+      {required this.status, this.expiresAt, this.requestedByMe = false});
 
   factory RevealRequest.fromJson(Map<String, dynamic> json) => RevealRequest(
         status: RevealStatus.values.firstWhere((s) => s.name == json['status'],
@@ -2014,9 +2050,13 @@ class RevealRequest {
         expiresAt: json['expires_at'] == null
             ? null
             : DateTime.parse(json['expires_at'] as String).toLocal(),
+        requestedByMe: json['requested_by_me'] as bool? ?? false,
       );
 
   final RevealStatus status;
+
+  /// I asked (otherwise they did).
+  final bool requestedByMe;
 
   /// While pending: when it expires unanswered.
   final DateTime? expiresAt;
@@ -2035,6 +2075,7 @@ class AnonymousProfile {
     this.reveal,
     this.canRequestReveal = false,
     this.unmatched = false,
+    this.mutual = false,
   });
 
   factory AnonymousProfile.fromJson(Map<String, dynamic> json) =>
@@ -2050,6 +2091,7 @@ class AnonymousProfile {
             : RevealRequest.fromJson(json['reveal'] as Map<String, dynamic>),
         canRequestReveal: json['can_request_reveal'] as bool? ?? false,
         unmatched: json['unmatched'] as bool? ?? false,
+        mutual: json['mutual'] as bool? ?? false,
       );
 
   final int conversationId;
@@ -2065,6 +2107,9 @@ class AnonymousProfile {
 
   /// On my Unmatched Users list (I can only remove them from it).
   final bool unmatched;
+
+  /// Both of us are anonymous (a chat from Threads).
+  final bool mutual;
 }
 
 /// After answering a reveal request: accepted, the chat is now this direct
@@ -2433,25 +2478,51 @@ Future<ConversationPage> fetchConversations(
 
 /// Where Message on a profile goes (POST .../conversations/start): our
 /// direct conversation when we have one, otherwise my anonymous one with
-/// them (started the first time).
+/// them (started the first time). From Threads, our chat where both stay
+/// anonymous.
 class MessageTarget {
-  const MessageTarget({required this.conversationId, this.anonymous});
+  const MessageTarget(
+      {required this.conversationId, this.other, this.anonymous});
 
   factory MessageTarget.fromJson(Map<String, dynamic> json) {
     final conversation = json['conversation'] as Map<String, dynamic>;
+    final summary = ConversationSummary.fromJson(conversation);
     return MessageTarget(
-      conversationId: conversation['id'] as int,
-      anonymous: json['anonymous'] == true
-          ? ConversationSummary.fromJson(conversation)
-          : null,
+      conversationId: summary.id,
+      other: summary.other,
+      anonymous: json['anonymous'] == true ? summary : null,
     );
   }
 
   final int conversationId;
 
+  /// Whom the chat is with (as the chat shows them: anonymous or not).
+  final Profile? other;
+
   /// The anonymous conversation, when it's one (null: direct).
   final ConversationSummary? anonymous;
 }
+
+/// POST .../nearby/posts/{id}[/comments/{id}]/message: Message on the
+/// anonymous profile of whoever wrote it, our chat where both of us stay
+/// anonymous (or our direct one, once we've shown each other).
+Future<MessageTarget> messageThreadsAuthor(
+        {required String backendUrl,
+        required String token,
+        required int postId,
+        int? commentId,
+        http.Client? client}) =>
+    _sendAuthorized(
+      client,
+      (httpClient) => httpClient.post(
+          _endpoint(
+              backendUrl,
+              commentId == null
+                  ? '/nearby/posts/$postId/message'
+                  : '/nearby/posts/$postId/comments/$commentId/message'),
+          headers: _json(token)),
+      MessageTarget.fromJson,
+    );
 
 Future<MessageTarget> startConversation(
         {required String backendUrl,

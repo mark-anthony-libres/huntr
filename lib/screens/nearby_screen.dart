@@ -202,6 +202,16 @@ class _NearbyScreenState extends State<NearbyScreen> {
     }
   }
 
+  /// The post author's anonymous profile: Report there reports it here.
+  Future<void> _openAuthor(NearbyPost post) async {
+    final action = await openThreadsAuthor(context,
+        author: post.author,
+        postId: post.id,
+        distanceM: post.distanceM,
+        mine: post.mine);
+    if (action != null && mounted) await _act(post, action);
+  }
+
   Future<bool> _confirmDelete() async =>
       await showDialog<bool>(
         context: context,
@@ -362,6 +372,7 @@ class _NearbyScreenState extends State<NearbyScreen> {
                     onLike: () => _like(post),
                     onAction: (action) => _act(post, action),
                     onOpen: () => _open(post),
+                    onAuthor: () => _openAuthor(post),
                   ),
                 if (_next != null)
                   LoadMoreRow(onVisible: () => _load(more: true)),

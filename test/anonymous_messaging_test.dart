@@ -571,6 +571,9 @@ void main() {
     })));
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
+    // in the header's ⋯ menu
+    await tester.tap(find.byKey(const Key('anonymousChatMenu')));
+    await tester.pumpAndSettle();
     expect(find.byKey(const Key('requestRevealButton')), findsOneWidget);
     await tester.tap(find.byKey(const Key('unmatchButton')));
     await tester.pumpAndSettle();

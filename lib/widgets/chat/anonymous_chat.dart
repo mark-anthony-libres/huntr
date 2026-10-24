@@ -16,6 +16,7 @@ class RevealBanner extends StatelessWidget {
     super.key,
     required this.anonymous,
     required this.reveal,
+    this.otherName,
     this.busy = false,
     this.onAccept,
     this.onDecline,
@@ -23,6 +24,9 @@ class RevealBanner extends StatelessWidget {
 
   final AnonymousInfo anonymous;
   final RevealRequest reveal;
+
+  /// Their anonymous name (a mutual chat: the other one's, not mine).
+  final String? otherName;
   final bool busy;
   final VoidCallback? onAccept;
   final VoidCallback? onDecline;
@@ -40,7 +44,37 @@ class RevealBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final mine = anonymous.iAmAnonymous;
+    final mutual = anonymous.mutual;
+    final asked = reveal.requestedByMe;
+    final them = otherName ?? anonymous.name;
     final (IconData icon, String title, String text) = switch (reveal.status) {
+      // a mutual chat: either asks, the other answers; nothing stops the chat
+      RevealStatus.pending when mutual && !asked => (
+          Icons.visibility_outlined,
+          '$them wants to swap profiles 👀',
+          'If you agree, you’ll both see each other’s profiles. Nothing is '
+              'shown unless you do, and you can keep chatting either way 💛'
+        ),
+      RevealStatus.pending when mutual => (
+          Icons.hourglass_top_rounded,
+          'Fingers crossed 🤞',
+          'We’ll let you know when $them answers. Keep chatting meanwhile.'
+        ),
+      RevealStatus.declined when mutual && asked => (
+          Icons.lock_outline_rounded,
+          '$them would rather stay anonymous',
+          'That’s okay 💛 You can keep chatting anonymously.'
+        ),
+      RevealStatus.declined when mutual => (
+          Icons.lock_outline_rounded,
+          'You both stay anonymous 🤫',
+          'Keep chatting. Changed your mind? You can ask them anytime.'
+        ),
+      RevealStatus.expired when mutual => (
+          Icons.timer_off_outlined,
+          'No answer this time',
+          'You’re both still anonymous. Keep chatting, or ask again later.'
+        ),
       RevealStatus.pending when mine => (
           Icons.visibility_outlined,
           'Someone’s curious about you 👀',
@@ -84,7 +118,7 @@ class RevealBanner extends StatelessWidget {
         ),
     };
     final pending = reveal.status == RevealStatus.pending;
-    final answering = mine && pending;
+    final answering = pending && (mutual ? !asked : mine);
     final left = pending ? timeLeft(reveal.expiresAt, DateTime.now()) : null;
 
     final header = Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -134,7 +168,7 @@ class RevealBanner extends StatelessWidget {
           Text(text,
               style: const TextStyle(
                   color: HuntrColors.muted, fontSize: 13, height: 1.35)),
-          if (answering) ...[
+          if (answering && !mutual) ...[
             const SizedBox(height: 4),
             const Text(
                 'The chat pauses until you decide. If you don’t answer within '
@@ -173,7 +207,10 @@ class RevealBanner extends StatelessWidget {
             if (answering) ...[
               const SizedBox(height: 14),
               _AnswerButtons(
-                  busy: busy, onAccept: onAccept, onDecline: onDecline),
+                  busy: busy,
+                  mutual: mutual,
+                  onAccept: onAccept,
+                  onDecline: onDecline),
             ],
           ]),
         ),
@@ -185,9 +222,13 @@ class RevealBanner extends StatelessWidget {
 /// "Unmatch" and "Show my profile": side by side, or stacked (the
 /// main one first) when there's no room.
 class _AnswerButtons extends StatelessWidget {
-  const _AnswerButtons({required this.busy, this.onAccept, this.onDecline});
+  const _AnswerButtons(
+      {required this.busy, this.mutual = false, this.onAccept, this.onDecline});
 
   final bool busy;
+
+  /// A mutual chat: "Stay anonymous" (the chat goes on) and "Show both".
+  final bool mutual;
   final VoidCallback? onAccept;
   final VoidCallback? onDecline;
 
@@ -209,8 +250,10 @@ class _AnswerButtons extends StatelessWidget {
         side: BorderSide(color: Colors.white.withValues(alpha: 0.22)),
       ),
       onPressed: busy ? null : onDecline,
-      icon: const Icon(Icons.person_remove_outlined, size: 18),
-      label: const Text('Unmatch'),
+      icon: Icon(
+          mutual ? Icons.lock_outline_rounded : Icons.person_remove_outlined,
+          size: 18),
+      label: Text(mutual ? 'Stay anonymous' : 'Unmatch'),
     );
     final accept = DecoratedBox(
       decoration:
@@ -235,7 +278,7 @@ class _AnswerButtons extends StatelessWidget {
                 child: CircularProgressIndicator(
                     strokeWidth: 2, color: Colors.black))
             : const Icon(Icons.visibility_outlined, size: 18),
-        label: const Text('Show my profile'),
+        label: Text(mutual ? 'Show both' : 'Show my profile'),
       ),
     );
     return LayoutBuilder(builder: (context, box) {
@@ -334,20 +377,26 @@ class AnonymousIntro extends StatelessWidget {
               height: 96,
               child: AnonymousArt(
                   key: const Key('anonymousIntroAvatar'),
-                  animal: anonymous.avatar,
+                  animal: anonymous.myAvatar ?? anonymous.avatar,
                   radius: 48,
                   size: 96),
             ),
             const SizedBox(height: 14),
-            Text('Hi, ${anonymous.name}! 👋',
+            Text('Hi, ${anonymous.shownAs}! 👋',
                 key: const Key('anonymousIntro'),
                 style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 6),
             Text(
-              'You’re in disguise 🎭 ${to.isEmpty ? 'They' : to} will only see '
-              '${anonymous.name}, never your name, photos or profile. Break '
-              'the ice with a message. Photos, albums and locations can wait '
-              'until you’re ready to meet for real.',
+              anonymous.mutual
+                  ? 'You’re both in disguise 🎭 ${to.isEmpty ? 'They' : to} '
+                      'will only see ${anonymous.shownAs}, and you only see '
+                      'them by theirs. Break the ice with a message. Either '
+                      'of you can ask to show both profiles.'
+                  : 'You’re in disguise 🎭 ${to.isEmpty ? 'They' : to} will '
+                      'only see ${anonymous.shownAs}, never your name, photos '
+                      'or profile. Break the ice with a message. Photos, '
+                      'albums and locations can wait until you’re ready to '
+                      'meet for real.',
               textAlign: TextAlign.center,
               style: const TextStyle(color: HuntrColors.muted),
             ),
@@ -380,10 +429,14 @@ class RevealedCard extends StatelessWidget {
     required this.fromMe,
     required this.person,
     this.avatar,
+    this.mutual = false,
     this.onViewProfile,
   });
 
   final String name;
+
+  /// Both showed their profiles (a mutual chat).
+  final bool mutual;
 
   /// The animal they were shown as.
   final String? avatar;
@@ -430,34 +483,42 @@ class RevealedCard extends StatelessWidget {
           ]),
           const SizedBox(height: 10),
           Text(
-            fromMe ? 'Mask off! 🎉' : 'Surprise! $name revealed themselves 🎉',
+            mutual
+                ? 'Masks off! 🎉'
+                : fromMe
+                    ? 'Mask off! 🎉'
+                    : 'Surprise! $name revealed themselves 🎉',
             textAlign: TextAlign.center,
             style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
           ),
           const SizedBox(height: 4),
           Text.rich(
-            fromMe
-                ? TextSpan(children: [
-                    TextSpan(text: '$who now knows '),
-                    TextSpan(
-                        text: name,
-                        style: TextStyle(
-                            color: HuntrColors.orange,
-                            fontWeight: FontWeight.w700)),
-                    const TextSpan(text: ' was you. Have fun chatting!'),
-                  ])
-                : TextSpan(children: [
-                    TextSpan(
-                        text: name,
-                        style: TextStyle(
-                            color: HuntrColors.orange,
-                            fontWeight: FontWeight.w700)),
-                    TextSpan(text: ' is $who! Say hi properly 👋'),
-                  ]),
+            mutual
+                ? TextSpan(
+                    text: 'You both showed your profiles. Say hi to $who '
+                        'properly 👋')
+                : fromMe
+                    ? TextSpan(children: [
+                        TextSpan(text: '$who now knows '),
+                        TextSpan(
+                            text: name,
+                            style: TextStyle(
+                                color: HuntrColors.orange,
+                                fontWeight: FontWeight.w700)),
+                        const TextSpan(text: ' was you. Have fun chatting!'),
+                      ])
+                    : TextSpan(children: [
+                        TextSpan(
+                            text: name,
+                            style: TextStyle(
+                                color: HuntrColors.orange,
+                                fontWeight: FontWeight.w700)),
+                        TextSpan(text: ' is $who! Say hi properly 👋'),
+                      ]),
             textAlign: TextAlign.center,
             style: const TextStyle(color: HuntrColors.muted, fontSize: 13),
           ),
-          if (!fromMe && onViewProfile != null) ...[
+          if ((!fromMe || mutual) && onViewProfile != null) ...[
             const SizedBox(height: 10),
             TextButton.icon(
               key: const Key('revealedViewProfile'),
@@ -478,6 +539,7 @@ class RevealedCard extends StatelessWidget {
 Future<AnonymousProfile?> askToSeeProfile(BuildContext context,
     {required int conversationId,
     required String name,
+    bool mutual = false,
     ValueChanged<bool>? onSending}) async {
   final messaging = MessagingScope.read(context);
   if (messaging == null) return null;
@@ -486,9 +548,13 @@ Future<AnonymousProfile?> askToSeeProfile(BuildContext context,
     context: context,
     builder: (context) => AlertDialog(
       title: const Text('Curious who it is? 👀'),
-      content: Text('We’ll ask $name if they’d like to show you who they '
-          'are. The chat pauses while they decide. If they don’t answer within '
-          '3 days, the chat ends and they stay a mystery.'),
+      content: Text(mutual
+          ? 'We’ll ask $name if you’d both like to show your profiles. '
+              'Nothing is shown unless they agree, and you can keep chatting '
+              'meanwhile.'
+          : 'We’ll ask $name if they’d like to show you who they '
+              'are. The chat pauses while they decide. If they don’t answer '
+              'within 3 days, the chat ends and they stay a mystery.'),
       actions: [
         TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -544,10 +610,14 @@ Future<bool> confirmUnmatch(BuildContext context, String name) async =>
 /// In the chat where it was asked: the recipient wants to see who the
 /// anonymous sender is (answered in the banner above the chat).
 class RevealRequestCard extends StatelessWidget {
-  const RevealRequestCard({super.key, required this.fromMe});
+  const RevealRequestCard(
+      {super.key, required this.fromMe, this.mutual = false});
 
   /// I'm the one who asked.
   final bool fromMe;
+
+  /// To show both profiles (a mutual chat).
+  final bool mutual;
 
   @override
   Widget build(BuildContext context) {
@@ -567,9 +637,13 @@ class RevealRequestCard extends StatelessWidget {
           const SizedBox(width: 8),
           Flexible(
             child: Text(
-              fromMe
-                  ? 'You asked to see who they are 👀'
-                  : 'They’re curious who you are 👀',
+              mutual
+                  ? fromMe
+                      ? 'You asked to swap profiles 👀'
+                      : 'They’d like to swap profiles 👀'
+                  : fromMe
+                      ? 'You asked to see who they are 👀'
+                      : 'They’re curious who you are 👀',
               style: const TextStyle(fontWeight: FontWeight.w700),
             ),
           ),

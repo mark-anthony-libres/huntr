@@ -1,12 +1,20 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../services/huntr_backend.dart';
+import '../services/services_scope.dart';
+import '../state/app_state.dart';
 import '../state/messaging_state.dart';
 import '../theme.dart';
 import '../widgets/anonymous_avatar.dart';
 import '../widgets/chat/anonymous_chat.dart';
+import '../services/nearby_service.dart' show nearbyDistanceLabel;
 import '../widgets/me/section_states.dart';
 import '../widgets/avatar.dart' show OnlineDot;
+import '../widgets/nearby/nearby_post_card.dart' show NearbyAction;
+import '../widgets/profile/gradient_button.dart';
+import 'chat_screen.dart';
 
 /// Someone writing to me anonymously, as I may see them: their anonymous
 /// name and animal, whether they're online, roughly how far away (if they
@@ -68,6 +76,7 @@ class _AnonymousProfileScreenState extends State<AnonymousProfileScreen> {
 
   Future<void> _requestReveal(AnonymousProfile profile) async {
     final updated = await askToSeeProfile(context,
+        mutual: profile.mutual,
         conversationId: widget.conversationId,
         name: profile.name, onSending: (sending) {
       if (mounted) setState(() => _requesting = sending);
@@ -122,7 +131,7 @@ class _AnonymousProfileScreenState extends State<AnonymousProfileScreen> {
                 children: [
                   _Hero(profile: profile),
                   const SizedBox(height: 20),
-                  const _HowItWorks(),
+                  _HowItWorks(mutual: profile.mutual),
                   const SizedBox(height: 24),
                   // on my Unmatched list: only taking them off it
                   if (profile.unmatched)
@@ -168,9 +177,15 @@ class _AnonymousProfileScreenState extends State<AnonymousProfileScreen> {
 
 /// The animal, name and status, on a warm card.
 class _Hero extends StatelessWidget {
-  const _Hero({required this.profile});
+  const _Hero({required this.profile, this.presence = true, this.distance});
 
   final AnonymousProfile profile;
+
+  /// Whether to show online or not (Threads doesn't say).
+  final bool presence;
+
+  /// How far, said another way than [AnonymousProfile.distanceKm].
+  final String? distance;
 
   @override
   Widget build(BuildContext context) {
@@ -236,20 +251,25 @@ class _Hero extends StatelessWidget {
           spacing: 8,
           runSpacing: 8,
           children: [
-            _Pill(
-              leading: online
-                  ? const OnlineDot(size: 9)
-                  : const Icon(Icons.circle_outlined,
-                      size: 10, color: HuntrColors.muted),
-              label: online ? 'Online now' : 'Offline',
-              color: online ? HuntrColors.online : HuntrColors.muted,
-            ),
-            if (profile.distanceKm case final km?)
+            if (presence)
+              _Pill(
+                leading: online
+                    ? const OnlineDot(size: 9)
+                    : const Icon(Icons.circle_outlined,
+                        size: 10, color: HuntrColors.muted),
+                label: online ? 'Online now' : 'Offline',
+                color: online ? HuntrColors.online : HuntrColors.muted,
+              ),
+            if (distance ??
+                    (profile.distanceKm == null
+                        ? null
+                        : 'About ${profile.distanceKm} km away')
+                case final far?)
               _Pill(
                 key: const Key('anonymousDistance'),
                 leading: const Icon(Icons.near_me_rounded,
                     size: 14, color: HuntrColors.muted),
-                label: 'About $km km away',
+                label: far,
                 color: Colors.white70,
               ),
           ],
@@ -290,9 +310,11 @@ class _Pill extends StatelessWidget {
   }
 }
 
-/// What anonymous means here, in three lines.
+/// What anonymous means here, in three lines ([mutual]: both of us are).
 class _HowItWorks extends StatelessWidget {
-  const _HowItWorks();
+  const _HowItWorks({this.mutual = false});
+
+  final bool mutual;
 
   @override
   Widget build(BuildContext context) {
@@ -330,15 +352,26 @@ class _HowItWorks extends StatelessWidget {
         borderRadius: BorderRadius.circular(22),
       ),
       child: Column(children: [
-        row(Icons.visibility_off_outlined, 'Private for now',
-            'Their name, photos and profile stay private.'),
+        row(
+            Icons.visibility_off_outlined,
+            'Private for now',
+            mutual
+                ? 'You both stay anonymous. Names, photos and profiles stay '
+                    'private.'
+                : 'Their name, photos and profile stay private.'),
         row(
             Icons.chat_bubble_outline_rounded,
             'Just text',
             'Anonymous chats are for messages only. Photos, videos, albums '
                 'and locations can wait.'),
-        row(Icons.how_to_reg_outlined, 'Curious who it is?',
-            'You can ask to see their profile. It’s up to them to share it.'),
+        mutual
+            ? row(
+                Icons.how_to_reg_outlined,
+                'Curious who it is?',
+                'Either of you can ask to show both profiles. Nothing is '
+                    'shown unless you both agree.')
+            : row(Icons.how_to_reg_outlined, 'Curious who it is?',
+                'You can ask to see their profile. It’s up to them to share it.'),
       ]),
     );
   }
@@ -356,7 +389,8 @@ class _RevealAction extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final status = profile.reveal?.status;
-    if (status == null) {
+    // in a mutual chat, asking again after an answer
+    if (status == null || (profile.mutual && profile.canRequestReveal)) {
       final enabled = profile.canRequestReveal && !busy;
       return Opacity(
         opacity: enabled || busy ? 1 : 0.45,
@@ -385,12 +419,31 @@ class _RevealAction extends StatelessWidget {
                     child: CircularProgressIndicator(
                         strokeWidth: 2, color: Colors.black))
                 : const Icon(Icons.visibility_outlined),
-            label: const Text('Request to see profile'),
+            label: Text(profile.mutual
+                ? 'Ask to show both profiles'
+                : 'Request to see profile'),
           ),
         ),
       );
     }
+    final asked = profile.reveal?.requestedByMe ?? true;
     final (IconData icon, String title, String text) = switch (status) {
+      RevealStatus.pending when profile.mutual && !asked => (
+          Icons.visibility_outlined,
+          'They’d like to swap profiles 👀',
+          'Answer their request in the chat. Nothing is shown unless you '
+              'agree.'
+        ),
+      RevealStatus.pending when profile.mutual => (
+          Icons.hourglass_top_rounded,
+          'Fingers crossed 🤞',
+          'We’ll let you know as soon as they answer. Keep chatting meanwhile.'
+        ),
+      RevealStatus.declined when profile.mutual => (
+          Icons.lock_outline_rounded,
+          'They’d rather stay anonymous for now',
+          'That’s okay 💛 You can keep chatting anonymously.'
+        ),
       RevealStatus.pending => (
           Icons.hourglass_top_rounded,
           'Fingers crossed 🤞',
@@ -547,6 +600,251 @@ class _ReportSheetState extends State<_ReportSheet> {
                     : const Text('Send report'),
               ),
             ]),
+      ),
+    );
+  }
+}
+
+/// My anonymous profile, as others see it (Me > Anonymous profile): my
+/// animal and anonymous name on the same card, and what anonymous means.
+/// Refresh gives me a new random name (after asking): my anonymous chats
+/// show it right away; threads I already wrote keep the old one.
+class MyAnonymousProfileScreen extends StatefulWidget {
+  const MyAnonymousProfileScreen({super.key});
+
+  @override
+  State<MyAnonymousProfileScreen> createState() =>
+      _MyAnonymousProfileScreenState();
+}
+
+class _MyAnonymousProfileScreenState extends State<MyAnonymousProfileScreen> {
+  bool _changing = false;
+
+  Future<void> _change() async {
+    final app = AppScope.read(context);
+    final profiles = ServicesScope.profilesOf(context);
+    final token = app.sessionToken;
+    if (profiles == null || token == null || _changing) return;
+    final sure = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Get a new anonymous name?'),
+            content: const Text(
+                "You'll get a new random name. Your anonymous chats show it "
+                'right away; threads you already wrote keep your current one.'),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text('Cancel')),
+              TextButton(
+                  key: const Key('anonymousNameConfirm'),
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: const Text('Change')),
+            ],
+          ),
+        ) ??
+        false;
+    if (!sure || !mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final messaging = MessagingScope.read(context);
+    setState(() => _changing = true);
+    try {
+      final name = await profiles.changeAnonymousName(token);
+      app.anonymousName = name;
+      // my anonymous chats show it now: their list again
+      unawaited(messaging?.refresh());
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text("You're ${name.name} now.")));
+    } on SessionRejectedException {
+      app.endSession();
+    } catch (error) {
+      messenger.showSnackBar(SnackBar(
+          content: Text(error is BackendException
+              ? error.message
+              : "Your name couldn't be changed. Try again.")));
+    } finally {
+      if (mounted) setState(() => _changing = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final mine = AppScope.of(context).anonymousName;
+    return Scaffold(
+      key: const Key('myAnonymousProfile'),
+      appBar: AppBar(
+        title: const Text('Anonymous profile'),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: IconButton(
+              key: const Key('anonymousNameChange'),
+              tooltip: 'New anonymous name',
+              onPressed: _changing || mine == null ? null : _change,
+              icon: _changing
+                  ? const SizedBox.square(
+                      dimension: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.refresh_rounded),
+            ),
+          ),
+        ],
+      ),
+      body: mine == null
+          ? const Center(child: CircularProgressIndicator())
+          : ListView(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
+              children: [
+                Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 480),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const Padding(
+                          padding: EdgeInsets.only(bottom: 12),
+                          child: Text(
+                              'This is how others see you in anonymous chats '
+                              'and Threads.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(color: HuntrColors.muted)),
+                        ),
+                        _Hero(
+                          profile: AnonymousProfile(
+                              conversationId: 0,
+                              name: mine.name,
+                              avatar: mine.avatar,
+                              online: true),
+                        ),
+                        const SizedBox(height: 20),
+                        const _HowItWorks(),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+    );
+  }
+}
+
+/// Whoever wrote a Threads post (or a comment on it), as their anonymous
+/// profile: the name and animal it was written under and how far it is.
+/// Message opens a chat where both of us stay anonymous; Report closes this
+/// with [NearbyAction.report] (the caller asks why and reports it).
+class ThreadsAuthorScreen extends StatefulWidget {
+  const ThreadsAuthorScreen({
+    super.key,
+    required this.author,
+    required this.postId,
+    this.commentId,
+    this.distanceM,
+    this.mine = false,
+  });
+
+  final AnonymousName author;
+  final int postId;
+  final int? commentId;
+  final int? distanceM;
+
+  /// It's me (no Message or Report).
+  final bool mine;
+
+  @override
+  State<ThreadsAuthorScreen> createState() => _ThreadsAuthorScreenState();
+}
+
+class _ThreadsAuthorScreenState extends State<ThreadsAuthorScreen> {
+  bool _opening = false;
+
+  Future<void> _message() async {
+    final messaging = MessagingScope.read(context);
+    if (_opening || messaging == null) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+    setState(() => _opening = true);
+    try {
+      final target = await messaging.messageThreadsAuthor(widget.postId,
+          commentId: widget.commentId);
+      if (target?.other case final other?) {
+        await navigator.push(MaterialPageRoute(
+            builder: (_) => ChatScreen.conversation(
+                conversationId: target!.conversationId, other: other)));
+      }
+    } on BackendException catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (_) {
+      messenger.showSnackBar(const SnackBar(
+          content: Text(
+              "Couldn't open the chat. Check your connection and try again.")));
+    } finally {
+      if (mounted) setState(() => _opening = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final far = widget.distanceM;
+    return Scaffold(
+      key: const Key('threadsAuthorProfile'),
+      appBar: AppBar(title: const Text('Anonymous profile')),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
+        children: [
+          Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 480),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _Hero(
+                    profile: AnonymousProfile(
+                        conversationId: 0,
+                        name: widget.author.name,
+                        avatar: widget.author.avatar,
+                        online: false),
+                    presence: false,
+                    distance: widget.mine
+                        ? 'This is you'
+                        : far == null
+                            ? null
+                            : far < 10
+                                ? 'Right here'
+                                : '${nearbyDistanceLabel(far)} away',
+                  ),
+                  const SizedBox(height: 20),
+                  const _HowItWorks(mutual: true),
+                  if (!widget.mine) ...[
+                    const SizedBox(height: 24),
+                    GradientButton(
+                      key: const Key('threadsMessage'),
+                      icon: Icons.chat_bubble_rounded,
+                      label: _opening ? 'Opening chat…' : 'Message',
+                      onPressed: _opening ? null : _message,
+                    ),
+                    const SizedBox(height: 10),
+                    OutlinedButton.icon(
+                      key: const Key('threadsReport'),
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size.fromHeight(52),
+                        shape: const StadiumBorder(),
+                        foregroundColor: const Color(0xFFFF8A80),
+                        side: BorderSide(
+                            color:
+                                const Color(0xFFFF8A80).withValues(alpha: 0.5)),
+                      ),
+                      onPressed: () =>
+                          Navigator.of(context).pop(NearbyAction.report),
+                      icon: const Icon(Icons.flag_outlined),
+                      label: const Text('Report'),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

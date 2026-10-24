@@ -784,13 +784,28 @@ class MessagingState extends ChangeNotifier {
     final userId = other.backendId;
     if (userId == null) return null;
     final target = await _call((t) => service.startConversation(t, userId));
-    if (target == null) return null;
+    return target == null ? null : _opened(target).conversationId;
+  }
+
+  /// Message on a Threads author's anonymous profile (of the post, or of
+  /// [commentId] on it): our chat where both of us stay anonymous. Throws
+  /// what the backend says (a block, an unmatch).
+  Future<MessageTarget?> messageThreadsAuthor(int postId,
+      {int? commentId}) async {
+    final target = await _call(
+        (t) => service.messageThreadsAuthor(t, postId, commentId: commentId));
+    return target == null ? null : _opened(target);
+  }
+
+  /// A chat Message just opened: an anonymous one is listed until the
+  /// next refresh has it.
+  MessageTarget _opened(MessageTarget target) {
     final anonymous = target.anonymous;
     if (anonymous != null && summary(anonymous.id) == null) {
       _started[anonymous.id] = anonymous;
       notifyListeners();
     }
-    return target.conversationId;
+    return target;
   }
 
   // ---- unmatching ----

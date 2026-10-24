@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../services/huntr_backend.dart';
 import '../../services/nearby_service.dart';
 import '../../theme.dart';
+import '../../screens/anonymous_profile_screen.dart' show ThreadsAuthorScreen;
 import '../../screens/chats_screen.dart' show timeLabel;
 import '../anonymous_avatar.dart';
 
@@ -44,6 +45,33 @@ String nearbyMeta(
 /// What can be done with a post or comment from its ⋯: delete mine, or
 /// report someone else's.
 enum NearbyAction { delete, report }
+
+/// Opens the anonymous profile of whoever wrote it (Message, Report): what
+/// was chosen there for the caller to do ([NearbyAction.report]), or null.
+Future<NearbyAction?> openThreadsAuthor(BuildContext context,
+        {required AnonymousName author,
+        required int postId,
+        int? commentId,
+        int? distanceM,
+        bool mine = false}) =>
+    Navigator.of(context).push<NearbyAction>(MaterialPageRoute(
+        builder: (_) => ThreadsAuthorScreen(
+            author: author,
+            postId: postId,
+            commentId: commentId,
+            distanceM: distanceM,
+            mine: mine)));
+
+/// [child] opens the author's anonymous profile when tapped ([onTap]).
+Widget nearbyAuthorTap(
+        {Key? key, required VoidCallback? onTap, required Widget child}) =>
+    onTap == null
+        ? child
+        : InkWell(
+            key: key,
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(24),
+            child: child);
 
 /// The ⋯ button; [onSelected] gets what was picked.
 class NearbyMenu extends StatelessWidget {
@@ -127,6 +155,7 @@ class NearbyPostCard extends StatelessWidget {
     required this.onLike,
     required this.onAction,
     this.onOpen,
+    this.onAuthor,
     this.large = false,
   });
 
@@ -134,6 +163,9 @@ class NearbyPostCard extends StatelessWidget {
   final DateTime now;
   final VoidCallback onLike;
   final ValueChanged<NearbyAction> onAction;
+
+  /// Opens the author's anonymous profile (their picture or name tapped).
+  final VoidCallback? onAuthor;
 
   /// Opens its discussion (null: it's the discussion's own header).
   final VoidCallback? onOpen;
@@ -158,7 +190,10 @@ class NearbyPostCard extends StatelessWidget {
             child:
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Row(children: [
-                NearbyAvatar(animal: post.author.avatar, size: 48),
+                nearbyAuthorTap(
+                    key: Key('nearbyAuthor-${post.id}'),
+                    onTap: onAuthor,
+                    child: NearbyAvatar(animal: post.author.avatar, size: 48)),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -167,11 +202,15 @@ class NearbyPostCard extends StatelessWidget {
                         // the name, and how long ago (short)
                         Row(children: [
                           Flexible(
-                            child: Text(post.author.name,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                    fontSize: 16, fontWeight: FontWeight.w700)),
+                            child: nearbyAuthorTap(
+                              onTap: onAuthor,
+                              child: Text(post.author.name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w700)),
+                            ),
                           ),
                           Text('  ·  ${timeLabel(post.createdAt, now)}',
                               style: const TextStyle(

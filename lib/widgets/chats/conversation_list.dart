@@ -423,7 +423,7 @@ class _ConversationRow extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(10, 10, 14, 10),
             child: Row(children: [
               // where I'm the anonymous one: a mask over their picture
-              c.anonymous?.iAmAnonymous == true
+              c.anonymous?.onlyMeMasked == true
                   ? MaskOverlay(
                       size: 56,
                       online: c.other.online,
@@ -457,7 +457,7 @@ class _ConversationRow extends StatelessWidget {
                           if (c.anonymous case final a?
                               when a.iAmAnonymous) ...[
                             const SizedBox(width: 8),
-                            _MaskBadge(name: a.name),
+                            _MaskBadge(name: a.shownAs),
                           ],
                         ]),
                       ),

@@ -736,19 +736,39 @@ class _ChatScreenState extends State<ChatScreen> {
   /// The anonymous side answers the request to see their profile.
   bool _answering = false;
 
-  Future<void> _answerReveal(int conversationId, bool accept) async {
+  /// Whether I may ask to see who they are now (in a mutual chat: again
+  /// after an answer, unless they just said no to me).
+  static bool _mayAskToReveal(AnonymousInfo anonymous, RevealRequest? reveal) {
+    if (reveal == null) return true;
+    if (!anonymous.mutual) return false;
+    return switch (reveal.status) {
+      RevealStatus.pending || RevealStatus.accepted => false,
+      RevealStatus.declined => !reveal.requestedByMe,
+      RevealStatus.expired => true,
+    };
+  }
+
+  Future<void> _answerReveal(int conversationId, bool accept,
+      {bool mutual = false}) async {
     final messaging = _messaging;
     if (messaging == null) return;
     final yes = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title:
-            Text(accept ? 'Ready to reveal yourself? 🎭' : 'Stay a mystery?'),
+        title: Text(accept
+            ? (mutual ? 'Swap profiles? 🎭' : 'Ready to reveal yourself? 🎭')
+            : (mutual ? 'Stay anonymous?' : 'Stay a mystery?')),
         content: Text(accept
-            ? 'They’ll finally see who you are, and you can keep chatting in '
-                'Direct. Exciting! ✨'
-            : 'This chat will end for both of you, and your identity stays '
-                'private. That’s completely okay.'),
+            ? (mutual
+                ? 'You’ll both see each other’s profiles, and you can keep '
+                    'chatting in Direct. Exciting! ✨'
+                : 'They’ll finally see who you are, and you can keep chatting in '
+                    'Direct. Exciting! ✨')
+            : (mutual
+                ? 'You both stay anonymous and the chat goes on. That’s '
+                    'completely okay.'
+                : 'This chat will end for both of you, and your identity stays '
+                    'private. That’s completely okay.')),
         actions: [
           TextButton(
               onPressed: () => Navigator.of(context).pop(false),
@@ -756,7 +776,9 @@ class _ChatScreenState extends State<ChatScreen> {
           FilledButton(
               key: const Key('confirmRevealAnswer'),
               onPressed: () => Navigator.of(context).pop(true),
-              child: Text(accept ? 'Show my profile' : 'Unmatch')),
+              child: Text(accept
+                  ? (mutual ? 'Show both' : 'Show my profile')
+                  : (mutual ? 'Stay anonymous' : 'Unmatch'))),
         ],
       ),
     );
@@ -767,7 +789,9 @@ class _ChatScreenState extends State<ChatScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(answer?.accepted == true
-              ? 'Mask off! 🎉 They can see your profile now.'
+              ? (mutual
+                  ? 'Masks off! 🎉 You can see each other’s profiles now.'
+                  : 'Mask off! 🎉 They can see your profile now.')
               : 'Done. Your secret’s safe 🤫')));
     } on BackendException catch (e) {
       if (mounted) {
@@ -787,7 +811,7 @@ class _ChatScreenState extends State<ChatScreen> {
       return 'This chat has ended.';
     }
     final reveal = summary.reveal?.status;
-    if (summary.anonymous?.iAmAnonymous == true) {
+    if (summary.anonymous?.onlyMeMasked == true) {
       if (reveal == RevealStatus.pending) {
         return 'Pick an option above to keep the chat going 👆';
       }
@@ -904,7 +928,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     padding: const EdgeInsets.symmetric(vertical: 4),
                     child: Row(children: [
                       // no online dot while a block is between us
-                      anonymous != null && anonymous.iAmAnonymous
+                      anonymous != null && anonymous.onlyMeMasked
                           ? MaskOverlay(
                               size: 40,
                               online: p.online && !blocked,
@@ -927,7 +951,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                   const SizedBox(width: 4),
                                   Flexible(
                                     child: Text(
-                                        'You’re ${anonymous.name} to them',
+                                        'You’re ${anonymous.shownAs} to them',
                                         key: const Key('anonymousAsHeader'),
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
@@ -955,32 +979,51 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
                 ),
               ),
-              // an anonymous chat: the recipient's actions at the right
-              // (no Block; the one who wrote first can't unmatch here)
+              // an anonymous chat: the recipient's actions, in a ⋯ menu
+              // (no Block; the one who wrote first can't unmatch here; in a
+              // mutual chat, both have them)
               if (anonymous != null &&
-                  !anonymous.iAmAnonymous &&
+                  anonymous.theyAreAnonymous &&
                   !blocked &&
                   !gone &&
                   summary?.unmatched != true) ...[
-                if (summary?.reveal == null)
-                  IconButton(
-                    key: const Key('requestRevealButton'),
-                    tooltip: 'Request to see profile',
-                    icon: const Icon(Icons.visibility_outlined),
-                    onPressed: () => askToSeeProfile(context,
-                        conversationId: id, name: anonymous.name),
-                  ),
-                const SizedBox(width: 4),
-                OutlinedButton.icon(
-                  key: const Key('unmatchButton'),
-                  style: OutlinedButton.styleFrom(
-                    visualDensity: VisualDensity.compact,
-                    foregroundColor: const Color(0xFFFF8A80),
-                    side: const BorderSide(color: Color(0x66FF8A80)),
-                  ),
-                  onPressed: () => _unmatch(p, id),
-                  icon: const Icon(Icons.person_remove_outlined, size: 18),
-                  label: const Text('Unmatch'),
+                // one ⋯ menu, so the name has the room
+                PopupMenuButton<String>(
+                  key: const Key('anonymousChatMenu'),
+                  tooltip: 'More',
+                  icon: const Icon(Icons.more_vert_rounded),
+                  onSelected: (action) => action == 'reveal'
+                      ? askToSeeProfile(context,
+                          conversationId: id,
+                          name: p.name,
+                          mutual: anonymous.mutual)
+                      : _unmatch(p, id),
+                  itemBuilder: (context) => [
+                    if (_mayAskToReveal(anonymous, summary?.reveal))
+                      PopupMenuItem(
+                        key: const Key('requestRevealButton'),
+                        value: 'reveal',
+                        child: Row(children: [
+                          const Icon(Icons.visibility_outlined),
+                          const SizedBox(width: 12),
+                          Flexible(
+                              child: Text(anonymous.mutual
+                                  ? 'Ask to show both profiles'
+                                  : 'Ask to see their profile')),
+                        ]),
+                      ),
+                    const PopupMenuItem(
+                      key: Key('unmatchButton'),
+                      value: 'unmatch',
+                      child: Row(children: [
+                        Icon(Icons.person_remove_outlined,
+                            color: Color(0xFFFF8A80)),
+                        SizedBox(width: 12),
+                        Text('Unmatch',
+                            style: TextStyle(color: Color(0xFFFF8A80))),
+                      ]),
+                    ),
+                  ],
                 ),
               ],
             ]),
@@ -996,9 +1039,12 @@ class _ChatScreenState extends State<ChatScreen> {
               RevealBanner(
                 anonymous: anonymous,
                 reveal: summary!.reveal!,
+                otherName: p.name,
                 busy: _answering,
-                onAccept: () => _answerReveal(id, true),
-                onDecline: () => _answerReveal(id, false),
+                onAccept: () =>
+                    _answerReveal(id, true, mutual: anonymous.mutual),
+                onDecline: () =>
+                    _answerReveal(id, false, mutual: anonymous.mutual),
               ),
             if (blocked || anonymous != null)
               const SizedBox.shrink()
@@ -1221,7 +1267,9 @@ class _ChatScreenState extends State<ChatScreen> {
                                   ChatMessageType.liveLocation =>
                                     const SizedBox.shrink(),
                                   ChatMessageType.revealRequest =>
-                                    RevealRequestCard(fromMe: m.fromMe),
+                                    RevealRequestCard(
+                                        fromMe: m.fromMe,
+                                        mutual: anonymous?.mutual ?? false),
                                   ChatMessageType.tap => TapCard(
                                       answers: m.tapAnswers,
                                       fromMe: m.fromMe,
@@ -1229,6 +1277,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                   ChatMessageType.reveal => RevealedCard(
                                       name: m.body,
                                       avatar: m.revealedAvatar,
+                                      mutual: m.revealedMutual,
                                       fromMe: m.fromMe,
                                       person: p,
                                       onViewProfile: p.isAnonymous

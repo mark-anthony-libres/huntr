@@ -181,6 +181,18 @@ class _NearbyPostScreenState extends State<NearbyPostScreen> {
     }
   }
 
+  /// The anonymous profile of whoever wrote the post (or [comment]):
+  /// Report there reports it here.
+  Future<void> _openAuthor({NearbyComment? comment}) async {
+    final action = await openThreadsAuthor(context,
+        author: comment?.author ?? _post.author,
+        postId: _post.id,
+        commentId: comment?.id,
+        distanceM: comment == null ? _post.distanceM : comment.distanceM,
+        mine: comment?.mine ?? _post.mine);
+    if (action != null && mounted) await _act(action, comment: comment);
+  }
+
   Future<bool> _confirm(String question) async =>
       await showDialog<bool>(
         context: context,
@@ -248,6 +260,7 @@ class _NearbyPostScreenState extends State<NearbyPostScreen> {
                         large: true,
                         onLike: _likePost,
                         onAction: (action) => _act(action),
+                        onAuthor: () => _openAuthor(),
                       ),
                       const SizedBox(height: 6),
                       Row(children: [
@@ -288,6 +301,7 @@ class _NearbyPostScreenState extends State<NearbyPostScreen> {
                             onReply: () => _reply(comment),
                             onLike: () => _likeComment(comment),
                             onAction: (a) => _act(a, comment: comment),
+                            onAuthor: () => _openAuthor(comment: comment),
                           ),
                           // its replies, threaded under it
                           for (final reply in comment.replies)
@@ -308,6 +322,7 @@ class _NearbyPostScreenState extends State<NearbyPostScreen> {
                                     onReply: () => _reply(comment),
                                     onLike: () => _likeComment(reply),
                                     onAction: (a) => _act(a, comment: reply),
+                                    onAuthor: () => _openAuthor(comment: reply),
                                   ),
                                 ),
                               ),
@@ -398,6 +413,7 @@ class _CommentTile extends StatelessWidget {
     required this.onReply,
     required this.onLike,
     required this.onAction,
+    required this.onAuthor,
     this.small = false,
   });
 
@@ -406,6 +422,9 @@ class _CommentTile extends StatelessWidget {
   final VoidCallback onReply;
   final VoidCallback onLike;
   final ValueChanged<NearbyAction> onAction;
+
+  /// Opens the commenter's anonymous profile.
+  final VoidCallback onAuthor;
   final bool small;
 
   @override
@@ -414,7 +433,11 @@ class _CommentTile extends StatelessWidget {
       key: Key('nearbyComment-${comment.id}'),
       padding: const EdgeInsets.only(bottom: 10),
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        NearbyAvatar(animal: comment.author.avatar, size: small ? 34 : 40),
+        nearbyAuthorTap(
+            key: Key('nearbyCommentAuthor-${comment.id}'),
+            onTap: onAuthor,
+            child: NearbyAvatar(
+                animal: comment.author.avatar, size: small ? 34 : 40)),
         const SizedBox(width: 10),
         Expanded(
           child:

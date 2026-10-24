@@ -1,4 +1,5 @@
-// My anonymous name on my profile (Me): shown, and changed for a new one.
+// My anonymous profile (Me > Anonymous profile): my name as others see it,
+// and refresh for a new one.
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:huntr/main.dart';
@@ -47,6 +48,9 @@ Future<AppState> _openMe(WidgetTester tester, _Profiles profiles) async {
   ));
   await tester.pumpAndSettle();
   await tester.tap(find.text('Me'));
+  await tester.pumpAndSettle();
+  // Me > Anonymous profile: how others see me
+  await tester.tap(find.byKey(const Key('openAnonymousProfile')));
   await tester.pumpAndSettle();
   return state;
 }

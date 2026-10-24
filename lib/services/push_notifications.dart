@@ -130,6 +130,28 @@ class PushNotifications {
     }
   }
 
+  /// Reads this device's permission again (after the person allowed it in
+  /// the browser's or phone's settings) and, when it's allowed now,
+  /// registers the device. True when notifications are on here.
+  Future<bool> recheck() async {
+    if (!supported || _sessionToken == null) return false;
+    try {
+      await _init();
+      permission.value =
+          (await FirebaseMessaging.instance.getNotificationSettings())
+              .authorizationStatus;
+      if (permission.value != AuthorizationStatus.authorized) return false;
+      if (!registered.value) {
+        problem.value = null;
+        await _register();
+      }
+      return registered.value;
+    } catch (error) {
+      _failed('Push notifications not rechecked', error);
+      return false;
+    }
+  }
+
   /// Not asked yet on this device (the app offers to turn them on).
   bool get undecided =>
       supported && permission.value == AuthorizationStatus.notDetermined;

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../state/app_state.dart';
 import '../widgets/avatar.dart';
-import '../widgets/me/anonymous_name_card.dart';
 import '../widgets/me/me_profile_card.dart';
 import '../widgets/me/my_albums_section.dart';
 import '../widgets/me/my_story_section.dart';
@@ -11,6 +10,7 @@ import '../widgets/me/profile_preview_banner.dart';
 import '../theme.dart';
 import 'settings_screen.dart';
 import '../widgets/profile/edit_profile_sheet.dart';
+import 'anonymous_profile_screen.dart' show MyAnonymousProfileScreen;
 import 'profile_screen.dart';
 
 class MeScreen extends StatelessWidget {
@@ -37,9 +37,29 @@ class MeScreen extends StatelessWidget {
       const SizedBox(height: 16),
       const MyStorySection(),
       const SizedBox(height: 16),
-      // my anonymous name (chats and Threads), and Change
+      // how others see me anonymously (and a new name there)
       if (app.anonymousName != null) ...[
-        const AnonymousNameCard(),
+        Material(
+          color: HuntrColors.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+            side: const BorderSide(color: HuntrColors.border),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: ListTile(
+            key: const Key('openAnonymousProfile'),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 18),
+            minVerticalPadding: 16,
+            leading:
+                Icon(Icons.theater_comedy_outlined, color: HuntrColors.orange),
+            title: const Text('Anonymous profile',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+            trailing: const Icon(Icons.chevron_right_rounded,
+                color: HuntrColors.muted),
+            onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => const MyAnonymousProfileScreen())),
+          ),
+        ),
         const SizedBox(height: 16),
       ],
       ProfilePreviewBanner(

@@ -92,6 +92,16 @@ class MessagingService {
       backend.startConversation(
           backendUrl: await _url(), token: token, userId: userId);
 
+  /// Message on a Threads author's anonymous profile: our chat where both
+  /// of us stay anonymous.
+  Future<MessageTarget> messageThreadsAuthor(String token, int postId,
+          {int? commentId}) async =>
+      backend.messageThreadsAuthor(
+          backendUrl: await _url(),
+          token: token,
+          postId: postId,
+          commentId: commentId);
+
   // ---- unmatching ----
 
   Future<List<UnmatchedPerson>> fetchUnmatches(String token) async =>
