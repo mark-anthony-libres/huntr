@@ -1404,8 +1404,8 @@ class ChatMessage {
         ChatMessageType.gif => gif?.isSticker == true ? '✨ Sticker' : '🎞️ GIF',
         ChatMessageType.storyReply => '↩ Story reply: $body',
         ChatMessageType.albumInterest => fromMe
-            ? '❤️ You’re interested in their album'
-            : '❤️ Interested in your album',
+            ? '✨ You sent a little spark'
+            : '✨ Loves your album',
       };
 }
 
@@ -1513,7 +1513,7 @@ class ReplyPreview {
         ChatMessageType.tap => '👋 Tap',
         ChatMessageType.gif => '🎞️ GIF',
         ChatMessageType.storyReply => '↩ $body',
-        ChatMessageType.albumInterest => '❤️ Interested in an album',
+        ChatMessageType.albumInterest => '✨ Loves an album',
       };
 }
 

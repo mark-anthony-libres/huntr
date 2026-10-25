@@ -260,62 +260,88 @@ class _Card extends StatelessWidget {
   }
 }
 
-/// In the chat: "❤️ Sam is interested in your album!" (to the album's
-/// owner), or, to me, that I said so.
-class AlbumInterestCard extends StatelessWidget {
+/// In the chat, centred like a note (not a bubble): a beating heart and
+/// "Sam loves your album ✨" (to the album's owner, with a quiet "Say hi 👋"),
+/// or, to me, "You sent a little spark ✨".
+class AlbumInterestCard extends StatefulWidget {
   const AlbumInterestCard(
-      {super.key, required this.message, required this.otherName});
+      {super.key,
+      required this.message,
+      required this.otherName,
+      this.onSayHi});
 
   final ChatMessage message;
   final String otherName;
 
+  /// Theirs: starts a hello in the message box.
+  final VoidCallback? onSayHi;
+
+  @override
+  State<AlbumInterestCard> createState() => _AlbumInterestCardState();
+}
+
+class _AlbumInterestCardState extends State<AlbumInterestCard>
+    with SingleTickerProviderStateMixin {
+  // a heartbeat: two quick beats, then a rest
+  late final _beat = AnimationController(
+      vsync: this, duration: const Duration(milliseconds: 1400))
+    // a few beats when it shows, then still
+    ..repeat(count: 3);
+
+  static final _scale = TweenSequence<double>([
+    TweenSequenceItem(tween: Tween(begin: 1, end: 1.25), weight: 10),
+    TweenSequenceItem(tween: Tween(begin: 1.25, end: 1), weight: 10),
+    TweenSequenceItem(tween: Tween(begin: 1, end: 1.18), weight: 10),
+    TweenSequenceItem(tween: Tween(begin: 1.18, end: 1), weight: 12),
+    TweenSequenceItem(tween: ConstantTween(1), weight: 58),
+  ]);
+
+  @override
+  void dispose() {
+    _beat.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
-    final mine = message.fromMe;
-    final who = otherName.isEmpty ? 'Someone' : otherName;
-    return Align(
-      alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        key: Key('albumInterest-${message.id ?? message.clientId}'),
-        constraints: const BoxConstraints(maxWidth: 320),
-        margin: const EdgeInsets.symmetric(vertical: 6),
-        padding: const EdgeInsets.fromLTRB(12, 10, 14, 10),
-        decoration: BoxDecoration(
-          color: mine
-              ? HuntrColors.surface
-              : HuntrColors.orange.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-              color: HuntrColors.orange.withValues(alpha: mine ? 0.25 : 0.5)),
-        ),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-                color: HuntrColors.orange.withValues(alpha: 0.18),
-                shape: BoxShape.circle),
-            child: Icon(Icons.favorite_rounded,
-                color: HuntrColors.orange, size: 19),
-          ),
-          const SizedBox(width: 10),
+    final mine = widget.message.fromMe;
+    final who = widget.otherName.isEmpty ? 'Someone' : widget.otherName;
+    final still = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    final heart =
+        Icon(Icons.favorite_rounded, color: HuntrColors.orange, size: 18);
+    return Padding(
+      key: Key('albumInterest-${widget.message.id ?? widget.message.clientId}'),
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 24),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Row(mainAxisSize: MainAxisSize.min, children: [
+          still
+              ? heart
+              : ScaleTransition(scale: _scale.animate(_beat), child: heart),
+          const SizedBox(width: 8),
           Flexible(
-            child:
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(
-                  mine
-                      ? 'You’re interested'
-                      : '$who is interested in your album!',
-                  style: const TextStyle(fontWeight: FontWeight.w700)),
-              if (mine) ...[
-                const SizedBox(height: 2),
-                const Text('They’ll be notified.',
-                    style: TextStyle(color: HuntrColors.muted, fontSize: 12.5)),
-              ],
-            ]),
+            child: Text(
+                mine
+                    ? 'You sent $who a little spark ✨'
+                    : '$who loves your album ✨',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                    fontSize: 13.5, fontWeight: FontWeight.w600)),
           ),
         ]),
-      ),
+        if (!mine && widget.onSayHi != null)
+          TextButton(
+            key: const Key('albumInterestSayHi'),
+            style: TextButton.styleFrom(
+                foregroundColor: HuntrColors.orange,
+                visualDensity: VisualDensity.compact,
+                textStyle: const TextStyle(
+                    fontFamily: huntrFontFamily,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700)),
+            onPressed: widget.onSayHi,
+            child: const Text('Say hi 👋'),
+          ),
+      ]),
     );
   }
 }

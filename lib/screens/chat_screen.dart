@@ -741,6 +741,15 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  /// "Say hi 👋" on their spark: a hello in the message box, ready to send.
+  void _sayHi() {
+    if (_input.text.trim().isEmpty) {
+      _input.text = 'Hey! 👋';
+      _input.selection = TextSelection.collapsed(offset: _input.text.length);
+    }
+    _inputFocus.requestFocus();
+  }
+
   /// Trades whose prompt I put away for now (it's still asked: it comes
   /// back when the chat opens again).
   final Set<int> _hiddenInterest = {};
@@ -1299,7 +1308,11 @@ class _ChatScreenState extends State<ChatScreen> {
                                     const SizedBox.shrink(),
                                   ChatMessageType.albumInterest =>
                                     AlbumInterestCard(
-                                        message: m, otherName: p.name),
+                                        message: m,
+                                        otherName: p.name,
+                                        onSayHi: blocked || closed != null
+                                            ? null
+                                            : _sayHi),
                                   ChatMessageType.revealRequest =>
                                     RevealRequestCard(
                                         fromMe: m.fromMe,
