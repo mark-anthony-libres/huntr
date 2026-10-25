@@ -320,8 +320,14 @@ class MessagingState extends ChangeNotifier {
           await _call((t) => service.fetchLivePositions(t, m.id!));
       if (positions == null || !_sessions.containsKey(m.id)) return;
       final known = livePositionsOf(m.id!);
+      final theirs = positions.them;
+      final had = known.them;
       _livePositions[m.id!] = LivePositions(
-          me: known.me ?? positions.me, them: positions.them ?? known.them);
+          me: known.me ?? positions.me,
+          // whichever is newer (one may have come live meanwhile)
+          them: theirs == null || (had != null && had.at.isAfter(theirs.at))
+              ? had
+              : theirs);
       notifyListeners();
     } catch (error) {
       debugPrint('Live positions not loaded: $error');
@@ -393,6 +399,9 @@ class MessagingState extends ChangeNotifier {
     }
     session.heartbeat =
         Timer.periodic(m.liveLocation!.heartbeat, (_) => _beat(session));
+    // read again now and then: not every device (or browser) says when it
+    // moves
+    session.recheck = Timer.periodic(_liveEvery, (_) => _recheck(session));
     session.moves = location.watch(minDistance: _liveMinMove).listen((p) {
       session.latest = p;
       _maybeSend(session);
@@ -447,6 +456,19 @@ class MessagingState extends ChangeNotifier {
       _ended(session, error);
     } catch (error) {
       debugPrint('Live position not sent: $error');
+    }
+  }
+
+  /// Where I am now; sent when I moved (a failed read just waits for the
+  /// next one).
+  Future<void> _recheck(_LiveSession session) async {
+    try {
+      final here = await location.current();
+      if (!identical(_sessions[session.message.id], session)) return;
+      session.latest = here;
+      _maybeSend(session);
+    } catch (error) {
+      debugPrint('Live position not read: $error');
     }
   }
 
@@ -1492,6 +1514,7 @@ class _LiveSession {
   DevicePosition? sent;
   StreamSubscription<DevicePosition>? moves;
   Timer? heartbeat;
+  Timer? recheck;
 
   /// Sent recently: the next send waits for it ([waiting]: one is due).
   Timer? cooldown;
@@ -1500,6 +1523,7 @@ class _LiveSession {
   void cancel() {
     moves?.cancel();
     heartbeat?.cancel();
+    recheck?.cancel();
     cooldown?.cancel();
   }
 }

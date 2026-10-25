@@ -432,11 +432,10 @@ class LiveMap extends StatelessWidget {
     }
     final points = [for (final (_, point) in known) point];
     return FlutterMap(
-      // frame again once someone else appears (the small card: whenever
-      // someone moves, so both always stay in view)
-      key: interactive
-          ? ValueKey(points.length)
-          : ValueKey(Object.hashAll(points)),
+      // the small card frames again whenever someone moves, so both stay in
+      // view; the big map is one map, framed by its controller (a new map
+      // on the same controller stops loading its tiles)
+      key: interactive ? null : ValueKey(Object.hashAll(points)),
       mapController: controller,
       options: MapOptions(
         initialCenter: points.first,

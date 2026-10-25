@@ -34,9 +34,10 @@ class _LiveLocationScreenState extends State<LiveLocationScreen> {
   final MapController _map = MapController();
   bool _stopping = false;
 
-  /// While their position hasn't come: asks for it again now and then (it
-  /// may have come before this opened, or the event got lost).
+  /// While their position hasn't come, or hasn't changed for a while: asks
+  /// for it again now and then (an event may have been missed).
   Timer? _lookAgain;
+  DateTime _lookedAt = DateTime.now();
 
   /// Whose positions were known at the last framing (a new one: frame both).
   int _framed = 0;
@@ -53,8 +54,14 @@ class _LiveLocationScreenState extends State<LiveLocationScreen> {
       final messaging = MessagingScope.read(context);
       if (!mounted || messaging == null) return;
       final m = _current(messaging);
-      if (m.liveLocation?.active == true &&
-          messaging.livePositionsOf(m.id!).them == null) {
+      final them = messaging.livePositionsOf(m.id!).them;
+      final now = DateTime.now();
+      // not yet: every few seconds; quiet a while: now and then
+      final due = them == null ||
+          (now.difference(them.at) > const Duration(seconds: 30) &&
+              now.difference(_lookedAt) > const Duration(seconds: 15));
+      if (m.liveLocation?.active == true && due) {
+        _lookedAt = now;
         messaging.refreshLivePositions(m);
       }
     });
