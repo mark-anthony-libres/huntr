@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart' show LatLng;
@@ -32,12 +34,50 @@ class _LiveLocationScreenState extends State<LiveLocationScreen> {
   final MapController _map = MapController();
   bool _stopping = false;
 
+  /// While their position hasn't come: asks for it again now and then (it
+  /// may have come before this opened, or the event got lost).
+  Timer? _lookAgain;
+
+  /// Whose positions were known at the last framing (a new one: frame both).
+  int _framed = 0;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         MessagingScope.read(context)?.refreshLivePositions(widget.message);
+      }
+    });
+    _lookAgain = Timer.periodic(const Duration(seconds: 4), (_) {
+      final messaging = MessagingScope.read(context);
+      if (!mounted || messaging == null) return;
+      final m = _current(messaging);
+      if (m.liveLocation?.active == true &&
+          messaging.livePositionsOf(m.id!).them == null) {
+        messaging.refreshLivePositions(m);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _lookAgain?.cancel();
+    super.dispose();
+  }
+
+  /// Someone new on the map (they arrived): both in view.
+  void _frameNewcomers(LivePositions positions) {
+    final known = [positions.me, positions.them].where((p) => p != null).length;
+    if (known <= _framed) return;
+    _framed = known;
+    if (known < 2) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      try {
+        _fitBoth(positions);
+      } catch (_) {
+        // the map isn't laid out yet: it frames both itself
       }
     });
   }
@@ -96,6 +136,7 @@ class _LiveLocationScreenState extends State<LiveLocationScreen> {
     final positions = messaging.livePositionsOf(m.id!);
     final name = widget.other.name.isEmpty ? 'They' : widget.other.name;
     final now = DateTime.now();
+    if (info.active) _frameNewcomers(positions);
 
     return Scaffold(
       appBar: AppBar(title: Text('Live location with $name')),
@@ -127,6 +168,14 @@ class _LiveLocationScreenState extends State<LiveLocationScreen> {
                           color: theirColor),
                     ],
                   ),
+                  // they accepted, but their position hasn't come yet
+                  if (positions.them == null)
+                    Positioned(
+                      top: 12,
+                      left: 12,
+                      right: 12,
+                      child: Center(child: _WaitingFor(name: name)),
+                    ),
                   // frame both again (under the zoom buttons)
                   if (positions.me != null || positions.them != null)
                     Positioned(
@@ -168,6 +217,44 @@ class _LiveLocationScreenState extends State<LiveLocationScreen> {
                     ]),
                   ),
                 ]),
+        ),
+      ]),
+    );
+  }
+}
+
+/// "Waiting for Sam's location…": they're in, their phone is still finding
+/// where they are (or their connection is slow).
+class _WaitingFor extends StatelessWidget {
+  const _WaitingFor({required this.name});
+
+  final String name;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: const Key('liveWaitingForThem'),
+      padding: const EdgeInsets.fromLTRB(12, 9, 14, 9),
+      decoration: BoxDecoration(
+        color: const Color(0xF20C0C0F),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: theirColor.withValues(alpha: 0.7)),
+        boxShadow: const [BoxShadow(color: Colors.black45, blurRadius: 10)],
+      ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        SizedBox.square(
+            dimension: 14,
+            child:
+                CircularProgressIndicator(strokeWidth: 2, color: theirColor)),
+        const SizedBox(width: 10),
+        Flexible(
+          child: Text(
+              name == 'They'
+                  ? 'Waiting for their location…'
+                  : 'Waiting for $name’s location…',
+              maxLines: 2,
+              style:
+                  const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
         ),
       ]),
     );

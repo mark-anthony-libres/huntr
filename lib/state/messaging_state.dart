@@ -367,6 +367,15 @@ class MessagingState extends ChangeNotifier {
   Future<void> _startSession(ChatMessage m) async {
     final session = _sessions[m.id!] = _LiveSession(m);
     unawaited(refreshLivePositions(m));
+    // one the device already has, at once, so they see me while the
+    // precise one is found (a GPS fix can take a while)
+    unawaited(location.quick().then((quick) {
+      if (quick != null &&
+          identical(_sessions[m.id], session) &&
+          session.sent == null) {
+        _sendPosition(session, quick);
+      }
+    }));
     final DevicePosition here;
     try {
       here = await location.current();
@@ -374,8 +383,14 @@ class MessagingState extends ChangeNotifier {
       return _locationLost(session, error);
     }
     if (!identical(_sessions[m.id], session)) return; // ended meanwhile
-    await _sendPosition(session, here);
-    if (!identical(_sessions[m.id], session)) return; // it was refused
+    if (session.sent == null) {
+      await _sendPosition(session, here);
+      if (!identical(_sessions[m.id], session)) return; // it was refused
+    } else {
+      // the quick one went: this one after its cooldown (if it moved)
+      session.latest = here;
+      _maybeSend(session);
+    }
     session.heartbeat =
         Timer.periodic(m.liveLocation!.heartbeat, (_) => _beat(session));
     session.moves = location.watch(minDistance: _liveMinMove).listen((p) {

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:geolocator/geolocator.dart';
 
 import 'location_service.dart' show LocationException;
@@ -39,6 +40,37 @@ class DeviceLocation {
       throw const LocationException(
           'Your location could not be found. Check that location is on, then '
           'try again.');
+    }
+  }
+
+  /// A position the device already has (from the last minute or two), at
+  /// once - or null. For showing something while [current] finds the
+  /// precise one.
+  Future<DevicePosition?> quick() async {
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) return null;
+      final permission = await Geolocator.checkPermission();
+      if (permission != LocationPermission.always &&
+          permission != LocationPermission.whileInUse) {
+        return null;
+      }
+      if (kIsWeb) {
+        // the browser answers at once with one it already has
+        return _of(await Geolocator.getCurrentPosition(
+            locationSettings: WebSettings(
+                accuracy: LocationAccuracy.low,
+                maximumAge: const Duration(minutes: 2),
+                timeLimit: const Duration(seconds: 4))));
+      }
+      final last = await Geolocator.getLastKnownPosition();
+      if (last == null ||
+          DateTime.now().difference(last.timestamp) >
+              const Duration(minutes: 2)) {
+        return null;
+      }
+      return _of(last);
+    } catch (_) {
+      return null;
     }
   }
 
