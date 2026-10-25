@@ -1179,6 +1179,17 @@ class MessagingState extends ChangeNotifier {
     unawaited(catchUp(conversationId));
   }
 
+  /// My private answer after viewing their album of the trade in
+  /// [tradeMessage]: yes tells them (its message joins the chat), not now
+  /// tells nobody. My card then shows it answered. Throws what the backend
+  /// says.
+  Future<void> answerAlbumInterest(ChatMessage tradeMessage, bool yes) async {
+    final told = await _call(
+        (t) => service.answerAlbumInterest(t, tradeMessage.trade!.id, yes));
+    if (told != null) _upsert(tradeMessage.conversationId, told);
+    await refreshMessage(tradeMessage.conversationId, tradeMessage.id!);
+  }
+
   Future<void> cancelTrade(int conversationId, AlbumTrade trade) async {
     final saved = await _call((t) => service.cancelTrade(t, trade.id));
     if (saved != null) _upsert(conversationId, saved);

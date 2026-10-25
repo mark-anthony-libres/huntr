@@ -1176,7 +1176,11 @@ enum ChatMessageType {
   gif,
 
   /// A reply or reaction to a story ([ChatMessage.body] is what was said).
-  storyReply;
+  storyReply,
+
+  /// Its sender is interested in my album (they said so after viewing it
+  /// in a trade): "❤️ Sam is interested in your album!".
+  albumInterest;
 
   static ChatMessageType parse(String? value) => switch (value) {
         'gif' => gif,
@@ -1188,6 +1192,7 @@ enum ChatMessageType {
         'video' => video,
         'album_trade' => albumTrade,
         'album_trade_return' => albumTradeReturn,
+        'album_interest' => albumInterest,
         'location' => location,
         'live_location' => liveLocation,
         _ => text,
@@ -1398,6 +1403,9 @@ class ChatMessage {
           fromMe ? '👋 You tapped them' : '👋 They tapped you',
         ChatMessageType.gif => gif?.isSticker == true ? '✨ Sticker' : '🎞️ GIF',
         ChatMessageType.storyReply => '↩ Story reply: $body',
+        ChatMessageType.albumInterest => fromMe
+            ? '❤️ You’re interested in their album'
+            : '❤️ Interested in your album',
       };
 }
 
@@ -1505,6 +1513,7 @@ class ReplyPreview {
         ChatMessageType.tap => '👋 Tap',
         ChatMessageType.gif => '🎞️ GIF',
         ChatMessageType.storyReply => '↩ $body',
+        ChatMessageType.albumInterest => '❤️ Interested in an album',
       };
 }
 
@@ -1838,6 +1847,7 @@ class AlbumTrade {
     this.canCancel = false,
     this.completedAt,
     this.returnMessageId,
+    this.myInterest,
   });
 
   factory AlbumTrade.fromJson(Map<String, dynamic> json) => AlbumTrade(
@@ -1862,6 +1872,7 @@ class AlbumTrade {
             ? null
             : DateTime.parse(json['completed_at'] as String).toLocal(),
         returnMessageId: json['return_message_id'] as int?,
+        myInterest: json['my_interest'] as String?,
       );
 
   /// The message the album chosen in return came as (null: not chosen yet,
@@ -1883,6 +1894,15 @@ class AlbumTrade {
 
   /// When the other album was chosen in return.
   final DateTime? completedAt;
+
+  /// Mine only: after I closed their album, asked whether I'm interested
+  /// ("pending"), or how I answered ("interested", "not_now"); null when
+  /// not asked.
+  final String? myInterest;
+
+  /// Asked, and not answered yet.
+  bool get interestAsked =>
+      status == TradeStatus.completed && myInterest == 'pending';
 
   /// The album I get to open once it's completed (the other person's).
   TradeAlbum? get theirAlbum => fromMe ? returnedAlbum : offeredAlbum;
@@ -3181,6 +3201,26 @@ Future<void> endMediaView(
           _endpoint(backendUrl, '/media-views/$viewToken/end'),
           headers: _authorization(token)),
       (_) {},
+    );
+
+/// POST {backendUrl}/album-trades/{id}/interest: my private answer after
+/// viewing their album. The "interested" message they got, on a yes (null
+/// otherwise, or when it was already answered).
+Future<ChatMessage?> answerAlbumInterest(
+        {required String backendUrl,
+        required String token,
+        required int tradeId,
+        required bool interested,
+        http.Client? client}) =>
+    _sendAuthorized(
+      client,
+      (httpClient) => httpClient.post(
+          _endpoint(backendUrl, '/album-trades/$tradeId/interest'),
+          headers: _json(token),
+          body: jsonEncode({'interested': interested})),
+      (json) => json['message'] == null
+          ? null
+          : ChatMessage.fromJson(json['message'] as Map<String, dynamic>),
     );
 
 /// POST {backendUrl}/album-trades/{id}/cancel: cancels a pending trade.

@@ -205,24 +205,17 @@ class _TapRow extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(children: [
-                      Expanded(
-                        child: Text(
-                          tap.count > 1
-                              ? '${tap.sender.name} tapped you ${tap.count} times 👋'
-                              : '${tap.sender.name} tapped you 👋',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                              fontSize: 16,
-                              fontWeight:
-                                  unread ? FontWeight.w800 : FontWeight.w600),
-                        ),
-                      ),
-                      Text(time,
-                          style: const TextStyle(
-                              color: HuntrColors.muted, fontSize: 13)),
-                    ]),
+                    Text(
+                      tap.count > 1
+                          ? '${tap.sender.name} tapped you ${tap.count} times 👋'
+                          : '${tap.sender.name} tapped you 👋',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          fontSize: 16,
+                          fontWeight:
+                              unread ? FontWeight.w800 : FontWeight.w600),
+                    ),
                     const SizedBox(height: 4),
                     Text(
                       first?.answer ?? 'Say hi back 👋',
@@ -234,34 +227,46 @@ class _TapRow extends StatelessWidget {
                   ],
                 ),
               ),
-              // how many taps, when more than one
-              if (tap.count > 1) ...[
-                const SizedBox(width: 10),
-                Container(
-                  key: Key('tapCount-${tap.id}'),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    gradient: HuntrColors.accentGradient,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text('×${tap.count}',
+              const SizedBox(width: 10),
+              // when, and below it how many taps and whether it's new: the
+              // same column on every row, so the times line up
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(time,
                       style: const TextStyle(
-                          color: Colors.black,
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w800)),
-                ),
-              ],
-              if (unread) ...[
-                const SizedBox(width: 10),
-                Container(
-                  key: Key('tapUnread-${tap.id}'),
-                  width: 10,
-                  height: 10,
-                  decoration: BoxDecoration(
-                      shape: BoxShape.circle, color: HuntrColors.orange),
-                ),
-              ],
+                          color: HuntrColors.muted, fontSize: 13)),
+                  const SizedBox(height: 6),
+                  Row(mainAxisSize: MainAxisSize.min, children: [
+                    if (tap.count > 1)
+                      Container(
+                        key: Key('tapCount-${tap.id}'),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          gradient: HuntrColors.accentGradient,
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text('×${tap.count}',
+                            style: const TextStyle(
+                                color: Colors.black,
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w800)),
+                      ),
+                    if (tap.count > 1 && unread) const SizedBox(width: 6),
+                    if (unread)
+                      Container(
+                        key: Key('tapUnread-${tap.id}'),
+                        width: 10,
+                        height: 10,
+                        decoration: BoxDecoration(
+                            shape: BoxShape.circle, color: HuntrColors.orange),
+                      ),
+                    // the same height without either
+                    if (tap.count <= 1 && !unread) const SizedBox(height: 20),
+                  ]),
+                ],
+              ),
             ]),
           ),
         ),

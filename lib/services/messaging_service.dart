@@ -213,6 +213,14 @@ class MessagingService {
           tradeId: tradeId,
           albumId: albumId);
 
+  Future<ChatMessage?> answerAlbumInterest(
+          String token, int tradeId, bool interested) async =>
+      backend.answerAlbumInterest(
+          backendUrl: await _url(),
+          token: token,
+          tradeId: tradeId,
+          interested: interested);
+
   Future<ChatMessage> cancelTrade(String token, int tradeId) async => backend
       .cancelTrade(backendUrl: await _url(), token: token, tradeId: tradeId);
 

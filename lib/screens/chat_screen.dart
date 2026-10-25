@@ -42,6 +42,7 @@ import 'my_album_screen.dart';
 import 'story_viewer_screen.dart';
 import 'anonymous_profile_screen.dart';
 import '../widgets/chat/anonymous_chat.dart';
+import '../widgets/chat/album_interest.dart';
 import '../flows/my_albums.dart';
 
 class ChatScreen extends StatefulWidget {
@@ -729,6 +730,44 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  /// Their album of a trade; once it's closed, my card again (closing it
+  /// may have started its countdown, and asks whether I'm interested).
+  Future<void> _openTheirAlbum(ChatMessage m) async {
+    await Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => TradedAlbumViewerScreen(message: m)));
+    final messaging = _messaging;
+    if (messaging != null && m.id != null) {
+      unawaited(messaging.refreshMessage(m.conversationId, m.id!));
+    }
+  }
+
+  /// Trades whose prompt I put away for now (it's still asked: it comes
+  /// back when the chat opens again).
+  final Set<int> _hiddenInterest = {};
+
+  /// The trade I just said yes on: "You let them know!" for a moment.
+  int? _sentInterest;
+
+  /// The newest trade card asking me (privately) whether I'm interested.
+  ChatMessage? _interestAsked(List<ChatMessage> newestFirst) {
+    for (final m in newestFirst) {
+      final trade = m.trade;
+      if (trade != null &&
+          trade.interestAsked &&
+          !_hiddenInterest.contains(trade.id)) {
+        return m;
+      }
+    }
+    return null;
+  }
+
+  Future<void> _answerInterest(ChatMessage m, bool yes) async {
+    final messaging = _messaging;
+    if (messaging == null) return;
+    await messaging.answerAlbumInterest(m, yes);
+    if (yes && mounted) setState(() => _sentInterest = m.trade!.id);
+  }
+
   void _openProfile(Profile p) => openPersonProfile(context, p,
       // Message on their profile comes back to this chat
       onMessage: (page) => Navigator.of(page).pop());
@@ -1176,11 +1215,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                       other: p,
                                       now: now,
                                       onOpenMine: _openMyAlbum,
-                                      onOpenTheirs: () => Navigator.of(context)
-                                          .push(MaterialPageRoute(
-                                              builder: (_) =>
-                                                  TradedAlbumViewerScreen(
-                                                      message: m))),
+                                      onOpenTheirs: () => _openTheirAlbum(m),
                                       busy:
                                           _changingTrades.contains(m.trade!.id),
                                       onRespond: () => answerAlbumTrade(context,
@@ -1204,11 +1239,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                       now: now,
                                       returnOnly: true,
                                       onOpenMine: _openMyAlbum,
-                                      onOpenTheirs: () => Navigator.of(context)
-                                          .push(MaterialPageRoute(
-                                              builder: (_) =>
-                                                  TradedAlbumViewerScreen(
-                                                      message: m))),
+                                      onOpenTheirs: () => _openTheirAlbum(m),
                                       onRespond: () {},
                                       onCancel: () {},
                                       wrapOffer: (card) => _actions(m, p, card),
@@ -1266,6 +1297,9 @@ class _ChatScreenState extends State<ChatScreen> {
                                         )),
                                   ChatMessageType.liveLocation =>
                                     const SizedBox.shrink(),
+                                  ChatMessageType.albumInterest =>
+                                    AlbumInterestCard(
+                                        message: m, otherName: p.name),
                                   ChatMessageType.revealRequest =>
                                     RevealRequestCard(
                                         fromMe: m.fromMe,
@@ -1349,6 +1383,19 @@ class _ChatScreenState extends State<ChatScreen> {
                               },
                             ),
             ),
+            // after viewing their album: asked privately (mine only)
+            if (!blocked && !gone && _sentInterest != null)
+              AlbumInterestSent(
+                  key: ValueKey('albumInterestSent-$_sentInterest'),
+                  onDone: () => setState(() => _sentInterest = null))
+            else if ((blocked || gone ? null : _interestAsked(msgs))
+                case final asked?)
+              AlbumInterestPrompt(
+                key: ValueKey('albumInterestPrompt-${asked.trade!.id}'),
+                onAnswer: (yes) => _answerInterest(asked, yes),
+                onHide: () =>
+                    setState(() => _hiddenInterest.add(asked.trade!.id)),
+              ),
             if (movedTo != null && movedTo != id)
               MovedToDirectBar(
                   onOpen: () => Navigator.of(context).pushReplacement(
