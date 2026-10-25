@@ -17,6 +17,7 @@ import 'me_screen.dart';
 import 'nearby_screen.dart';
 import 'taps_screen.dart';
 import '../widgets/huntr_bottom_bar.dart';
+import '../widgets/page_title.dart';
 
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key});
@@ -32,6 +33,19 @@ class _HomeShellState extends State<HomeShell> {
   static const _chatsTab = 3;
 
   int _tab = _exploreTab;
+
+  /// How many times each tab has been opened (its title plays each time).
+  final _visits = [
+    for (var i = 0; i < 5; i++) ValueNotifier(i == _exploreTab ? 1 : 0)
+  ];
+
+  /// Opens a tab (a new visit when it wasn't the one shown).
+  void _showTab(int tab) {
+    if (tab == _tab) return;
+    setState(() => _tab = tab);
+    _visits[tab].value++;
+  }
+
   StreamSubscription<String>? _events;
 
   // Shown as online while signed in here and the app is in the foreground.
@@ -125,9 +139,8 @@ class _HomeShellState extends State<HomeShell> {
         ..hideCurrentSnackBar()
         ..showSnackBar(SnackBar(
           content: Text(msg),
-          action: SnackBarAction(
-              label: 'Chats',
-              onPressed: () => setState(() => _tab = _chatsTab)),
+          action:
+              SnackBarAction(label: 'Chats', onPressed: () => _showTab(_chatsTab)),
         ));
     });
   }
@@ -137,9 +150,9 @@ class _HomeShellState extends State<HomeShell> {
     if (!mounted) return;
     switch (target) {
       case OpenTaps():
-        setState(() => _tab = _tapsTab);
+        _showTab(_tapsTab);
       case OpenChat(:final conversationId):
-        setState(() => _tab = _chatsTab);
+        _showTab(_chatsTab);
         final messaging = _messaging;
         if (messaging == null) return;
         if (messaging.summary(conversationId) == null) {
@@ -204,6 +217,9 @@ class _HomeShellState extends State<HomeShell> {
   @override
   void dispose() {
     _lifecycle?.dispose();
+    for (final visits in _visits) {
+      visits.dispose();
+    }
     _presence
       ?..onEvent = null
       ..onConnected = null
@@ -221,16 +237,19 @@ class _HomeShellState extends State<HomeShell> {
       body: IndexedStack(
         index: _tab,
         children: [
-          const ExploreScreen(),
-          const ThreadsTab(),
-          const TapsScreen(),
-          ChatsScreen(onExplore: () => setState(() => _tab = _exploreTab)),
-          const MeScreen(),
+          for (final (i, tab) in [
+            const ExploreScreen(),
+            const ThreadsTab(),
+            const TapsScreen(),
+            ChatsScreen(onExplore: () => _showTab(_exploreTab)),
+            const MeScreen(),
+          ].indexed)
+            PageVisits(visits: _visits[i], child: tab),
         ],
       ),
       bottomNavigationBar: HuntrBottomBar(
         selectedIndex: _tab,
-        onSelected: (i) => setState(() => _tab = i),
+        onSelected: _showTab,
         items: [
           const HuntrBottomBarItem(
               icon: Icons.explore_outlined,

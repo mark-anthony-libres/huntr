@@ -3748,6 +3748,49 @@ class AnonymousName {
   final String avatar;
 }
 
+/// A tag a Threads post can have, like "Sex" (Looking for) or "Outdoor"
+/// (Meet preference).
+class NearbyTag {
+  const NearbyTag(
+      {required this.id,
+      required this.slug,
+      required this.name,
+      required this.category});
+
+  factory NearbyTag.fromJson(Map<String, dynamic> json) => NearbyTag(
+      id: json['id'] as int,
+      slug: json['slug'] as String,
+      name: json['name'] as String,
+      category: json['category'] as String);
+
+  final int id;
+  final String slug;
+  final String name;
+
+  /// looking_for or meet_preference.
+  final String category;
+}
+
+/// One kind of tag (Looking for, Meet preference) and its tags, in order.
+class NearbyTagCategory {
+  const NearbyTagCategory(
+      {required this.key, required this.label, required this.tags});
+
+  factory NearbyTagCategory.fromJson(Map<String, dynamic> json) =>
+      NearbyTagCategory(
+        key: json['key'] as String,
+        label: json['label'] as String,
+        tags: [
+          for (final t in json['tags'] as List)
+            NearbyTag.fromJson(t as Map<String, dynamic>),
+        ],
+      );
+
+  final String key;
+  final String label;
+  final List<NearbyTag> tags;
+}
+
 /// A Nearby post as I see it.
 class NearbyPost {
   const NearbyPost({
@@ -3761,6 +3804,7 @@ class NearbyPost {
     required this.commentCount,
     required this.mine,
     this.radiusM,
+    this.tags = const [],
   });
 
   factory NearbyPost.fromJson(Map<String, dynamic> json) => NearbyPost(
@@ -3774,6 +3818,10 @@ class NearbyPost {
         commentCount: json['comment_count'] as int? ?? 0,
         mine: json['mine'] as bool? ?? false,
         radiusM: json['radius_m'] as int?,
+        tags: [
+          for (final t in json['tags'] as List? ?? const [])
+            NearbyTag.fromJson(t as Map<String, dynamic>),
+        ],
       );
 
   final int id;
@@ -3791,6 +3839,9 @@ class NearbyPost {
   /// How far it reaches (mine only).
   final int? radiusM;
 
+  /// Its tags: Looking for first, then Meet preference.
+  final List<NearbyTag> tags;
+
   NearbyPost copyWith({int? likeCount, bool? liked, int? commentCount}) =>
       NearbyPost(
         id: id,
@@ -3803,6 +3854,7 @@ class NearbyPost {
         commentCount: commentCount ?? this.commentCount,
         mine: mine,
         radiusM: radiusM,
+        tags: tags,
       );
 }
 
@@ -3955,6 +4007,7 @@ Future<NearbyPost> createNearbyPost(
         required String body,
         required int radiusM,
         AnonymousName? as,
+        List<int> tagIds = const [],
         http.Client? client}) =>
     _nearbyCall(() => _sendAuthorized(
           client,
@@ -3963,11 +4016,27 @@ Future<NearbyPost> createNearbyPost(
               body: jsonEncode({
                 'body': body,
                 'radius_m': radiusM,
+                if (tagIds.isNotEmpty) 'tag_ids': tagIds,
                 if (as != null) 'name': as.name,
                 if (as != null) 'avatar': as.avatar,
               })),
           NearbyPost.fromJson,
         ));
+
+/// GET .../nearby/tags: the tags a post can have, by category.
+Future<List<NearbyTagCategory>> fetchNearbyTags(
+        {required String backendUrl,
+        required String token,
+        http.Client? client}) =>
+    _sendAuthorized(
+      client,
+      (httpClient) => httpClient.get(_nearby(backendUrl, '/tags'),
+          headers: _authorization(token)),
+      (json) => [
+        for (final c in json['categories'] as List)
+          NearbyTagCategory.fromJson(c as Map<String, dynamic>),
+      ],
+    );
 
 /// GET .../nearby/posts/{id}: the post and its discussion.
 Future<NearbyDiscussion> fetchNearbyDiscussion(

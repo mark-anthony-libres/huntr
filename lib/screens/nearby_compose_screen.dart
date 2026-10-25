@@ -7,6 +7,7 @@ import '../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/load_more_row.dart';
 import '../widgets/nearby/nearby_post_card.dart';
+import '../widgets/nearby/nearby_tags.dart';
 import 'chats_screen.dart' show timeLabel;
 import 'nearby_post_screen.dart';
 
@@ -26,6 +27,10 @@ class _NearbyComposeScreenState extends State<NearbyComposeScreen> {
 
   /// How far it reaches, in metres (one of [NearbyService.radii]).
   int _radiusM = 5000;
+
+  /// The tags picked (ids), and the tags there are (once loaded).
+  Set<int> _tagIds = {};
+  List<NearbyTagCategory>? _tagCategories;
   bool _posting = false;
   String? _error;
 
@@ -84,8 +89,8 @@ class _NearbyComposeScreenState extends State<NearbyComposeScreen> {
       _error = null;
     });
     try {
-      final post =
-          await service.post(token, body: _text.text, radiusM: _radiusM);
+      final post = await service.post(token,
+          body: _text.text, radiusM: _radiusM, tagIds: _tagIds.toList());
       if (mounted) Navigator.of(context).pop(post);
     } on SessionRejectedException {
       if (mounted) app.endSession();
@@ -100,6 +105,30 @@ class _NearbyComposeScreenState extends State<NearbyComposeScreen> {
       if (mounted) setState(() => _posting = false);
     }
   }
+
+  /// The tags there are (loaded once, the first time they're picked).
+  Future<List<NearbyTagCategory>> _loadTags() async {
+    if (_tagCategories case final loaded?) return loaded;
+    final service = ServicesScope.nearbyOf(context);
+    final token = AppScope.read(context).sessionToken;
+    if (service == null || token == null) throw StateError('signed out');
+    final loaded = await service.tags(token);
+    if (mounted) setState(() => _tagCategories = loaded);
+    return loaded;
+  }
+
+  Future<void> _pickTags() async {
+    final picked =
+        await pickNearbyTags(context, load: _loadTags, picked: _tagIds);
+    if (picked != null && mounted) setState(() => _tagIds = picked);
+  }
+
+  /// The picked tags' names, in the order they're listed.
+  List<String> get _tagNames => [
+        for (final category in _tagCategories ?? const <NearbyTagCategory>[])
+          for (final tag in category.tags)
+            if (_tagIds.contains(tag.id)) tag.name,
+      ];
 
   Future<void> _pickRadius() async {
     final picked = await showModalBottomSheet<int>(
@@ -269,6 +298,76 @@ class _NearbyComposeScreenState extends State<NearbyComposeScreen> {
                         style: const TextStyle(color: HuntrColors.coral)),
                   ),
                 const SizedBox(height: 14),
+
+                // ---- tags (optional) ----
+                Material(
+                  color: HuntrColors.surface,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18),
+                    side: const BorderSide(color: HuntrColors.border),
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: InkWell(
+                    key: const Key('nearbyTags'),
+                    onTap: _pickTags,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(14, 16, 8, 16),
+                      child: Row(children: [
+                        Text('#',
+                            style: TextStyle(
+                                color: HuntrColors.orange,
+                                fontSize: 22,
+                                fontWeight: FontWeight.w800,
+                                height: 1)),
+                        const SizedBox(width: 12),
+                        if (_tagIds.isEmpty)
+                          const Expanded(
+                            child: Text.rich(TextSpan(children: [
+                              TextSpan(
+                                  text: 'Tags',
+                                  style: TextStyle(fontSize: 14.5)),
+                              TextSpan(
+                                  text: ' (optional)',
+                                  style: TextStyle(
+                                      fontSize: 14.5,
+                                      color: HuntrColors.muted)),
+                            ])),
+                          )
+                        else ...[
+                          const Text('Tags', style: TextStyle(fontSize: 14.5)),
+                          const SizedBox(width: 8),
+                          Container(
+                            key: const Key('nearbyTagsCount'),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: HuntrColors.orange,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text('${_tagIds.length}',
+                                style: const TextStyle(
+                                    color: Colors.black,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w800)),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(_tagNames.join(', '),
+                                key: const Key('nearbyTagsSummary'),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                textAlign: TextAlign.right,
+                                style: const TextStyle(
+                                    color: HuntrColors.muted, fontSize: 13.5)),
+                          ),
+                        ],
+                        const Icon(Icons.chevron_right_rounded,
+                            color: HuntrColors.muted),
+                      ]),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
 
                 // ---- how far it reaches ----
                 Material(

@@ -6,6 +6,7 @@ import '../../theme.dart';
 import '../../screens/anonymous_profile_screen.dart' show ThreadsAuthorScreen;
 import '../../screens/chats_screen.dart' show timeLabel;
 import '../anonymous_avatar.dart';
+import 'nearby_tags.dart';
 
 /// A random animal in a circle: who someone is on a Nearby post.
 class NearbyAvatar extends StatelessWidget {
@@ -249,6 +250,11 @@ class NearbyPostCard extends StatelessWidget {
                 child: Text(post.body,
                     style: TextStyle(fontSize: large ? 18 : 16, height: 1.4)),
               ),
+              // its tags, right under the text (all of them on the post itself)
+              NearbyTagPills(
+                  key: ValueKey('nearbyTags-${post.id}'),
+                  tags: post.tags,
+                  limit: large ? null : 4),
               const SizedBox(height: 8),
               Row(children: [
                 NearbyHeart(

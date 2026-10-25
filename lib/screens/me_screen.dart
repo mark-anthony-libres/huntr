@@ -10,6 +10,7 @@ import '../widgets/me/profile_preview_banner.dart';
 import '../theme.dart';
 import 'settings_screen.dart';
 import '../widgets/profile/edit_profile_sheet.dart';
+import '../widgets/page_title.dart';
 import 'anonymous_profile_screen.dart' show MyAnonymousProfileScreen;
 import 'profile_screen.dart';
 
@@ -95,7 +96,8 @@ class MeScreen extends StatelessWidget {
               children: [
                 Row(children: [
                   const Expanded(
-                    child: Text('Me',
+                    child: PageTitle('Me',
+                        gradient: false,
                         style: TextStyle(
                             fontSize: 40,
                             fontWeight: FontWeight.w800,

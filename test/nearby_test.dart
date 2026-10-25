@@ -75,7 +75,10 @@ class _FakeNearby extends NearbyService {
 
   @override
   Future<NearbyPost> post(String token,
-      {required String body, required int radiusM, AnonymousName? as}) async {
+      {required String body,
+      required int radiusM,
+      AnonymousName? as,
+      List<int> tagIds = const []}) async {
     calls.add('post $radiusM ${as?.name} $body');
     return NearbyPost(
         id: 50,
