@@ -31,6 +31,9 @@ class _FakeAgreements extends AgreementService {
   }
 
   @override
+  Future<String> fetchPrivacyPolicy() async => '# Privacy\n\nEnd of privacy.';
+
+  @override
   Future<void> decline(String token) async {
     if (failDeclineWith != null) throw failDeclineWith!;
     declinedWith.add(token);

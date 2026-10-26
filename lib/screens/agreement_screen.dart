@@ -6,29 +6,39 @@ import '../services/agreement_service.dart';
 import '../services/huntr_backend.dart';
 import '../theme.dart';
 
-/// The terms & community guidelines, loaded from the backend.
+/// Which document an [AgreementScreen] shows.
+enum AgreementDocument { terms, communityGuidelines, privacyPolicy }
+
+/// The terms, community guidelines or privacy policy, loaded from the
+/// backend.
 ///
 /// With [onAccept] and [onDecline] the user must choose (new users, before
-/// onboarding); without them it's read-only (from the Me screen).
+/// onboarding): the terms and the privacy policy, one after the other.
+/// Without them it's read-only (from the Me screen, or before signing in).
 class AgreementScreen extends StatefulWidget {
   const AgreementScreen({
     super.key,
     required this.agreements,
     this.onAccept,
     this.onDecline,
-  }) : communityGuidelines = false;
+  }) : document = AgreementDocument.terms;
 
   /// The Community Guidelines, read-only.
   const AgreementScreen.communityGuidelines(
       {super.key, required this.agreements})
-      : communityGuidelines = true,
+      : document = AgreementDocument.communityGuidelines,
+        onAccept = null,
+        onDecline = null;
+
+  /// The Privacy Policy, read-only.
+  const AgreementScreen.privacyPolicy({super.key, required this.agreements})
+      : document = AgreementDocument.privacyPolicy,
         onAccept = null,
         onDecline = null;
 
   final AgreementService agreements;
 
-  /// Shows the Community Guidelines instead of the terms.
-  final bool communityGuidelines;
+  final AgreementDocument document;
   final VoidCallback? onAccept;
 
   /// Deactivates the account. Throwing keeps the user here with the error.
@@ -75,17 +85,31 @@ class _AgreementScreenState extends State<AgreementScreen> {
       _progress = 0;
     });
     try {
-      final content = widget.communityGuidelines
-          ? await widget.agreements.fetchGuidelines()
-          : await widget.agreements.fetch();
+      final agreements = widget.agreements;
+      final content = switch (widget.document) {
+        AgreementDocument.communityGuidelines =>
+          await agreements.fetchGuidelines(),
+        AgreementDocument.privacyPolicy =>
+          await agreements.fetchPrivacyPolicy(),
+        // accepting covers the privacy policy too: it follows the terms
+        AgreementDocument.terms when widget._asksForAcceptance =>
+          (await Future.wait(
+                  [agreements.fetch(), agreements.fetchPrivacyPolicy()]))
+              .join('\n\n---\n\n'),
+        AgreementDocument.terms => await agreements.fetch(),
+      };
       if (mounted) setState(() => _content = content);
     } catch (error) {
       if (!mounted) return;
       setState(() => _error = error is BackendException
           ? error.message
-          : widget.communityGuidelines
-              ? 'The Community Guidelines could not be loaded.'
-              : 'The agreement could not be loaded.');
+          : switch (widget.document) {
+              AgreementDocument.communityGuidelines =>
+                'The Community Guidelines could not be loaded.',
+              AgreementDocument.privacyPolicy =>
+                'The Privacy Policy could not be loaded.',
+              AgreementDocument.terms => 'The agreement could not be loaded.',
+            });
     }
   }
 
@@ -96,7 +120,8 @@ class _AgreementScreenState extends State<AgreementScreen> {
       builder: (dialogContext) => AlertDialog(
         title: const Text('Decline and deactivate?'),
         content: const Text(
-            'Huntr can only be used if you accept the terms. Declining '
+            'Huntr can only be used if you accept the terms and privacy '
+            'policy. Declining '
             'deactivates your account and signs you out.'),
         actions: [
           TextButton(
@@ -159,9 +184,12 @@ class _AgreementScreenState extends State<AgreementScreen> {
       appBar: asks
           ? null // new users can't leave; declining is the way out
           : AppBar(
-              title: Text(widget.communityGuidelines
-                  ? 'Community Guidelines'
-                  : 'Terms & guidelines')),
+              title: Text(switch (widget.document) {
+                AgreementDocument.communityGuidelines =>
+                  'Community Guidelines',
+                AgreementDocument.privacyPolicy => 'Privacy Policy',
+                AgreementDocument.terms => 'Terms & guidelines',
+              })),
       body: SafeArea(
         child: Center(
           child: ConstrainedBox(
@@ -399,7 +427,7 @@ class _Header extends StatelessWidget {
                       ?.copyWith(fontWeight: FontWeight.w800)),
               const SizedBox(height: 2),
               const Text(
-                'Please read and accept our terms and community guidelines.',
+                'Please read and accept our terms and privacy policy.',
                 style: TextStyle(color: HuntrColors.muted),
               ),
             ],

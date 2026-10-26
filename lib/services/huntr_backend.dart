@@ -340,6 +340,15 @@ Future<String> fetchCommunityGuidelines({
     _fetchMarkdown(backendUrl, '/agreement/guidelines',
         'The Community Guidelines', client);
 
+/// The Privacy Policy, as Markdown (GET .../agreement/privacy). New users
+/// accept it with the agreement. Public: no session token needed.
+Future<String> fetchPrivacyPolicy({
+  required String backendUrl,
+  http.Client? client,
+}) =>
+    _fetchMarkdown(
+        backendUrl, '/agreement/privacy', 'The Privacy Policy', client);
+
 Future<String> _fetchMarkdown(
     String backendUrl, String path, String what, http.Client? client) async {
   final httpClient = client ?? http.Client();

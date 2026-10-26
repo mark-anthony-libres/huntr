@@ -142,6 +142,16 @@ class SettingsScreen extends StatelessWidget {
                         builder: (_) =>
                             AgreementScreen(agreements: agreements))),
                   ),
+                if (agreements != null)
+                  SettingsRow(
+                    key: const Key('openPrivacyPolicy'),
+                    icon: Icons.privacy_tip_outlined,
+                    title: 'Privacy Policy',
+                    subtitle: 'What we collect and how we use it',
+                    onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                        builder: (_) => AgreementScreen.privacyPolicy(
+                            agreements: agreements))),
+                  ),
               ]),
               _sectionGap,
 

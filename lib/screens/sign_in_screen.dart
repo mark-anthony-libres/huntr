@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../services/agreement_service.dart';
+import '../services/services_scope.dart';
 import '../theme.dart';
+import 'agreement_screen.dart';
 import '../widgets/sign_in/google_sign_in_card.dart';
 import '../widgets/sign_in/sign_in_button.dart';
 import '../widgets/sign_in/privacy_card.dart';
@@ -117,7 +120,7 @@ class SignInScreen extends StatelessWidget {
                             PrivacyCard(bodySize: bodySize, dense: dense),
                             SizedBox(height: gap),
                           ],
-                          if (googleSignInError != null)
+                          if (googleSignInError != null) ...[
                             Text(
                               googleSignInError!,
                               key: const Key('googleSignInError'),
@@ -126,17 +129,14 @@ class SignInScreen extends StatelessWidget {
                                 color: Color(0xFFFF9B8A),
                                 fontSize: 14,
                               ),
-                            )
-                          else
-                            Text(
-                              'Facebook sign-in coming soon',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: HuntrColors.muted,
-                                fontSize: dense || narrow ? 13 : 15,
-                                height: 1.4,
-                              ),
                             ),
+                            SizedBox(height: gap * 0.6),
+                          ],
+                          _LegalLinks(
+                            agreements: ServicesScope.agreementsOf(context) ??
+                                const AgreementService(),
+                            fontSize: dense || narrow ? 13 : 15,
+                          ),
                         ],
                       ),
                     ),
@@ -147,6 +147,49 @@ class SignInScreen extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// "By continuing, you agree to …" with the terms, guidelines and privacy
+/// policy to read before signing in.
+class _LegalLinks extends StatelessWidget {
+  const _LegalLinks({required this.agreements, required this.fontSize});
+
+  final AgreementService agreements;
+  final double fontSize;
+
+  @override
+  Widget build(BuildContext context) {
+    final text =
+        TextStyle(color: HuntrColors.muted, fontSize: fontSize, height: 1.4);
+    Widget link(String key, String label, AgreementScreen screen) => InkWell(
+          key: Key(key),
+          borderRadius: BorderRadius.circular(4),
+          onTap: () => Navigator.of(context)
+              .push(MaterialPageRoute(builder: (_) => screen)),
+          child: Text(label,
+              style: text.copyWith(
+                color: HuntrColors.orange,
+                fontWeight: FontWeight.w600,
+                decoration: TextDecoration.underline,
+                decorationColor: HuntrColors.orange,
+              )),
+        );
+    return Wrap(
+      alignment: WrapAlignment.center,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        Text("By continuing, you agree to HUNTR's ", style: text),
+        link('signInTerms', 'Terms', AgreementScreen(agreements: agreements)),
+        Text(', ', style: text),
+        link('signInGuidelines', 'Community Guidelines',
+            AgreementScreen.communityGuidelines(agreements: agreements)),
+        Text(' and ', style: text),
+        link('signInPrivacy', 'Privacy Policy',
+            AgreementScreen.privacyPolicy(agreements: agreements)),
+        Text('.', style: text),
+      ],
     );
   }
 }

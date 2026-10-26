@@ -97,10 +97,7 @@ void main() {
         findsOneWidget);
     expect(
         find.text('We never post anything to social media.'), findsOneWidget);
-    expect(
-      find.text('Facebook sign-in coming soon'),
-      findsOneWidget,
-    );
+    expect(find.byKey(const Key('signInPrivacy')), findsOneWidget);
     expect(AppScope.read(tester.element(find.byType(Scaffold))).onboarded,
         isFalse);
 
