@@ -25,51 +25,80 @@ class ReplyQuote extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final who = quote.fromMe ? 'You' : otherName;
-    return MouseRegion(
-      cursor: onTap == null ? MouseCursor.defer : SystemMouseCursors.click,
-      child: GestureDetector(
-        key: Key('replyQuote-${quote.id}'),
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: Container(
-          margin: const EdgeInsets.only(top: 4, bottom: 2),
-          padding: const EdgeInsets.fromLTRB(10, 6, 12, 8),
-          decoration: BoxDecoration(
-            color: HuntrColors.surface,
-            borderRadius: BorderRadius.circular(14),
-            border: Border(
-              left: BorderSide(
-                  color: quote.fromMe ? HuntrColors.orange : HuntrColors.active,
-                  width: 3),
-            ),
-          ),
-          child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(mainAxisSize: MainAxisSize.min, children: [
-                  const Icon(Icons.reply_rounded,
-                      size: 14, color: HuntrColors.muted),
-                  const SizedBox(width: 4),
-                  Flexible(
-                    child: Text(
-                        mine
-                            ? 'You replied to ${quote.fromMe ? 'yourself' : who}'
-                            : '$otherName replied to ${quote.fromMe ? 'you' : 'themselves'}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                            color: HuntrColors.muted, fontSize: 11.5)),
-                  ),
-                ]),
-                const SizedBox(height: 2),
-                Text(quote.text,
-                    maxLines: 2,
+    final accent = quote.fromMe ? HuntrColors.orange : HuntrColors.active;
+    // Who replied to whom, on its own quiet line; then the quoted message
+    // in a soft card of its own, apart from the reply's bubble.
+    return Padding(
+      padding: const EdgeInsets.only(top: 10, bottom: 6),
+      child: Column(
+        crossAxisAlignment:
+            mine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              const Icon(Icons.reply_rounded,
+                  size: 14, color: HuntrColors.muted),
+              const SizedBox(width: 5),
+              Flexible(
+                child: Text(
+                    mine
+                        ? 'You replied to ${quote.fromMe ? 'yourself' : who}'
+                        : '$otherName replied to ${quote.fromMe ? 'you' : 'themselves'}',
+                    maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                        color: Colors.white70, fontSize: 13.5, height: 1.3)),
-              ]),
-        ),
+                        color: HuntrColors.muted,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500)),
+              ),
+            ]),
+          ),
+          const SizedBox(height: 6),
+          MouseRegion(
+            cursor:
+                onTap == null ? MouseCursor.defer : SystemMouseCursors.click,
+            child: GestureDetector(
+              key: Key('replyQuote-${quote.id}'),
+              behavior: HitTestBehavior.opaque,
+              onTap: onTap,
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(12, 10, 16, 11),
+                decoration: BoxDecoration(
+                  color: HuntrColors.surfaceHigh.withValues(alpha: 0.55),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+                ),
+                child: IntrinsicHeight(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Container(
+                        width: 3,
+                        decoration: BoxDecoration(
+                          color: accent,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Flexible(
+                        child: Text(quote.text,
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.62),
+                                fontSize: 14,
+                                height: 1.4)),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
