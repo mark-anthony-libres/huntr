@@ -7,6 +7,7 @@ import '../services/huntr_backend.dart';
 import '../services/agreement_service.dart';
 import '../services/location_permission.dart';
 import '../services/location_service.dart';
+import '../services/notification_sound.dart';
 import '../services/profile_service.dart';
 import '../services/session_service.dart';
 import '../state/app_state.dart';
@@ -125,6 +126,8 @@ class _SessionGateState extends State<SessionGate> {
           taps: profile.privacy.notifyTaps,
           messages: profile.privacy.notifyMessages,
           storyReplies: profile.privacy.notifyStoryReplies);
+      app.notificationSound =
+          NotificationSound.fromWire(profile.privacy.notificationSound);
       if (!profile.onboarded) {
         // Onboarding shows the backend's limits. Without them it still works:
         // the backend enforces them when onboarding is saved.

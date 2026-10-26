@@ -40,12 +40,14 @@ class _FakeProfiles extends ProfileService {
       bool? showOnMap,
       bool? notifyTaps,
       bool? notifyMessages,
-      bool? notifyStoryReplies}) async {
+      bool? notifyStoryReplies,
+      String? notificationSound}) async {
     saves.add((showOnline: showOnline, showDistance: showDistance));
     if (failSaveWith != null) throw failSaveWith!;
     stored = PrivacySettings(
       showOnline: showOnline ?? stored.showOnline,
       showDistance: showDistance ?? stored.showDistance,
+      notificationSound: notificationSound ?? stored.notificationSound,
     );
     return stored;
   }

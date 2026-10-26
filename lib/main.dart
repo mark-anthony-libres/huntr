@@ -13,6 +13,7 @@ import 'services/story_service.dart';
 import 'services/presence/presence_service.dart';
 import 'services/location_service.dart';
 import 'services/message_sound.dart';
+import 'services/notification_sound.dart';
 import 'services/messaging_service.dart';
 import 'services/photo_cache/photo_cache_store.dart';
 import 'services/photo_cache/photo_cache.dart';
@@ -70,7 +71,9 @@ void main() {
     devicePreferences: const SecureDevicePreferences(),
   );
   unawaited(state.loadDevicePreferences());
-  final sound = MessageSound();
+  final sound = MessageSound(sound: () => state.notificationSound);
+  // Android: a notification channel per sound, before any push needs one
+  unawaited(NotificationSound.ensureChannels());
   messaging = MessagingState(
     service: const MessagingService(),
     token: () => state.sessionToken,

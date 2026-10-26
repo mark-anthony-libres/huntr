@@ -44,8 +44,9 @@ flutter:
     - assets/app_icons/
     - assets/google_g_logo.png
     - assets/google_oauth.json
-    # the in-app sound for an incoming message
-    - assets/sounds/message.wav
+    # the in-app sound for an incoming message, and the notification sounds
+    # (Chime, Pop, Ping; copies in android/app/src/main/res/raw for pushes)
+    - assets/sounds/
 
   # The app's font (Google Fonts, Open Font License:
   # assets/fonts/plus_jakarta_sans/OFL.txt).

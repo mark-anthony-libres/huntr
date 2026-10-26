@@ -160,7 +160,8 @@ class PrivacySettings {
       this.anonymousMessaging = true,
       this.notifyTaps = true,
       this.notifyMessages = true,
-      this.notifyStoryReplies = true});
+      this.notifyStoryReplies = true,
+      this.notificationSound = 'default'});
 
   factory PrivacySettings.fromJson(Map<String, dynamic> json) =>
       PrivacySettings(
@@ -172,6 +173,7 @@ class PrivacySettings {
         notifyTaps: json['notify_taps'] as bool? ?? true,
         notifyMessages: json['notify_messages'] as bool? ?? true,
         notifyStoryReplies: json['notify_story_replies'] as bool? ?? true,
+        notificationSound: json['notification_sound'] as String? ?? 'default',
       );
 
   final bool showOnline;
@@ -187,6 +189,9 @@ class PrivacySettings {
   final bool notifyTaps;
   final bool notifyMessages;
   final bool notifyStoryReplies;
+
+  /// The sound they make (NotificationSound.wire).
+  final String notificationSound;
 }
 
 /// The signed-in Huntr account returned by the backend.
@@ -724,6 +729,7 @@ Future<PrivacySettings> updateMyPrivacy({
   bool? notifyTaps,
   bool? notifyMessages,
   bool? notifyStoryReplies,
+  String? notificationSound,
   http.Client? client,
 }) =>
     _sendAuthorized(
@@ -739,6 +745,8 @@ Future<PrivacySettings> updateMyPrivacy({
           if (notifyMessages != null) 'notify_messages': notifyMessages,
           if (notifyStoryReplies != null)
             'notify_story_replies': notifyStoryReplies,
+          if (notificationSound != null)
+            'notification_sound': notificationSound,
         }),
       ),
       PrivacySettings.fromJson,

@@ -51,7 +51,8 @@ class ProfileService {
           bool? showOnMap,
           bool? notifyTaps,
           bool? notifyMessages,
-          bool? notifyStoryReplies}) async =>
+          bool? notifyStoryReplies,
+          String? notificationSound}) async =>
       updateMyPrivacy(
         backendUrl: await GoogleOAuthConfig.loadBackendUrl(),
         token: token,
@@ -61,6 +62,7 @@ class ProfileService {
         notifyTaps: notifyTaps,
         notifyMessages: notifyMessages,
         notifyStoryReplies: notifyStoryReplies,
+        notificationSound: notificationSound,
       );
 
   /// A new random anonymous name for me, from now on.

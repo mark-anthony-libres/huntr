@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import '../../flows/media_permission.dart' show openAppSettingsAndWait;
 
 import '../../services/huntr_backend.dart';
+import '../../services/notification_sound.dart';
 import '../../services/push_notifications.dart';
 import '../../services/services_scope.dart';
 import '../../state/app_state.dart';
@@ -15,7 +16,8 @@ import '../../theme.dart';
 import 'settings_group.dart';
 
 /// Settings > Notifications: a switch for each kind (taps, messages, replies
-/// to my story), saved on the backend for every device; and, while this
+/// to my story) and the sound they make, saved on the backend for every
+/// device; and, while this
 /// device doesn't show notifications yet, a way to allow them. Like the
 /// privacy switches, a switch moves at once and moves back if the save
 /// fails.
@@ -214,6 +216,45 @@ class _NotificationSettingsGroupState extends State<NotificationSettingsGroup>
     }
   }
 
+  /// Saves the sound (it shows at once, and goes back if the save fails).
+  Future<bool> _saveSound(NotificationSound sound) async {
+    final app = AppScope.read(context);
+    final profiles = ServicesScope.profilesOf(context);
+    final token = app.sessionToken;
+    final messenger = ScaffoldMessenger.of(context);
+    final previous = app.notificationSound;
+    app.notificationSound = sound;
+    if (profiles == null || token == null) return true; // no backend: local only
+    try {
+      final saved = await profiles.updatePrivacy(token, notificationSound: sound.wire);
+      app.notificationSound = NotificationSound.fromWire(saved.notificationSound);
+      return true;
+    } on SessionRejectedException {
+      app.notificationSound = previous;
+      app.endSession();
+    } catch (error) {
+      app.notificationSound = previous;
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(
+            content: Text(error is BackendException
+                ? error.message
+                : 'Your sound could not be saved. Please try again.')));
+    }
+    return false;
+  }
+
+  /// HUNTR's sounds to choose from (each plays when picked), and on Android
+  /// "Your sound": any sound on the phone, picked in Android's settings.
+  Future<void> _pickSound() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (sheetContext) => _SoundPicker(onChoose: _saveSound),
+    );
+  }
+
   Future<void> _allow() async {
     setState(() => _enabling = true);
     final allowed = await PushNotifications.instance.enable();
@@ -329,8 +370,121 @@ class _NotificationSettingsGroupState extends State<NotificationSettingsGroup>
               onChanged: locked ? null : (value) => _save(storyReplies: value),
             ),
           ),
+          SettingsRow(
+            key: const Key('notificationSound'),
+            icon: Icons.music_note_outlined,
+            title: 'Sound',
+            subtitle: AppScope.of(context).notificationSound.label,
+            trailing: const Icon(Icons.chevron_right_rounded,
+                color: HuntrColors.muted),
+            onTap: _saving ? null : _pickSound,
+          ),
         ]);
       },
+    );
+  }
+}
+
+/// The sound list: tap one to hear it and choose it (saved at once).
+class _SoundPicker extends StatefulWidget {
+  const _SoundPicker({required this.onChoose});
+
+  /// Saves it; false: it couldn't be.
+  final Future<bool> Function(NotificationSound sound) onChoose;
+
+  @override
+  State<_SoundPicker> createState() => _SoundPickerState();
+}
+
+class _SoundPickerState extends State<_SoundPicker> {
+  bool _saving = false;
+
+  Future<void> _choose(NotificationSound sound) async {
+    unawaited(sound.preview());
+    setState(() => _saving = true);
+    final saved = await widget.onChoose(sound);
+    if (mounted) setState(() => _saving = false);
+    // "Your sound": its sound is picked in Android's settings
+    if (saved && sound == NotificationSound.custom) {
+      await sound.openAndroidSettings();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final chosen = AppScope.of(context).notificationSound;
+    return SafeArea(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(8, 0, 8, 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 0, 16, 4),
+              child: Text('Notification sound',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+            ),
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 0, 16, 10),
+              child: Text(
+                  'For taps, messages and story replies. Tap one to hear it.',
+                  style: TextStyle(color: HuntrColors.muted, height: 1.4)),
+            ),
+            for (final sound in NotificationSound.choices)
+              ListTile(
+                key: Key('sound-${sound.wire}'),
+                enabled: !_saving,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
+                leading: Icon(
+                  sound == chosen
+                      ? Icons.radio_button_checked_rounded
+                      : Icons.radio_button_off_rounded,
+                  color: sound == chosen ? HuntrColors.orange : HuntrColors.muted,
+                ),
+                title: Text(sound == NotificationSound.custom
+                    ? 'Other sound…'
+                    : sound.label),
+                subtitle: switch (sound) {
+                  NotificationSound.custom => const Text(
+                      "Any sound on your phone, chosen in Android's settings"),
+                  NotificationSound.silent =>
+                    const Text('Notifications still show, without a sound'),
+                  _ => null,
+                },
+                trailing: switch (sound) {
+                  NotificationSound.silent => null,
+                  // chosen: change it again in Android's settings
+                  NotificationSound.custom when sound == chosen => TextButton(
+                      key: const Key('changeCustomSound'),
+                      onPressed: sound.openAndroidSettings,
+                      child: const Text('Change'),
+                    ),
+                  NotificationSound.custom => const Icon(
+                      Icons.open_in_new_rounded,
+                      size: 20,
+                      color: HuntrColors.muted),
+                  _ => IconButton(
+                      tooltip: 'Play',
+                      icon: const Icon(Icons.play_arrow_rounded),
+                      onPressed: sound.preview,
+                    ),
+                },
+                onTap: () => _choose(sound),
+              ),
+            if (!NotificationSound.androidSettings)
+              const Padding(
+                padding: EdgeInsets.fromLTRB(16, 10, 16, 0),
+                child: Text(
+                    "In a browser, notifications use your browser's own sound; "
+                    'this one plays for new messages while HUNTR is open.',
+                    style: TextStyle(
+                        color: HuntrColors.muted, fontSize: 13, height: 1.4)),
+              ),
+          ],
+        ),
+      ),
     );
   }
 }

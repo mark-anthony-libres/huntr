@@ -6,6 +6,7 @@ import 'package:flutter/widgets.dart';
 import '../data/sample_data.dart';
 import '../models/models.dart';
 import '../services/device_preferences.dart';
+import '../services/notification_sound.dart';
 import '../services/huntr_backend.dart' show AnonymousName;
 import '../theme.dart';
 
@@ -72,6 +73,7 @@ class AppState extends ChangeNotifier {
     myStats = const ProfileStats();
     anonymousMessaging = true;
     notifications = (taps: true, messages: true, storyReplies: true);
+    _notificationSound = NotificationSound.phoneDefault;
     _anonymousName = null;
     myIsNew = false;
     albumLimits = null;
@@ -116,6 +118,16 @@ class AppState extends ChangeNotifier {
   /// on the backend.
   ({bool taps, bool messages, bool storyReplies}) notifications =
       (taps: true, messages: true, storyReplies: true);
+
+  /// The sound notifications make (Settings > Notifications > Sound), as
+  /// saved on the backend; an incoming message plays it in the app too.
+  NotificationSound _notificationSound = NotificationSound.phoneDefault;
+  NotificationSound get notificationSound => _notificationSound;
+  set notificationSound(NotificationSound sound) {
+    if (sound == _notificationSound) return;
+    _notificationSound = sound;
+    notifyListeners();
+  }
 
   void updateNotifications({bool? taps, bool? messages, bool? storyReplies}) {
     notifications = (
