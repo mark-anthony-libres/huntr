@@ -25,6 +25,26 @@ class _FilterSheetState extends State<FilterSheet> {
             Text('Filters',
                 style: text.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
             const SizedBox(height: 12),
+            Text('Sort by', style: text.titleSmall),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: SegmentedButton<ExploreSort>(
+                key: const Key('exploreSort'),
+                showSelectedIcon: false,
+                segments: [
+                  for (final sort in ExploreSort.values)
+                    ButtonSegment(
+                        value: sort,
+                        icon: Icon(sort.icon, size: 18),
+                        label: Text(sort.label)),
+                ],
+                selected: {f.sort},
+                onSelectionChanged: (choice) =>
+                    setState(() => f = f.copyWith(sort: choice.first)),
+              ),
+            ),
+            const SizedBox(height: 4),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               title: const Text('Online now only'),

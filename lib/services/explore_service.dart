@@ -28,11 +28,13 @@ class ExploreService {
           token: token,
           offset: offset);
 
-  Future<NearbyPage> fetchNearby(String token, {int offset = 0}) async =>
+  Future<NearbyPage> fetchNearby(String token,
+          {int offset = 0, bool newest = false}) async =>
       backend.fetchNearby(
           backendUrl: await GoogleOAuthConfig.loadBackendUrl(),
           token: token,
-          offset: offset);
+          offset: offset,
+          newest: newest);
 
   /// One person with all their photos.
   Future<Profile> fetchPerson(String token, int userId) async =>

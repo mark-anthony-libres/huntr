@@ -3351,15 +3351,19 @@ Future<NearbyPage> fetchStoryPeople(
       NearbyPage.fromJson,
     );
 
+/// GET .../explore/nearby: a page of people nearby, nearest first (or, with
+/// [newest], who joined most recently first).
 Future<NearbyPage> fetchNearby(
         {required String backendUrl,
         required String token,
         int offset = 0,
+        bool newest = false,
         http.Client? client}) =>
     _sendAuthorized(
       client,
       (httpClient) => httpClient.get(
-          _endpoint(backendUrl, '/explore/nearby?offset=$offset'),
+          _endpoint(backendUrl,
+              '/explore/nearby?offset=$offset${newest ? '&sort=newest' : ''}'),
           headers: _authorization(token)),
       NearbyPage.fromJson,
     );

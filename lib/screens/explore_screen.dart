@@ -36,6 +36,9 @@ class _ExploreScreenState extends State<ExploreScreen> {
   /// Explore as a map instead of the list.
   bool _mapView = false;
 
+  /// The order the list was loaded in; another one (Filters) loads it again.
+  ExploreSort? _loadedSort;
+
   /// A fresh first page of Explore: the stories tray starts over too.
   int _trayGeneration = 0;
 
@@ -54,12 +57,17 @@ class _ExploreScreenState extends State<ExploreScreen> {
     final token = app.sessionToken;
     final offset = more ? app.nearbyNextOffset : 0;
     if (explore == null || token == null || offset == null || _loading) return;
+    final sort = app.filters.sort;
+    _loadedSort = sort;
     setState(() {
       _loading = true;
       _loadError = null;
     });
     try {
-      final page = await explore.fetchNearby(token, offset: offset);
+      final page = await explore.fetchNearby(token,
+          offset: offset, newest: sort == ExploreSort.newest);
+      // the order changed while this page was on its way: it's not wanted
+      if (sort != app.filters.sort) return;
       app.setNearby(page.people, nextOffset: page.nextOffset, append: more);
       if (!more && mounted) setState(() => _trayGeneration++);
     } on SessionRejectedException {
@@ -72,6 +80,8 @@ class _ExploreScreenState extends State<ExploreScreen> {
       }
     } finally {
       if (mounted) setState(() => _loading = false);
+      // the order changed while loading: now the list in the new order
+      if (mounted && sort != app.filters.sort) _loadNearby();
     }
   }
 
@@ -123,6 +133,13 @@ class _ExploreScreenState extends State<ExploreScreen> {
   Widget build(BuildContext context) {
     final app = AppScope.of(context);
     final f = app.filters;
+    // a new order from Filters: the list again from the top, in that order
+    if (_started && _loadedSort != null && f.sort != _loadedSort) {
+      _loadedSort = f.sort;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _loadNearby();
+      });
+    }
     final people = app.visibleProfiles;
     final onBackend = ServicesScope.exploreOf(context) != null;
     // On the backend, nothing is shown until real people are loaded.

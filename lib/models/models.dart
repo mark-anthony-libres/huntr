@@ -615,8 +615,23 @@ enum ExploreLayout {
       values.where((layout) => layout.name == name).firstOrNull;
 }
 
+/// How Explore orders people (Filters → Sort by).
+enum ExploreSort {
+  /// Nearest first.
+  nearest('Nearby', Icons.near_me_outlined),
+
+  /// Who joined most recently first.
+  newest('Recent', Icons.schedule_rounded);
+
+  const ExploreSort(this.label, this.icon);
+
+  final String label;
+  final IconData icon;
+}
+
 class ExploreFilters {
   const ExploreFilters({
+    this.sort = ExploreSort.nearest,
     this.onlineOnly = false,
     this.maxDistanceKm,
     this.ageRange = const RangeValues(18, 60),
@@ -624,6 +639,7 @@ class ExploreFilters {
     this.query = '',
   });
 
+  final ExploreSort sort;
   final bool onlineOnly;
   final double? maxDistanceKm;
   final RangeValues ageRange;
@@ -631,6 +647,7 @@ class ExploreFilters {
   final String query;
 
   bool get isDefault =>
+      sort == ExploreSort.nearest &&
       !onlineOnly &&
       maxDistanceKm == null &&
       ageRange.start <= 18 &&
@@ -639,6 +656,7 @@ class ExploreFilters {
       query.isEmpty;
 
   ExploreFilters copyWith({
+    ExploreSort? sort,
     bool? onlineOnly,
     double? maxDistanceKm,
     bool clearDistance = false,
@@ -647,6 +665,7 @@ class ExploreFilters {
     String? query,
   }) {
     return ExploreFilters(
+      sort: sort ?? this.sort,
       onlineOnly: onlineOnly ?? this.onlineOnly,
       maxDistanceKm:
           clearDistance ? null : (maxDistanceKm ?? this.maxDistanceKm),
