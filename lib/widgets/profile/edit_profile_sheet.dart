@@ -333,7 +333,7 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
                       ),
                     ),
                     _LabeledField(
-                      label: 'Looking for',
+                      label: 'Expectation',
                       info: 'Pick everything you are open to.',
                       child: Column(
                         key: const Key('editLookingFor'),

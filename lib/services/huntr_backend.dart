@@ -3797,7 +3797,7 @@ class AnonymousName {
   final String avatar;
 }
 
-/// A tag a Threads post can have, like "Sex" (Looking for) or "Outdoor"
+/// A tag a Threads post can have, like "Hookup" (Looking for) or "Outdoor"
 /// (Meet preference).
 class NearbyTag {
   const NearbyTag(

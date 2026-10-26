@@ -240,7 +240,7 @@ class ProfileScreen extends StatelessWidget {
               ),
             if (p.lookingFor.isNotEmpty)
               ProfileSection(
-                title: 'Looking for',
+                title: 'Expectation',
                 child: Wrap(
                   spacing: 8,
                   runSpacing: 8,

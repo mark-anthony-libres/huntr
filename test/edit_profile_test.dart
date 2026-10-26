@@ -113,7 +113,7 @@ void main() {
       'Bio',
       'Age',
       'Sexual position',
-      'Looking for'
+      'Expectation'
     ]) {
       expect(find.text(label), findsOneWidget);
     }
