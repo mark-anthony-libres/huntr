@@ -11,6 +11,7 @@ import '../services/profile_service.dart';
 import '../services/session_service.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
+import '../widgets/huntr_loader.dart';
 import 'agreement_screen.dart';
 import 'entry_screen.dart';
 import 'home_shell.dart';
@@ -298,7 +299,8 @@ class _CheckingSession extends StatelessWidget {
   Widget build(BuildContext context) {
     return const Scaffold(
       backgroundColor: HuntrColors.night,
-      body: Center(child: CircularProgressIndicator()),
+      // the same animation as the web page before the app starts
+      body: Center(child: HuntrLoader()),
     );
   }
 }

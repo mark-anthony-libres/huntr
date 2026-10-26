@@ -38,6 +38,8 @@ flutter:
   uses-material-design: true
   assets:
     - assets/huntr_logo.png
+    # the logo's H alone (transparent), for the loading animation
+    - assets/huntr_mark.png
     # the launcher icons to choose from (copies of res/mipmap-xhdpi)
     - assets/app_icons/
     - assets/google_g_logo.png
