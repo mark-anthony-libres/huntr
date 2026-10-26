@@ -65,8 +65,15 @@ class _AgreementScreenState extends State<AgreementScreen> {
   /// "I agree" unlocks only after the user reached the end of the text.
   bool _readToEnd = false;
 
-  /// How far through the text the user has scrolled, 0 to 1.
-  double _progress = 0;
+  /// How far through the text the user has scrolled, 0 to 1. Only the
+  /// progress bar and the percentage listen: scrolling doesn't rebuild the
+  /// screen (or re-lay out the document), which made it shake.
+  final _progress = ValueNotifier<double>(0);
+
+  final _scroll = ScrollController();
+
+  /// Built once per theme: a new style sheet makes the Markdown rebuild.
+  MarkdownStyleSheet? _style;
 
   bool _declining = false;
   String? _declineError;
@@ -77,13 +84,38 @@ class _AgreementScreenState extends State<AgreementScreen> {
     _load();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _style = _documentStyle(context);
+  }
+
+  @override
+  void dispose() {
+    _progress.dispose();
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  /// Down by most of a screen (a few lines stay in view to keep the place).
+  void _scrollOnePage() {
+    if (!_scroll.hasClients) return;
+    final position = _scroll.position;
+    _scroll.animateTo(
+      (position.pixels + position.viewportDimension * 0.85)
+          .clamp(0.0, position.maxScrollExtent),
+      duration: const Duration(milliseconds: 380),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
   Future<void> _load() async {
     setState(() {
       _content = null;
       _error = null;
       _readToEnd = false;
-      _progress = 0;
     });
+    _progress.value = 0;
     try {
       final agreements = widget.agreements;
       final content = switch (widget.document) {
@@ -158,13 +190,11 @@ class _AgreementScreenState extends State<AgreementScreen> {
         ? 1.0
         : (metrics.pixels / metrics.maxScrollExtent).clamp(0.0, 1.0);
     final reachedEnd = metrics.extentAfter <= _endTolerance;
-    if (progress == _progress && (!reachedEnd || _readToEnd)) return;
+    _progress.value = progress;
+    // the screen itself rebuilds once: when the end is first reached
+    if (!reachedEnd || _readToEnd) return;
     void apply() {
-      if (!mounted) return;
-      setState(() {
-        _progress = progress;
-        _readToEnd = _readToEnd || reachedEnd;
-      });
+      if (mounted && !_readToEnd) setState(() => _readToEnd = true);
     }
 
     // Metrics notifications can arrive during layout, where setState isn't
@@ -230,12 +260,15 @@ class _AgreementScreenState extends State<AgreementScreen> {
         children: [
           // Reading progress along the top edge of the card.
           if (_content != null)
-            LinearProgressIndicator(
-              key: const Key('agreementProgress'),
-              value: _progress,
-              minHeight: 3,
-              backgroundColor: HuntrColors.surfaceHigh,
-              valueColor: AlwaysStoppedAnimation(HuntrColors.orange),
+            ValueListenableBuilder<double>(
+              valueListenable: _progress,
+              builder: (context, progress, _) => LinearProgressIndicator(
+                key: const Key('agreementProgress'),
+                value: progress,
+                minHeight: 3,
+                backgroundColor: HuntrColors.surfaceHigh,
+                valueColor: AlwaysStoppedAnimation(HuntrColors.orange),
+              ),
             ),
           Expanded(child: _document()),
         ],
@@ -285,11 +318,21 @@ class _AgreementScreenState extends State<AgreementScreen> {
         if (metrics != null) _onScrollMetrics(metrics);
         return false;
       },
-      child: Markdown(
-        key: const Key('agreementContent'),
-        data: content,
-        padding: const EdgeInsets.fromLTRB(24, 20, 24, 28),
-        styleSheet: _documentStyle(context),
+      child: Scrollbar(
+        controller: _scroll,
+        thumbVisibility: true,
+        radius: const Radius.circular(4),
+        // Laid out whole, once (not lazily like Markdown's list): its full
+        // height is known, so the scroll position, scrollbar and progress
+        // don't jump as paragraphs come into view.
+        child: SingleChildScrollView(
+          key: const Key('agreementContent'),
+          controller: _scroll,
+          padding: const EdgeInsets.fromLTRB(24, 20, 28, 28),
+          child: RepaintBoundary(
+            child: MarkdownBody(data: content, styleSheet: _style),
+          ),
+        ),
       ),
     );
   }
@@ -342,18 +385,38 @@ class _AgreementScreenState extends State<AgreementScreen> {
                           style: TextStyle(color: HuntrColors.muted)),
                     ],
                   )
-                : Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.keyboard_double_arrow_down,
-                          size: 18, color: HuntrColors.muted),
-                      const SizedBox(width: 6),
-                      const Text('Scroll to the end to agree',
-                          key: Key('agreementScrollHint'),
-                          style: TextStyle(color: HuntrColors.muted)),
-                      Text('  ·  ${(_progress * 100).round()}%',
-                          style: const TextStyle(color: HuntrColors.muted)),
-                    ],
+                // tap: down a page
+                : Center(
+                    child: TextButton.icon(
+                      key: const Key('agreementNextPage'),
+                      onPressed: _scrollOnePage,
+                      style: TextButton.styleFrom(
+                        foregroundColor: HuntrColors.muted,
+                        shape: const StadiumBorder(),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 8),
+                      ),
+                      icon: const Icon(Icons.keyboard_double_arrow_down,
+                          size: 18),
+                      label: Row(mainAxisSize: MainAxisSize.min, children: [
+                        const Text('Scroll to the end to agree',
+                            key: Key('agreementScrollHint')),
+                        // a fixed width (and digits of one width), so the
+                        // row stays still as the number changes
+                        SizedBox(
+                          width: 58,
+                          child: ValueListenableBuilder<double>(
+                            valueListenable: _progress,
+                            builder: (context, progress, _) => Text(
+                              '  ·  ${(progress * 100).round()}%',
+                              style: const TextStyle(fontFeatures: [
+                                FontFeature.tabularFigures()
+                              ]),
+                            ),
+                          ),
+                        ),
+                      ]),
+                    ),
                   ),
           ),
         if (_declineError != null)
