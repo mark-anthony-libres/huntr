@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import 'profile_stats.dart';
@@ -605,7 +606,10 @@ enum ExploreLayout {
   final String description;
   final IconData icon;
 
-  static const standard = ExploreLayout.three;
+  /// Until one is chosen: 2 across on the web (name, age and distance on
+  /// wide screens), 3 on phones.
+  static ExploreLayout get standard =>
+      kIsWeb ? ExploreLayout.two : ExploreLayout.three;
 
   static ExploreLayout? fromName(String? name) =>
       values.where((layout) => layout.name == name).firstOrNull;
