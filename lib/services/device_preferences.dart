@@ -11,6 +11,10 @@ abstract class DevicePreferences {
   Future<String?> readThemeId();
   Future<void> saveThemeId(String id);
 
+  /// How Explore lays people out (ExploreLayout's name); null until chosen.
+  Future<String?> readExploreLayout();
+  Future<void> saveExploreLayout(String name);
+
   /// Turning notifications on was offered on this device (once).
   Future<bool> readNotificationsOffered();
   Future<void> saveNotificationsOffered();
@@ -24,6 +28,7 @@ class SecureDevicePreferences implements DevicePreferences {
   static const _showVibeBannerKey = 'huntr_show_vibe_banner';
   static const _themeKey = 'huntr_theme';
   static const _notificationsOfferedKey = 'huntr_notifications_offered';
+  static const _exploreLayoutKey = 'huntr_explore_layout';
   static const _storage = FlutterSecureStorage();
 
   @override
@@ -52,4 +57,11 @@ class SecureDevicePreferences implements DevicePreferences {
   @override
   Future<void> saveThemeId(String id) =>
       _storage.write(key: _themeKey, value: id);
+
+  @override
+  Future<String?> readExploreLayout() => _storage.read(key: _exploreLayoutKey);
+
+  @override
+  Future<void> saveExploreLayout(String name) =>
+      _storage.write(key: _exploreLayoutKey, value: name);
 }

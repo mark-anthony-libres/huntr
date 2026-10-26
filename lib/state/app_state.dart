@@ -372,12 +372,30 @@ class AppState extends ChangeNotifier {
         (Object error) => debugPrint('Theme choice not saved: $error')));
   }
 
+  /// How Explore lays people out (Settings → Appearance); remembered on
+  /// this device.
+  ExploreLayout _exploreLayout = ExploreLayout.standard;
+  ExploreLayout get exploreLayout => _exploreLayout;
+  set exploreLayout(ExploreLayout layout) {
+    if (_exploreLayout == layout) return;
+    _exploreLayout = layout;
+    notifyListeners();
+    unawaited(devicePreferences?.saveExploreLayout(layout.name).catchError(
+        (Object error) => debugPrint('Explore layout not saved: $error')));
+  }
+
   /// What this device remembers, when the app starts.
   Future<void> loadDevicePreferences() async {
     try {
       final show = await devicePreferences?.readShowVibeBanner();
       if (show != null && show != _showVibeBanner) {
         _showVibeBanner = show;
+        notifyListeners();
+      }
+      final layout =
+          ExploreLayout.fromName(await devicePreferences?.readExploreLayout());
+      if (layout != null && layout != _exploreLayout) {
+        _exploreLayout = layout;
         notifyListeners();
       }
       final themeId = await devicePreferences?.readThemeId();

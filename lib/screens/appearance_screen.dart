@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../models/models.dart' show ExploreLayout;
 import '../services/app_icon.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
@@ -94,6 +95,21 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
                 ),
               ),
 
+              // ---- Explore grid ----
+              const SizedBox(height: 28),
+              const SectionLabel('EXPLORE GRID'),
+              const SizedBox(height: 4),
+              const Text(
+                  'How many people Explore shows across, on this device.',
+                  style: TextStyle(color: HuntrColors.muted)),
+              const SizedBox(height: 12),
+              for (final layout in ExploreLayout.values)
+                _LayoutOption(
+                  layout: layout,
+                  chosen: layout == app.exploreLayout,
+                  onTap: () => app.exploreLayout = layout,
+                ),
+
               // ---- app icon (the Android app) ----
               if (AppIcons.supported) ...[
                 const SizedBox(height: 28),
@@ -119,6 +135,103 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// One Explore layout: how many across, what the cards show, and a little
+/// picture of it; the one in use is in orange with a tick.
+class _LayoutOption extends StatelessWidget {
+  const _LayoutOption(
+      {required this.layout, required this.chosen, required this.onTap});
+
+  final ExploreLayout layout;
+  final bool chosen;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Material(
+        color: chosen
+            ? HuntrColors.orange.withValues(alpha: 0.10)
+            : HuntrColors.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(
+              color: chosen
+                  ? HuntrColors.orange
+                  : Colors.white.withValues(alpha: 0.08),
+              width: chosen ? 1.5 : 1),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          key: Key('exploreLayout-${layout.name}'),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+            child: Row(children: [
+              _LayoutPicture(columns: layout.columns, chosen: chosen),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('${layout.columns} across · ${layout.label}',
+                          style: const TextStyle(fontWeight: FontWeight.w700)),
+                      const SizedBox(height: 2),
+                      Text(layout.description,
+                          style: const TextStyle(
+                              color: HuntrColors.muted, fontSize: 13)),
+                    ]),
+              ),
+              if (chosen)
+                Icon(Icons.check_circle_rounded,
+                    key: Key('exploreLayoutChosen-${layout.name}'),
+                    color: HuntrColors.orange),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A tiny grid of [columns] across, two rows deep.
+class _LayoutPicture extends StatelessWidget {
+  const _LayoutPicture({required this.columns, required this.chosen});
+
+  final int columns;
+  final bool chosen;
+
+  @override
+  Widget build(BuildContext context) {
+    final color =
+        chosen ? HuntrColors.orange : Colors.white.withValues(alpha: 0.35);
+    return SizedBox(
+      width: 44,
+      height: 44,
+      child: Column(children: [
+        for (var row = 0; row < 2; row++) ...[
+          if (row > 0) const SizedBox(height: 3),
+          Expanded(
+            // the squares fill the row's height
+            child:
+                Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              for (var column = 0; column < columns; column++) ...[
+                if (column > 0) const SizedBox(width: 3),
+                Expanded(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                        color: color, borderRadius: BorderRadius.circular(3)),
+                  ),
+                ),
+              ],
+            ]),
+          ),
+        ],
+      ]),
     );
   }
 }

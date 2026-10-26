@@ -580,6 +580,37 @@ class Conversation {
 }
 
 /// Explore filters. Everything is optional; an empty filter shows everyone.
+/// How Explore lays people out, chosen in Settings → Appearance (on this
+/// device): how many across on a phone, and what each card says.
+enum ExploreLayout {
+  /// One per row: photo, name, bio and what they're looking for.
+  one(1, 'Detailed', "Name, age, bio and what they're looking for",
+      Icons.view_agenda_outlined),
+
+  /// Name, age and how far.
+  two(2, 'Comfortable', 'Name, age and distance', Icons.grid_view_rounded),
+
+  /// Just the name, small.
+  three(3, 'Compact', 'Just the name', Icons.apps_rounded),
+
+  /// Photos only.
+  four(4, 'Photos only', 'No names, more people at once',
+      Icons.view_comfy_outlined);
+
+  const ExploreLayout(this.columns, this.label, this.description, this.icon);
+
+  /// Across, on a phone (more on wider screens).
+  final int columns;
+  final String label;
+  final String description;
+  final IconData icon;
+
+  static const standard = ExploreLayout.three;
+
+  static ExploreLayout? fromName(String? name) =>
+      values.where((layout) => layout.name == name).firstOrNull;
+}
+
 class ExploreFilters {
   const ExploreFilters({
     this.onlineOnly = false,

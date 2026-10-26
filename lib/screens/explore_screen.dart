@@ -130,8 +130,25 @@ class _ExploreScreenState extends State<ExploreScreen> {
     final favorites = app.favoriteProfiles;
     final text = Theme.of(context).textTheme;
     final width = MediaQuery.sizeOf(context).width;
-    // 2 cards across on phones, up to 5 on wide screens.
-    final columns = (width / 220).floor().clamp(2, 5);
+    final layout = app.exploreLayout;
+    // the chosen number across on a phone; more on wider screens, so the
+    // cards keep about the same size
+    final columns = (layout.columns * width / 430)
+        .floor()
+        .clamp(layout.columns, layout.columns * 3);
+    final gap = switch (layout) {
+      ExploreLayout.one || ExploreLayout.two => 12.0,
+      ExploreLayout.three => 8.0,
+      ExploreLayout.four => 4.0,
+    };
+    final grid = SliverGridDelegateWithFixedCrossAxisCount(
+      crossAxisCount: columns,
+      mainAxisSpacing: gap,
+      crossAxisSpacing: gap,
+      // rows have a fixed height; cards keep their shape
+      mainAxisExtent: layout == ExploreLayout.one ? 136 : null,
+      childAspectRatio: layout == ExploreLayout.four ? 0.86 : 0.8,
+    );
 
     final Widget header = Padding(
       padding: const EdgeInsets.fromLTRB(20, 12, 12, 4),
@@ -388,12 +405,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
                   SliverPadding(
                     padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
                     sliver: SliverGrid.builder(
-                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: columns,
-                        mainAxisSpacing: 12,
-                        crossAxisSpacing: 12,
-                        childAspectRatio: 0.82,
-                      ),
+                      gridDelegate: grid,
                       itemCount: columns * 3,
                       itemBuilder: (_, __) => const _TilePlaceholder(),
                     ),
@@ -414,18 +426,20 @@ class _ExploreScreenState extends State<ExploreScreen> {
                   SliverPadding(
                     padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
                     sliver: SliverGrid.builder(
-                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: columns,
-                        mainAxisSpacing: 12,
-                        crossAxisSpacing: 12,
-                        childAspectRatio: 0.82,
-                      ),
+                      gridDelegate: grid,
                       itemCount: people.length,
-                      itemBuilder: (_, i) => ProfileTile(
-                        profile: people[i],
-                        favorite: app.isFavorite(people[i].id),
-                        onTap: () => _open(people[i]),
-                      ),
+                      itemBuilder: (_, i) => layout == ExploreLayout.one
+                          ? ProfileRowTile(
+                              profile: people[i],
+                              favorite: app.isFavorite(people[i].id),
+                              onTap: () => _open(people[i]),
+                            )
+                          : ProfileTile(
+                              profile: people[i],
+                              favorite: app.isFavorite(people[i].id),
+                              layout: layout,
+                              onTap: () => _open(people[i]),
+                            ),
                     ),
                   ),
 
