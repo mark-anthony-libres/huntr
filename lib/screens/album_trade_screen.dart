@@ -16,8 +16,10 @@ import 'my_album_screen.dart';
 /// - No albums: "Create an Album First". Creating one opens the usual album
 ///   screen (to add photos and videos); coming back lands here again, with
 ///   the list refreshed, in the same trade (nothing is sent yet).
-/// - Otherwise a list to choose from, even of one album: nothing is sent
-///   until it's chosen.
+/// - Only empty albums: "Add Photos First", which opens one of them (an
+///   empty album can't be traded; the backend refuses it too).
+/// - Otherwise a list of the albums with something in them, even of one:
+///   nothing is sent until it's chosen.
 ///
 /// [onChosen] sends the choice and throws what the backend says; the screen
 /// closes (returning true) once it succeeds, and offers a retry if not.
@@ -164,6 +166,14 @@ class _AlbumTradeScreenState extends State<AlbumTradeScreen> {
         SnackBar(content: Text('Stopped sharing “${album.name}”')));
   }
 
+  /// An empty album opened to add photos and videos; then back here,
+  /// refreshed.
+  Future<void> _fillAlbum(Album album) async {
+    await Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => MyAlbumScreen(albumId: album.id)));
+    if (mounted) await _load();
+  }
+
   /// The usual album creation (name, then the album screen to add photos
   /// and videos); then back here, refreshed.
   Future<void> _createAlbum() async {
@@ -178,7 +188,12 @@ class _AlbumTradeScreenState extends State<AlbumTradeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final albums = _albums;
+    // empty albums can't be traded: only the ones with something in them
+    // (and one already offered here, to withdraw it)
+    final albums = _albums
+        ?.where((a) => a.photos.isNotEmpty || _waiting.contains(a.id))
+        .toList();
+    final firstEmpty = _albums?.where((a) => a.photos.isEmpty).firstOrNull;
     final sending = _sending;
     return Scaffold(
       appBar: AppBar(
@@ -211,7 +226,12 @@ class _AlbumTradeScreenState extends State<AlbumTradeScreen> {
                     : sending != null && _sendError == null
                         ? _Sending(album: sending, label: widget.sendingLabel)
                         : albums.isEmpty
-                            ? _NoAlbums(onCreate: _createAlbum)
+                            ? _NoAlbums(
+                                onCreate: _createAlbum,
+                                emptyAlbum: firstEmpty,
+                                onFill: firstEmpty == null
+                                    ? null
+                                    : () => _fillAlbum(firstEmpty))
                             : _AlbumList(
                                 intro: widget.intro,
                                 albums: albums,
@@ -231,14 +251,19 @@ class _AlbumTradeScreenState extends State<AlbumTradeScreen> {
 
 /// Nothing to offer yet: create an album first.
 class _NoAlbums extends StatelessWidget {
-  const _NoAlbums({required this.onCreate});
+  const _NoAlbums({required this.onCreate, this.emptyAlbum, this.onFill});
 
   final VoidCallback onCreate;
+
+  /// Albums exist but are all empty: this one to fill ([onFill]).
+  final Album? emptyAlbum;
+  final VoidCallback? onFill;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      key: const Key('noAlbumsForTrade'),
+      key: Key(
+          emptyAlbum == null ? 'noAlbumsForTrade' : 'onlyEmptyAlbumsForTrade'),
       padding: const EdgeInsets.all(28),
       child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
         Container(
@@ -254,17 +279,21 @@ class _NoAlbums extends StatelessWidget {
               size: 44, color: HuntrColors.orange),
         ),
         const SizedBox(height: 24),
-        Text('Create an Album First',
+        Text(emptyAlbum == null ? 'Create an Album First' : 'Add Photos First',
             textAlign: TextAlign.center,
             style: Theme.of(context)
                 .textTheme
                 .headlineSmall
                 ?.copyWith(fontWeight: FontWeight.w800)),
         const SizedBox(height: 12),
-        const Text(
-          'To trade, you offer one of your private albums. Create one and '
-          'add a few photos or videos — you’ll come right back here to '
-          'finish the trade.',
+        Text(
+          emptyAlbum == null
+              ? 'To trade, you offer one of your private albums. Create one and '
+                  'add a few photos or videos — you’ll come right back here to '
+                  'finish the trade.'
+              : 'Your albums are empty, and an empty album can’t be traded. '
+                  'Add a few photos or videos to “${emptyAlbum!.name}” — you’ll '
+                  'come right back here to finish the trade.',
           textAlign: TextAlign.center,
           style:
               TextStyle(color: HuntrColors.muted, fontSize: 16, height: 1.45),
@@ -282,12 +311,22 @@ class _NoAlbums extends StatelessWidget {
                   backgroundColor: Colors.transparent,
                   foregroundColor: Colors.black,
                   minimumSize: const Size.fromHeight(54)),
-              icon: const Icon(Icons.add_rounded),
-              label: const Text('Create Album'),
-              onPressed: onCreate,
+              icon: Icon(emptyAlbum == null
+                  ? Icons.add_rounded
+                  : Icons.add_photo_alternate_outlined),
+              label: Text(emptyAlbum == null ? 'Create Album' : 'Add Photos'),
+              onPressed: emptyAlbum == null ? onCreate : onFill,
             ),
           ),
         ),
+        if (emptyAlbum != null) ...[
+          const SizedBox(height: 10),
+          TextButton(
+            key: const Key('createAnotherAlbumForTrade'),
+            onPressed: onCreate,
+            child: const Text('Create a new album instead'),
+          ),
+        ],
       ]),
     );
   }

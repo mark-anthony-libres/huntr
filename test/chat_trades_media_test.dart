@@ -256,11 +256,20 @@ class _FakeMessaging extends MessagingService {
 }
 
 /// My albums on the backend, faked.
+/// One photo, so an album can be traded (empty ones can't).
+StoredAlbumItem _albumPhoto(int id) => StoredAlbumItem(
+    id: id,
+    isVideo: false,
+    url: 'https://s3.test/a$id.webp',
+    width: 4,
+    height: 4);
+
 class _FakeAlbums extends AlbumService {
   _FakeAlbums(List<String> names)
       : albums = [
           for (var i = 0; i < names.length; i++)
-            StoredAlbum(id: 60 + i, name: names[i], items: const [])
+            StoredAlbum(
+                id: 60 + i, name: names[i], items: [_albumPhoto(600 + i)])
         ];
 
   List<StoredAlbum> albums;
@@ -280,7 +289,8 @@ class _FakeAlbums extends AlbumService {
 
   @override
   Future<StoredAlbum> create(String token, String name) async {
-    final album = StoredAlbum(id: 90, name: name, items: const []);
+    // as if photos were added on the album screen before coming back
+    final album = StoredAlbum(id: 90, name: name, items: [_albumPhoto(900)]);
     albums = [...albums, album];
     return album;
   }
