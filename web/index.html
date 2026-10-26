@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <!--
     If you are serving your web app in a path other than the root, change the
@@ -18,8 +18,31 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="HUNTR: meet people near you.">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="HUNTR is the free gay app for gay, bi and queer men to meet guys near you. See who's nearby and online now, send a tap, chat with photos and videos, trade private albums, share your live location, post stories, and talk anonymously in Threads. For chats, friends, dates or more. 18+.">
+  <meta name="keywords" content="HUNTR, gay app, gay dating app, gay chat app, meet gay men, gay men near me, gay friends, bi guys, queer men, LGBTQ app, gay social network, anonymous gay chat, gay app Philippines">
+  <meta name="robots" content="index, follow, max-image-preview:large">
+  <meta name="application-name" content="HUNTR">
   <meta name="theme-color" content="#0C0C0F">
+  <!-- one address for search engines (also served at www. and workers.dev) -->
+  <link rel="canonical" href="https://huntr.online/">
+
+  <!-- link previews (Facebook, Messenger, WhatsApp, LinkedIn, Discord, ...) -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="HUNTR">
+  <meta property="og:url" content="https://huntr.online/">
+  <meta property="og:title" content="HUNTR – Gay App to Meet Guys Near You | Chat & Dating">
+  <meta property="og:description" content="HUNTR is the free gay app for gay, bi and queer men to meet guys near you. See who's nearby and online now, send a tap, chat with photos and videos, trade private albums, share your live location, post stories, and talk anonymously in Threads. For chats, friends, dates or more. 18+.">
+  <meta property="og:image" content="https://huntr.online/og-image.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="HUNTR: The gay app to meet guys right around you.">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="HUNTR – Gay App to Meet Guys Near You | Chat & Dating">
+  <meta name="twitter:description" content="The free gay app to meet guys near you. See who's nearby, send a tap, chat, trade private albums, share stories and talk anonymously in Threads. For chats, friends, dates or more. 18+.">
+  <meta name="twitter:image" content="https://huntr.online/og-image.png">
+  <meta name="twitter:image:alt" content="HUNTR: The gay app to meet guys right around you.">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
@@ -30,8 +53,47 @@
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/Icon-192.png">
 
-  <title>HUNTR</title>
+  <title>HUNTR – Gay App to Meet Guys Near You | Chat & Dating</title>
+
+  <!-- what HUNTR is, for search engines (Google's rich results) -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": "https://huntr.online/#organization",
+        "name": "HUNTR",
+        "url": "https://huntr.online/",
+        "logo": "https://huntr.online/icons/Icon-512.png"
+      },
+      {
+        "@type": "WebSite",
+        "@id": "https://huntr.online/#website",
+        "name": "HUNTR",
+        "url": "https://huntr.online/",
+        "description": "HUNTR is the free gay app for gay, bi and queer men to meet guys near you. See who's nearby and online now, send a tap, chat with photos and videos, trade private albums, share your live location, post stories, and talk anonymously in Threads. For chats, friends, dates or more. 18+.",
+        "publisher": { "@id": "https://huntr.online/#organization" },
+        "inLanguage": "en"
+      },
+      {
+        "@type": "SoftwareApplication",
+        "name": "HUNTR",
+        "url": "https://huntr.online/",
+        "description": "HUNTR is the free gay app for gay, bi and queer men to meet guys near you. See who's nearby and online now, send a tap, chat with photos and videos, trade private albums, share your live location, post stories, and talk anonymously in Threads. For chats, friends, dates or more. 18+.",
+        "applicationCategory": "SocialNetworkingApplication",
+        "keywords": "gay app, gay dating, gay chat, meet gay men nearby, LGBTQ",
+        "operatingSystem": "Web, Android",
+        "image": "https://huntr.online/og-image.png",
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+        "audience": { "@type": "PeopleAudience", "suggestedMinAge": 18 },
+        "publisher": { "@id": "https://huntr.online/#organization" }
+      }
+    ]
+  }
+  </script>
   <link rel="manifest" href="manifest.json">
 
   <!-- Landing loader: shown from the first paint until Flutter draws its
@@ -66,7 +128,12 @@
       background: linear-gradient(90deg, #FF7A1A, #FF4F1A);
       animation: huntr-slide 1.1s ease-in-out infinite;
     }
+    #huntr-loading .name { margin-bottom: 0; }
+    #huntr-loading .tagline { margin: 8px 0 0; font-size: 15px; color: #E6E6EA; }
     #huntr-loading .hint { margin-top: 14px; font-size: 13px; color: #9A9FAD; }
+    .huntr-about { max-width: 560px; margin: 0 auto; padding: 32px 20px; color: #E6E6EA;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; line-height: 1.6; }
+    .huntr-about h1 { color: #FF7A1A; }
     @keyframes huntr-pulse { 50% { transform: scale(1.06); } }
     @keyframes huntr-slide { 0% { left: -40%; } 100% { left: 100%; } }
     @media (prefers-reduced-motion: reduce) {
@@ -83,11 +150,43 @@
 </head>
 <body>
   <div id="huntr-loading" role="status" aria-label="Loading HUNTR">
-    <img src="icons/Icon-192.png" alt="">
-    <div class="name">HUNTR</div>
+    <img src="icons/Icon-192.png" alt="HUNTR logo" width="96" height="96">
+    <h1 class="name">HUNTR</h1>
+    <p class="tagline">The gay app to meet guys right around you.</p>
     <div class="bar"></div>
     <div class="hint">Loading…</div>
   </div>
+  <noscript>
+    <main class="huntr-about">
+      <h1>HUNTR – the gay app to meet guys near you</h1>
+      <p>HUNTR is a free gay app for gay, bi and queer men to meet guys right around them,
+        for chats, friends, dates or more. It shows who's nearby and how far away they are,
+        so meeting someone is a message away. Turn on JavaScript to use HUNTR in your browser.</p>
+      <h2>Meet guys nearby</h2>
+      <ul>
+        <li><strong>Explore</strong>: browse guys near you, sorted by distance, and see who's online now.
+          Filter by age, distance and what they're looking for: chat, friends, dates or a relationship.</li>
+        <li><strong>Taps</strong>: let a guy know you're interested with a single tap, and see who tapped you.</li>
+        <li><strong>Viewers</strong>: see who checked out your profile.</li>
+      </ul>
+      <h2>Chat your way</h2>
+      <ul>
+        <li><strong>Chat</strong>: message, send photos, videos and GIFs, and react to messages.</li>
+        <li><strong>Private albums</strong>: keep photos off your profile and trade albums only with the guys you choose.
+          Traded albums disappear a while after they're viewed.</li>
+        <li><strong>Live location</strong>: share where you are, live, when you're about to meet.</li>
+        <li><strong>Stories</strong>: post moments that disappear after a day.</li>
+      </ul>
+      <h2>Stay anonymous when you want</h2>
+      <ul>
+        <li><strong>Threads</strong>: post and chat anonymously with guys around you, under a random name.</li>
+        <li><strong>Anonymous chats</strong>: start talking without showing your profile, and only reveal it when you both agree.</li>
+      </ul>
+      <h2>Safe by design</h2>
+      <p>Block or report anyone, choose who sees your distance and online status, and unmatch any time.
+        HUNTR is for adults only (18+).</p>
+    </main>
+  </noscript>
   <script>
     // Flutter has drawn: fade the loader out, then remove it.
     window.addEventListener('flutter-first-frame', function () {

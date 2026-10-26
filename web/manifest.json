@@ -1,13 +1,19 @@
 {
     "id": "/",
     "scope": "/",
-    "name": "HUNTR",
+    "name": "HUNTR – Gay app to meet guys near you",
     "short_name": "HUNTR",
+    "description": "HUNTR is the free gay app for gay, bi and queer men to meet guys near you. See who's nearby and online now, send a tap, chat with photos and videos, trade private albums, share your live location, post stories, and talk anonymously in Threads. For chats, friends, dates or more. 18+.",
+    "lang": "en",
+    "dir": "ltr",
+    "categories": [
+        "social",
+        "lifestyle"
+    ],
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0C0C0F",
     "theme_color": "#0C0C0F",
-    "description": "Meet people right around you.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
