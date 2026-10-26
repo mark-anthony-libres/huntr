@@ -84,8 +84,11 @@ class _InstallBannerState extends State<InstallBanner> {
           borderRadius: BorderRadius.circular(18),
           border: Border.all(color: HuntrColors.orange.withValues(alpha: 0.6)),
         ),
-        child: Row(children: [
-          ClipRRect(
+        // phones: the button on its own row under the text (beside it,
+        // the text gets squeezed); wider screens: all on one row
+        child: LayoutBuilder(builder: (context, box) {
+          final narrow = box.maxWidth < 520;
+          final logo = ClipRRect(
             borderRadius: BorderRadius.circular(12),
             child: Image.asset('assets/huntr_logo.png',
                 width: 44,
@@ -94,24 +97,27 @@ class _InstallBannerState extends State<InstallBanner> {
                     width: 44,
                     height: 44,
                     child: Icon(Icons.download_rounded))),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child:
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Text('Get the HUNTR app',
-                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
-              const SizedBox(height: 2),
-              Text(
-                  _androidWeb
-                      ? 'Download the Android app. Google Play is coming soon.'
-                      : 'Full screen, quicker to open, right on your home screen.',
-                  style: const TextStyle(
-                      color: Colors.white70, fontSize: 12.5)),
-            ]),
-          ),
-          const SizedBox(width: 8),
-          FilledButton(
+          );
+          final text = Expanded(
+            child: Padding(
+              padding: EdgeInsets.only(top: narrow ? 4 : 0),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Get the HUNTR app',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w800, fontSize: 15)),
+                    const SizedBox(height: 2),
+                    Text(
+                        _androidWeb
+                            ? 'Download the Android app. Google Play is coming soon.'
+                            : 'Full screen, quicker to open, right on your home screen.',
+                        style: const TextStyle(
+                            color: Colors.white70, fontSize: 12.5, height: 1.35)),
+                  ]),
+            ),
+          );
+          final button = FilledButton.icon(
             key: const Key('installApp'),
             style: FilledButton.styleFrom(
               backgroundColor: Colors.white,
@@ -120,19 +126,45 @@ class _InstallBannerState extends State<InstallBanner> {
               padding: const EdgeInsets.symmetric(horizontal: 16),
             ),
             onPressed: _install,
-            child: Text(_androidWeb
-                ? 'Get it'
+            icon: Icon(
+                _androidWeb ? Icons.android_rounded : Icons.download_rounded,
+                size: 18),
+            label: Text(_androidWeb
+                ? 'Get the app'
                 : AppInstall.canPrompt
                     ? 'Install'
                     : 'How?'),
-          ),
-          IconButton(
+          );
+          final close = IconButton(
             key: const Key('installNotNow'),
             tooltip: 'Not now',
+            visualDensity: VisualDensity.compact,
             icon: const Icon(Icons.close_rounded, color: Colors.white70),
             onPressed: _notNow,
-          ),
-        ]),
+          );
+          if (!narrow) {
+            return Row(children: [
+              logo,
+              const SizedBox(width: 12),
+              text,
+              const SizedBox(width: 8),
+              button,
+              close,
+            ]);
+          }
+          return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  logo,
+                  const SizedBox(width: 12),
+                  text,
+                  close,
+                ]),
+                const SizedBox(height: 10),
+                Padding(padding: const EdgeInsets.only(right: 8), child: button),
+              ]);
+        }),
       ),
     );
   }
