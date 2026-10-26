@@ -40,3 +40,6 @@ Thumbs.db
 # connect_phone.ps1 remembers the last phone address on this PC
 /tool/.phone_address
 .wrangler/
+
+# the downloadable Android app (tool/release_apk.sh), uploaded with the site
+/web/download/*.apk

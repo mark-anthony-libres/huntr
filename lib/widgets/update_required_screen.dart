@@ -74,8 +74,10 @@ class UpdateRequiredScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final target = _target;
+    // installed from the website's download (not on Google Play yet)
+    final download = target?.path.endsWith('.apk') ?? false;
     final store = switch (defaultTargetPlatform) {
-      _ when kIsWeb => null,
+      _ when kIsWeb || download => null,
       TargetPlatform.android => 'Google Play',
       TargetPlatform.iOS => 'the App Store',
       _ => null,
@@ -128,13 +130,24 @@ class UpdateRequiredScreen extends StatelessWidget {
                           : Icons.system_update_rounded,
                       label: kIsWeb
                           ? 'Reload'
-                          : store == null
-                              ? 'Update now'
-                              : 'Update on $store',
+                          : download
+                              ? 'Download the update'
+                              : store == null
+                                  ? 'Update now'
+                                  : 'Update on $store',
                       onPressed: () => _update(target),
                     ),
-                  )
-                else
+                  ),
+                if (target != null && download)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 14),
+                    child: Text(
+                        'When it finishes, open huntr.apk and tap Update. '
+                        'Your account and chats stay as they are.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: HuntrColors.muted, height: 1.4)),
+                  ),
+                if (target == null)
                   const Text(
                       'Update HUNTR from where you installed it, then open it '
                       'again.',

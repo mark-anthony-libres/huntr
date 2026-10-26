@@ -22,5 +22,12 @@ if ! grep -q "Initializing Firebase" build/web/main.dart.js; then
   exit 1
 fi
 
+# the Android app download (tool/release_apk.sh); without it the link
+# would load the site instead of the file
+if [ ! -f build/web/download/huntr.apk ]; then
+  echo "ERROR: web/download/huntr.apk is missing; run tool/release_apk.sh first." >&2
+  exit 1
+fi
+
 echo "==> Uploading to Cloudflare"
 npx --yes wrangler@4 deploy

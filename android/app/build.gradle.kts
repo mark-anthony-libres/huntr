@@ -1,3 +1,12 @@
+import java.util.Properties
+
+// The release key (android/key.properties and the keystore it names; both
+// kept out of git: back them up, every update must be signed with them).
+val releaseKey = Properties().apply {
+    val file = rootProject.file("key.properties")
+    if (file.exists()) file.inputStream().use { load(it) }
+}
+
 plugins {
     id("com.android.application")
     // Firebase (push notifications), from google-services.json
@@ -31,11 +40,32 @@ android {
         versionName = flutter.versionName
     }
 
+    // The native libraries compressed in the APK: about half the download
+    // (it's downloaded from the website, where files must be under 25 MiB);
+    // Android unpacks them once at install.
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
+
+    signingConfigs {
+        if (releaseKey.isNotEmpty()) {
+            create("release") {
+                storeFile = file(releaseKey.getProperty("storeFile"))
+                storePassword = releaseKey.getProperty("storePassword")
+                keyAlias = releaseKey.getProperty("keyAlias")
+                keyPassword = releaseKey.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            // HUNTR's release key; without key.properties (another machine)
+            // the debug key, so `flutter run --release` still works there
+            signingConfig = if (releaseKey.isNotEmpty()) signingConfigs.getByName("release")
+                else signingConfigs.getByName("debug")
         }
     }
 }
