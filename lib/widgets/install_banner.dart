@@ -1,24 +1,20 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../services/app_install/app_install.dart';
 import '../theme.dart';
 
-/// "Get the HUNTR app" at the top of Explore on the website: on Android the
-/// app to download (until it's on Google Play), elsewhere one tap to install
-/// the site where the browser allows it, or the two steps on an iPhone. Not
-/// shown in the apps, once installed, or for 14 days after "Not now".
+/// "Get the HUNTR app" at the top of Explore on the website: one tap to
+/// install the site where the browser allows it (Android phones included:
+/// the Android app's download isn't offered here), or the two steps on an
+/// iPhone. Not shown in the apps, once installed, or for 14 days after "Not
+/// now".
 class InstallBanner extends StatefulWidget {
   const InstallBanner({super.key});
 
   @override
   State<InstallBanner> createState() => _InstallBannerState();
 }
-
-/// The website on an Android phone: the app can be downloaded.
-bool get _androidWeb =>
-    kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
 /// Where the Android app is downloaded from (tool/release_apk.sh), until
 /// it's on Google Play.
@@ -50,7 +46,7 @@ class _InstallBannerState extends State<InstallBanner> {
   bool get _visible =>
       !_dismissed &&
       !AppInstall.isInstalled &&
-      (_androidWeb || AppInstall.canPrompt || AppInstall.isIos);
+      (AppInstall.canPrompt || AppInstall.isIos);
 
   void _notNow() {
     AppInstall.dismiss();
@@ -58,7 +54,6 @@ class _InstallBannerState extends State<InstallBanner> {
   }
 
   Future<void> _install() async {
-    if (_androidWeb) return showGetTheAppSheet(context);
     if (AppInstall.canPrompt) {
       final installed = await AppInstall.prompt();
       if (mounted) setState(() => _dismissed = installed || _dismissed);
@@ -108,12 +103,12 @@ class _InstallBannerState extends State<InstallBanner> {
                         style: TextStyle(
                             fontWeight: FontWeight.w800, fontSize: 15)),
                     const SizedBox(height: 2),
-                    Text(
-                        _androidWeb
-                            ? 'Download the Android app. Google Play is coming soon.'
-                            : 'Full screen, quicker to open, right on your home screen.',
-                        style: const TextStyle(
-                            color: Colors.white70, fontSize: 12.5, height: 1.35)),
+                    const Text(
+                        'Full screen, quicker to open, right on your home screen.',
+                        style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 12.5,
+                            height: 1.35)),
                   ]),
             ),
           );
@@ -126,14 +121,8 @@ class _InstallBannerState extends State<InstallBanner> {
               padding: const EdgeInsets.symmetric(horizontal: 16),
             ),
             onPressed: _install,
-            icon: Icon(
-                _androidWeb ? Icons.android_rounded : Icons.download_rounded,
-                size: 18),
-            label: Text(_androidWeb
-                ? 'Get the app'
-                : AppInstall.canPrompt
-                    ? 'Install'
-                    : 'How?'),
+            icon: const Icon(Icons.download_rounded, size: 18),
+            label: Text(AppInstall.canPrompt ? 'Install' : 'How?'),
           );
           final close = IconButton(
             key: const Key('installNotNow'),
@@ -162,7 +151,8 @@ class _InstallBannerState extends State<InstallBanner> {
                   close,
                 ]),
                 const SizedBox(height: 10),
-                Padding(padding: const EdgeInsets.only(right: 8), child: button),
+                Padding(
+                    padding: const EdgeInsets.only(right: 8), child: button),
               ]);
         }),
       ),
@@ -229,8 +219,8 @@ class _Step extends StatelessWidget {
 class _GetTheApp extends StatelessWidget {
   const _GetTheApp();
 
-  Future<void> _download() => launchUrl(Uri.base.resolve(androidAppPath),
-      webOnlyWindowName: '_self');
+  Future<void> _download() =>
+      launchUrl(Uri.base.resolve(androidAppPath), webOnlyWindowName: '_self');
 
   @override
   Widget build(BuildContext context) {

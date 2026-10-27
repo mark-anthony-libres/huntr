@@ -297,8 +297,9 @@ class _GifResultsState extends State<_GifResults> {
 }
 
 /// HUNTR's stickers, in the server's groups (sections, in their order; run
-/// from the admin dashboard): each group's name and line, one row of its
-/// stickers and See all for the rest. Each sticker is a card with its price
+/// from the admin dashboard): each group's name and line over its stickers,
+/// a page at a time from the server (the next as the list nears its end;
+/// a search asks the server too). Each sticker is a card with its price
 /// in Beans (my balance is beside the search, [onBeans]); one I can't afford
 /// is greyed out with a lock and can't be picked. One already sent to this
 /// person says Sent: it counts on their profile until it's undone. In a
@@ -320,9 +321,27 @@ class _HuntrStickersState extends State<_HuntrStickers>
     with AutomaticKeepAliveClientMixin {
   StickerCatalog? _catalog;
   String? _error;
+  bool _loadingMore = false;
+  final _scroll = ScrollController();
 
-  /// Groups opened with See all.
-  final Set<int> _expanded = {};
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  /// A page that doesn't fill the sheet: the next one at once (there's
+  /// nothing to scroll to ask for it).
+  void _fillSheet() => WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted &&
+            _scroll.hasClients &&
+            _scroll.position.extentAfter < 600) {
+          _loadMore();
+        }
+      });
+
+  /// What [_catalog] was loaded for (a new search starts again).
+  String _loadedFor = '';
 
   // loaded once while the picker is open, not again on each visit to the tab
   @override
@@ -334,22 +353,60 @@ class _HuntrStickersState extends State<_HuntrStickers>
     _load();
   }
 
+  @override
+  void didUpdateWidget(_HuntrStickers old) {
+    super.didUpdateWidget(old);
+    if (widget.query != _loadedFor) _load();
+  }
+
+  /// The first page (for the search as it is now).
   Future<void> _load() async {
     final messaging = MessagingScope.read(context);
     if (messaging == null) {
       return setState(() => _catalog = const StickerCatalog(groups: []));
     }
-    setState(() => _error = null);
+    final query = widget.query;
+    setState(() {
+      _error = null;
+      _loadedFor = query;
+      _catalog = null;
+    });
     try {
-      final catalog = await messaging.stickerCatalog();
-      if (!mounted) return;
+      final catalog = await messaging.stickerCatalog(query: query);
+      if (!mounted || query != _loadedFor) return; // a newer search
       setState(() => _catalog = catalog ?? const StickerCatalog(groups: []));
       widget.onBeans(_catalog!.beansBalance);
+      _fillSheet();
     } catch (error) {
-      if (!mounted) return;
+      if (!mounted || query != _loadedFor) return;
       setState(() => _error = error is BackendException
           ? error.message
           : "Stickers couldn't load. Check your connection and try again.");
+    }
+  }
+
+  /// The next page, as the list nears its end (one at a time).
+  Future<void> _loadMore() async {
+    final catalog = _catalog, offset = _catalog?.nextOffset;
+    final messaging = MessagingScope.read(context);
+    if (catalog == null ||
+        offset == null ||
+        _loadingMore ||
+        messaging == null) {
+      return;
+    }
+    final query = _loadedFor;
+    setState(() => _loadingMore = true);
+    try {
+      final next = await messaging.stickerCatalog(offset: offset, query: query);
+      if (!mounted || query != _loadedFor || next == null) return;
+      setState(() => _catalog = catalog.followedBy(next));
+      _fillSheet();
+      widget.onBeans(next.beansBalance);
+    } catch (_) {
+      // scrolling again tries again
+    } finally {
+      if (mounted) setState(() => _loadingMore = false);
     }
   }
 
@@ -376,69 +433,71 @@ class _HuntrStickersState extends State<_HuntrStickers>
     if (catalog == null) {
       return const Center(child: CircularProgressIndicator());
     }
-    final q = widget.query.toLowerCase();
+    final searching = _loadedFor.isNotEmpty;
+    // the server found them (a search included)
     final shown = [
       for (final group in catalog.groups)
-        if (group.stickers
-                .where((s) => q.isEmpty || s.name.toLowerCase().contains(q))
-                .toList()
-            case final stickers when stickers.isNotEmpty)
-          (group: group, stickers: stickers),
+        if (group.stickers.isNotEmpty) (group: group, stickers: group.stickers),
     ];
     if (shown.isEmpty) {
       return Center(
           child: Text(
-              q.isEmpty ? 'No HUNTR stickers yet' : 'No HUNTR stickers found',
+              searching ? 'No HUNTR stickers found' : 'No HUNTR stickers yet',
               style: const TextStyle(color: HuntrColors.muted)));
     }
     return LayoutBuilder(builder: (context, constraints) {
-      // as many cards across as fit (at least 3); a group shows one row
-      // until See all
+      // as many cards across as fit (at least 3)
       final across = ((constraints.maxWidth - 24) / (_cardWidth + _gap))
           .floor()
           .clamp(3, 8);
-      return CustomScrollView(
-        slivers: [
-          for (final (:group, :stickers) in shown) ...[
-            SliverToBoxAdapter(
-              child: _GroupHeader(
-                group: group,
-                // what I've sent them from this group, if it's one per person
-                usedBy: group.onePerGroupPerRecipient
-                    ? group.stickers
-                        .where((s) => widget.sent.contains(s.id))
-                        .firstOrNull
-                    : null,
-                // searching shows every match; otherwise one row first
-                more: q.isEmpty && stickers.length > across
-                    ? _expanded.contains(group.id)
-                        ? _More.less
-                        : _More.all
-                    : null,
-                onMore: () => setState(() => _expanded.contains(group.id)
-                    ? _expanded.remove(group.id)
-                    : _expanded.add(group.id)),
-              ),
-            ),
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
-              sliver: SliverGrid(
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: across,
-                    mainAxisSpacing: _gap,
-                    crossAxisSpacing: _gap,
-                    childAspectRatio: 0.8),
-                delegate: SliverChildBuilderDelegate(
-                  childCount: q.isEmpty && !_expanded.contains(group.id)
-                      ? stickers.length.clamp(0, across)
-                      : stickers.length,
-                  (context, i) =>
-                      _stickerCard(group, stickers[i], catalog.beansBalance),
+      return NotificationListener<ScrollNotification>(
+        onNotification: (n) {
+          if (n.metrics.extentAfter < 600) _loadMore();
+          return false;
+        },
+        child: CustomScrollView(
+          controller: _scroll,
+          slivers: [
+            for (final (:group, :stickers) in shown) ...[
+              SliverToBoxAdapter(
+                child: _GroupHeader(
+                  group: group,
+                  // what I've sent them from this group, if it's one per person
+                  usedBy: group.onePerGroupPerRecipient
+                      ? group.stickers
+                          .where((s) => widget.sent.contains(s.id))
+                          .firstOrNull
+                      : null,
                 ),
               ),
-            ),
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+                sliver: SliverGrid(
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: across,
+                      mainAxisSpacing: _gap,
+                      crossAxisSpacing: _gap,
+                      childAspectRatio: 0.8),
+                  delegate: SliverChildBuilderDelegate(
+                    childCount: stickers.length,
+                    (context, i) =>
+                        _stickerCard(group, stickers[i], catalog.beansBalance),
+                  ),
+                ),
+              ),
+            ],
+            if (_loadingMore)
+              const SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(vertical: 16),
+                  child: Center(
+                      child: SizedBox.square(
+                          dimension: 24,
+                          child: CircularProgressIndicator(strokeWidth: 2.5))),
+                ),
+              ),
           ],
-        ],
+        ),
       );
     });
   }
@@ -549,20 +608,13 @@ class _HuntrStickersState extends State<_HuntrStickers>
   }
 }
 
-enum _More { all, less }
-
-/// A group's name and line over its stickers, with See all; for a
-/// one-per-person group, the rule (and which one they already have from me).
+/// A group's name and line over its stickers; for a one-per-person group,
+/// the rule (and which one they already have from me).
 class _GroupHeader extends StatelessWidget {
-  const _GroupHeader(
-      {required this.group, this.usedBy, this.more, required this.onMore});
+  const _GroupHeader({required this.group, this.usedBy});
 
   final HuntrStickerGroup group;
   final HuntrSticker? usedBy;
-
-  /// See all (or less), when there's more than a row.
-  final _More? more;
-  final VoidCallback onMore;
 
   @override
   Widget build(BuildContext context) {
@@ -570,7 +622,7 @@ class _GroupHeader extends StatelessWidget {
     final description = group.description;
     return Padding(
       key: Key('stickerGroup-${group.id}'),
-      padding: const EdgeInsets.fromLTRB(16, 16, 8, 10),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Expanded(
           child:
@@ -618,23 +670,6 @@ class _GroupHeader extends StatelessWidget {
               ),
           ]),
         ),
-        if (more != null)
-          TextButton(
-            key: Key('stickerGroupMore-${group.id}'),
-            style: TextButton.styleFrom(
-                foregroundColor: HuntrColors.orange,
-                visualDensity: VisualDensity.compact),
-            onPressed: onMore,
-            child: Row(mainAxisSize: MainAxisSize.min, children: [
-              Text(more == _More.all ? 'See all' : 'Show less',
-                  style: const TextStyle(fontWeight: FontWeight.w700)),
-              Icon(
-                  more == _More.all
-                      ? Icons.chevron_right_rounded
-                      : Icons.expand_less_rounded,
-                  size: 20),
-            ]),
-          ),
       ]),
     );
   }

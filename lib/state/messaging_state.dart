@@ -1137,10 +1137,10 @@ class MessagingState extends ChangeNotifier {
     }
   }
 
-  /// The sticker picker's groups, stickers and my Beans, fresh each time
-  /// it opens (null when signed out).
-  Future<StickerCatalog?> stickerCatalog() =>
-      _call((t) => service.fetchStickers(t));
+  /// A page of the sticker picker (from [offset]; [query] finds stickers by
+  /// name) and my Beans, fresh each time it opens (null when signed out).
+  Future<StickerCatalog?> stickerCatalog({int offset = 0, String query = ''}) =>
+      _call((t) => service.fetchStickers(t, offset: offset, query: query));
 
   /// GIFs or stickers for the GIF picker (trending when [query] is empty;
   /// null when signed out).

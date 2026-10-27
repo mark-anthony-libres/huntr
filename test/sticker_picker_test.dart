@@ -29,17 +29,45 @@ const _roasts = HuntrStickerGroup(
   ],
 );
 
+/// The server's picker: [pageSize] stickers a page (in order, with their
+/// groups), found by name with a query.
 class _Catalog extends MessagingService {
-  _Catalog(this.groups, this.beans);
+  _Catalog(this.groups, this.beans, {this.pageSize = 100});
 
   final List<HuntrStickerGroup> groups;
   int beans;
+  final int pageSize;
   int loads = 0;
+  final offsets = <int>[];
 
   @override
-  Future<StickerCatalog> fetchStickers(String token) async {
+  Future<StickerCatalog> fetchStickers(String token,
+      {int offset = 0, String query = ''}) async {
     loads++;
-    return StickerCatalog(groups: groups, beansBalance: beans);
+    offsets.add(offset);
+    final all = [
+      for (final g in groups)
+        for (final s in g.stickers)
+          if (s.name.toLowerCase().contains(query.toLowerCase())) (g, s),
+    ];
+    final page = all.skip(offset).take(pageSize).toList();
+    return StickerCatalog(
+      groups: [
+        for (final g in groups)
+          if (page.any((p) => p.$1.id == g.id))
+            HuntrStickerGroup(
+                id: g.id,
+                name: g.name,
+                description: g.description,
+                onePerGroupPerRecipient: g.onePerGroupPerRecipient,
+                stickers: [
+                  for (final p in page)
+                    if (p.$1.id == g.id) p.$2
+                ]),
+      ],
+      beansBalance: beans,
+      nextOffset: offset + pageSize < all.length ? offset + pageSize : null,
+    );
   }
 }
 
@@ -249,21 +277,31 @@ void main() {
     expect(find.byKey(const Key('beansBalance')), findsOneWidget);
   });
 
-  testWidgets('a group shows one row, and See all the rest', (tester) async {
-    tester.view.physicalSize = const Size(380, 1000);
+  testWidgets('scrolling down loads the next page from its offset',
+      (tester) async {
     final many = HuntrStickerGroup(id: 9, name: 'Many', stickers: [
-      for (var i = 1; i <= 7; i++)
-        HuntrSticker(id: 90 + i, name: 'S$i', groupId: 9),
+      for (var i = 1; i <= 40; i++)
+        HuntrSticker(id: 100 + i, name: 'S$i', groupId: 9),
     ]);
-    await open(tester, groups: [many]);
-    tester.view.physicalSize = const Size(380, 1000);
-    await tester.pumpAndSettle();
-    expect(find.byKey(const Key('huntrSticker-91')), findsOneWidget);
-    expect(find.byKey(const Key('huntrSticker-97')), findsNothing);
-    await tester.tap(find.byKey(const Key('stickerGroupMore-9')));
-    await tester.pumpAndSettle();
-    expect(find.byKey(const Key('huntrSticker-97')), findsOneWidget);
-    expect(find.text('Show less'), findsOneWidget);
+    final service = _Catalog([many], 5000, pageSize: 12);
+    await open(tester, service: service);
+    // the first page first (more only as it's needed)
+    expect(service.offsets.first, 0);
+    expect(service.offsets.length, lessThan(4));
+    expect(find.textContaining('See all'), findsNothing);
+    expect(find.byKey(const Key('huntrSticker-140'), skipOffstage: false),
+        findsNothing);
+    final list = find
+        .descendant(
+            of: find.byType(CustomScrollView),
+            matching: find.byType(Scrollable))
+        .first;
+    await tester.scrollUntilVisible(
+        find.byKey(const Key('huntrSticker-140')), 300,
+        scrollable: list, maxScrolls: 200);
+    expect(service.offsets, [0, 12, 24, 36]);
+    // each page once, its stickers added to the group's
+    expect(find.byKey(const Key('huntrSticker-140')), findsOneWidget);
   });
 
   testWidgets('a sticker already sent asks to undo it (Beans not given back)',

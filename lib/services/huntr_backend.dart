@@ -1435,9 +1435,8 @@ class ChatMessage {
           fromMe ? '👋 You tapped them' : '👋 They tapped you',
         ChatMessageType.gif => gif?.isSticker == true ? '✨ Sticker' : '🎞️ GIF',
         ChatMessageType.storyReply => '↩ Story reply: $body',
-        ChatMessageType.albumInterest => fromMe
-            ? '✨ You sent a little spark'
-            : '✨ Loves your album',
+        ChatMessageType.albumInterest =>
+          fromMe ? '✨ You sent a little spark' : '✨ Loves your album',
         ChatMessageType.sticker => '✨ ${sticker?.name ?? 'Sticker'} sticker',
       };
 }
@@ -1447,7 +1446,10 @@ class ChatMessage {
 /// (its sender can undo it while it does; a block ends it for good).
 class ChatSticker {
   const ChatSticker(
-      {required this.id, required this.name, this.imageUrl, this.active = true});
+      {required this.id,
+      required this.name,
+      this.imageUrl,
+      this.active = true});
 
   factory ChatSticker.fromJson(Map<String, dynamic> json) => ChatSticker(
         id: json['id'] as int?,
@@ -1569,7 +1571,8 @@ class ReplyPreview {
         ChatMessageType.gif => '🎞️ GIF',
         ChatMessageType.storyReply => '↩ $body',
         ChatMessageType.albumInterest => '✨ Loves an album',
-        ChatMessageType.sticker => body.isEmpty ? '✨ Sticker' : '✨ $body sticker',
+        ChatMessageType.sticker =>
+          body.isEmpty ? '✨ Sticker' : '✨ $body sticker',
       };
 }
 
@@ -2249,8 +2252,7 @@ Future<ChatMessage> sendAnonymousMessage(
     );
 
 /// What a send carries: one of HUNTR's stickers, a GIF, or text.
-Map<String, Object> _textOrGif(String body, String? gifId,
-        [int? stickerId]) =>
+Map<String, Object> _textOrGif(String body, String? gifId, [int? stickerId]) =>
     stickerId != null
         ? {'sticker_id': stickerId}
         : gifId != null
@@ -2686,16 +2688,23 @@ Future<bool> undoSticker(
       (data) => data['removed'] as bool? ?? false,
     );
 
-/// GET .../stickers: the chat's sticker picker: its groups in order, each
-/// with the stickers that can be sent (with links to their pictures and
-/// their prices), and my Beans.
+/// GET .../stickers: a page of the chat's sticker picker (from [offset];
+/// [query] finds stickers by name): the stickers that can be sent with
+/// their groups, links to their pictures and their prices, my Beans, and
+/// where the next page starts.
 Future<StickerCatalog> fetchStickerCatalog(
         {required String backendUrl,
         required String token,
+        int offset = 0,
+        String query = '',
         http.Client? client}) =>
     _sendAuthorized(
       client,
-      (httpClient) => httpClient.get(_endpoint(backendUrl, '/stickers'),
+      (httpClient) => httpClient.get(
+          _endpoint(backendUrl, '/stickers').replace(queryParameters: {
+            'offset': '$offset',
+            if (query.isNotEmpty) 'q': query,
+          }),
           headers: _authorization(token)),
       StickerCatalog.fromJson,
     );

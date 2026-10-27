@@ -35,18 +35,51 @@ class HuntrSticker {
   final int beansCost;
 }
 
-/// The chat's sticker picker: its groups, and how many Beans I have (to
-/// show which stickers I can afford; the server checks again on sending).
+/// The chat's sticker picker, a page at a time: its groups (with the
+/// stickers of this page), how many Beans I have (to show which stickers I
+/// can afford; the server checks again on sending), and where the next page
+/// starts.
 class StickerCatalog {
-  const StickerCatalog({required this.groups, this.beansBalance = 0});
+  const StickerCatalog(
+      {required this.groups, this.beansBalance = 0, this.nextOffset});
 
   factory StickerCatalog.fromJson(Map<String, dynamic> json) => StickerCatalog(
         groups: HuntrStickerGroup.listFromJson(json['groups']),
         beansBalance: json['beans_balance'] as int? ?? 0,
+        nextOffset: json['next_offset'] as int?,
       );
 
   final List<HuntrStickerGroup> groups;
   final int beansBalance;
+
+  /// Where the next page starts (null: this was the last).
+  final int? nextOffset;
+
+  /// This and the [next] page as one: a group that runs over both gets the
+  /// next page's stickers after its own; the balance is the newer one.
+  StickerCatalog followedBy(StickerCatalog next) {
+    final merged = [...groups];
+    for (final group in next.groups) {
+      final i = merged.indexWhere((g) => g.id == group.id);
+      if (i < 0) {
+        merged.add(group);
+      } else {
+        final known = merged[i];
+        merged[i] = HuntrStickerGroup(
+          id: known.id,
+          name: known.name,
+          description: known.description,
+          sortOrder: known.sortOrder,
+          onePerGroupPerRecipient: known.onePerGroupPerRecipient,
+          stickers: [...known.stickers, ...group.stickers],
+        );
+      }
+    }
+    return StickerCatalog(
+        groups: merged,
+        beansBalance: next.beansBalance,
+        nextOffset: next.nextOffset);
+  }
 }
 
 /// A number of Beans as people read it: 1,000.
