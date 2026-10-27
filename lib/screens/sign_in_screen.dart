@@ -8,7 +8,7 @@ import 'agreement_screen.dart';
 import '../widgets/sign_in/google_sign_in_card.dart';
 import '../widgets/sign_in/sign_in_button.dart';
 import '../widgets/sign_in/privacy_card.dart';
-import '../widgets/install_banner.dart' show showGetTheAppSheet;
+import '../widgets/install_banner.dart' show InstallWebsiteButton;
 import '../widgets/sign_in/brand_marks.dart';
 
 class SignInScreen extends StatelessWidget {
@@ -139,21 +139,13 @@ class SignInScreen extends StatelessWidget {
                                 const AgreementService(),
                             fontSize: dense || narrow ? 13 : 15,
                           ),
-                          // the website: the Android app, until it's on
-                          // Google Play
+                          // the website: install it as an app (where the
+                          // browser can; nothing shows otherwise)
                           if (kIsWeb) ...[
                             SizedBox(height: gap * 0.6),
                             Center(
-                              child: TextButton.icon(
-                                key: const Key('signInGetTheApp'),
-                                onPressed: () => showGetTheAppSheet(context),
-                                icon: const Icon(Icons.android_rounded,
-                                    size: 20),
-                                label: Text('Get the Android app',
-                                    style: TextStyle(
-                                        fontSize: dense || narrow ? 14 : 16,
-                                        fontWeight: FontWeight.w700)),
-                              ),
+                              child: InstallWebsiteButton(
+                                  fontSize: dense || narrow ? 14 : 16),
                             ),
                           ],
                         ],

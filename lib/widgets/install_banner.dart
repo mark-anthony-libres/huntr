@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../services/app_install/app_install.dart';
 import '../theme.dart';
@@ -16,20 +15,60 @@ class InstallBanner extends StatefulWidget {
   State<InstallBanner> createState() => _InstallBannerState();
 }
 
-/// Where the Android app is downloaded from (tool/release_apk.sh), until
-/// it's on Google Play.
-const androidAppPath = '/download/huntr.apk';
+/// The website can be installed as an app here (and isn't yet): with the
+/// browser's one tap, or the steps on an iPhone.
+bool get canInstallWebsite =>
+    !AppInstall.isInstalled && (AppInstall.canPrompt || AppInstall.isIos);
 
-/// "Get the HUNTR app": Google Play and the App Store are coming; for now
-/// the Android app to download, with how to install it, and on an iPhone how
-/// to add the site to the Home Screen.
-Future<void> showGetTheAppSheet(BuildContext context) =>
-    showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      isScrollControlled: true,
-      builder: (_) => const _GetTheApp(),
+/// Installs the website as an app: the browser's dialog where it has one
+/// (true when installed), otherwise the iPhone's two steps.
+Future<bool> installWebsite(BuildContext context) async {
+  if (AppInstall.canPrompt) return AppInstall.prompt();
+  await showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    builder: (_) => const _IosSteps(),
+  );
+  return false;
+}
+
+/// "Install HUNTR" (the sign-in page): installs the website as an app, where
+/// it can be (it shows once the browser offers it).
+class InstallWebsiteButton extends StatefulWidget {
+  const InstallWebsiteButton({super.key, this.fontSize = 16});
+
+  final double fontSize;
+
+  @override
+  State<InstallWebsiteButton> createState() => _InstallWebsiteButtonState();
+}
+
+class _InstallWebsiteButtonState extends State<InstallWebsiteButton> {
+  @override
+  void initState() {
+    super.initState();
+    // the browser may offer installing (or finish it) a moment later
+    AppInstall.onChange(() {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!canInstallWebsite) return const SizedBox.shrink();
+    return TextButton.icon(
+      key: const Key('signInInstallWebsite'),
+      onPressed: () async {
+        await installWebsite(context);
+        if (mounted) setState(() {});
+      },
+      icon: const Icon(Icons.install_mobile_rounded, size: 20),
+      label: Text('Install HUNTR',
+          style: TextStyle(
+              fontSize: widget.fontSize, fontWeight: FontWeight.w700)),
     );
+  }
+}
 
 class _InstallBannerState extends State<InstallBanner> {
   bool _dismissed = AppInstall.dismissedRecently;
@@ -43,10 +82,7 @@ class _InstallBannerState extends State<InstallBanner> {
     });
   }
 
-  bool get _visible =>
-      !_dismissed &&
-      !AppInstall.isInstalled &&
-      (AppInstall.canPrompt || AppInstall.isIos);
+  bool get _visible => !_dismissed && canInstallWebsite;
 
   void _notNow() {
     AppInstall.dismiss();
@@ -54,16 +90,8 @@ class _InstallBannerState extends State<InstallBanner> {
   }
 
   Future<void> _install() async {
-    if (AppInstall.canPrompt) {
-      final installed = await AppInstall.prompt();
-      if (mounted) setState(() => _dismissed = installed || _dismissed);
-      return;
-    }
-    await showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (_) => const _IosSteps(),
-    );
+    final installed = await installWebsite(context);
+    if (mounted) setState(() => _dismissed = installed || _dismissed);
   }
 
   @override
@@ -214,103 +242,4 @@ class _Step extends StatelessWidget {
         const SizedBox(width: 10),
         Expanded(child: Text(text)),
       ]);
-}
-
-class _GetTheApp extends StatelessWidget {
-  const _GetTheApp();
-
-  Future<void> _download() =>
-      launchUrl(Uri.base.resolve(androidAppPath), webOnlyWindowName: '_self');
-
-  @override
-  Widget build(BuildContext context) {
-    final iphone = AppInstall.isIos;
-    return SafeArea(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Get the HUNTR app',
-                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 20)),
-            const SizedBox(height: 8),
-            const Text(
-                'HUNTR is coming soon to Google Play and the App Store. '
-                'For now, you can download the Android app here.',
-                style: TextStyle(color: HuntrColors.muted, height: 1.45)),
-            const SizedBox(height: 18),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                key: const Key('downloadAndroidApp'),
-                style: FilledButton.styleFrom(minimumSize: const Size(0, 50)),
-                icon: const Icon(Icons.android_rounded),
-                label: const Text('Download for Android'),
-                onPressed: _download,
-              ),
-            ),
-            const SizedBox(height: 22),
-            const Text('How to install',
-                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
-            const SizedBox(height: 12),
-            const _Step(
-                number: 1,
-                icon: Icons.download_rounded,
-                text: 'Tap Download for Android, then open huntr.apk when '
-                    'it finishes (from the notification or your Downloads).'),
-            const SizedBox(height: 12),
-            const _Step(
-                number: 2,
-                icon: Icons.settings_outlined,
-                text: 'If your phone asks, allow your browser to install '
-                    'apps ("Install unknown apps", then Allow from this '
-                    'source), and go back.'),
-            const SizedBox(height: 12),
-            const _Step(
-                number: 3,
-                icon: Icons.install_mobile_rounded,
-                text: 'Tap Install. If Play Protect says it doesn\'t '
-                    'recognise the app, tap More details, then Install '
-                    'anyway: that\'s only because HUNTR isn\'t on Google Play '
-                    'yet.'),
-            const SizedBox(height: 12),
-            const _Step(
-                number: 4,
-                icon: Icons.login_rounded,
-                text: 'Open HUNTR and sign in with the same account.'),
-            const SizedBox(height: 14),
-            const Text(
-                'Updates: when there\'s a new version, HUNTR tells you and '
-                'downloads it; open it and tap Update. Your account and '
-                'chats stay as they are.',
-                style: TextStyle(
-                    color: HuntrColors.muted, fontSize: 13, height: 1.45)),
-            if (iphone) ...[
-              const SizedBox(height: 22),
-              const Divider(),
-              const SizedBox(height: 12),
-              const Text('On iPhone',
-                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
-              const SizedBox(height: 6),
-              const Text(
-                  'The App Store version is coming soon. Meanwhile, add '
-                  'HUNTR to your Home Screen:',
-                  style: TextStyle(color: HuntrColors.muted, height: 1.45)),
-              const SizedBox(height: 12),
-              const _Step(
-                  number: 1,
-                  icon: Icons.ios_share_rounded,
-                  text: 'Tap Share in the browser bar.'),
-              const SizedBox(height: 12),
-              const _Step(
-                  number: 2,
-                  icon: Icons.add_box_outlined,
-                  text: 'Choose "Add to Home Screen", then Add.'),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
 }

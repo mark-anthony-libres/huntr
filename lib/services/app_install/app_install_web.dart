@@ -41,8 +41,15 @@ Future<bool> prompt() async {
   return (choice['outcome'] as JSString?)?.toDart == 'accepted';
 }
 
+final _listeners = <void Function()>[];
+
 void onChange(void Function() listener) {
-  globalContext['huntrInstallChanged'] = listener.toJS;
+  _listeners.add(listener);
+  globalContext['huntrInstallChanged'] = () {
+    for (final each in List.of(_listeners)) {
+      each();
+    }
+  }.toJS;
 }
 
 bool dismissedRecently() {
