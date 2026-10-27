@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../services/huntr_backend.dart';
 import '../../theme.dart';
+import 'gif_picker.dart' show BeanIcon;
 import 'sticker_image.dart';
 
 /// One of HUNTR's stickers in the chat: the sticker itself, no bubble. My
@@ -18,40 +19,11 @@ class StickerBubble extends StatelessWidget {
   static const size = 132.0;
 
   Future<void> _askUndo(BuildContext context) async {
-    final name = message.sticker?.name ?? 'sticker';
-    final undo = await showModalBottomSheet<bool>(
-      context: context,
-      showDragHandle: true,
-      builder: (sheetContext) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            StickerImage(url: message.sticker?.imageUrl, name: name, size: 96),
-            const SizedBox(height: 10),
-            Text('Undo “$name”?',
-                style:
-                    const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-            const SizedBox(height: 6),
-            const Text(
-                "It leaves the chat and stops counting on their profile. "
-                'You can send it again later.',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: HuntrColors.muted, height: 1.4)),
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                key: const Key('undoStickerConfirm'),
-                icon: const Icon(Icons.undo_rounded),
-                label: const Text('Undo sticker'),
-                onPressed: () => Navigator.of(sheetContext).pop(true),
-              ),
-            ),
-          ]),
-        ),
-      ),
-    );
-    if (undo == true) await onUndo?.call();
+    if (await confirmStickerUndo(context,
+        name: message.sticker?.name ?? 'sticker',
+        imageUrl: message.sticker?.imageUrl)) {
+      await onUndo?.call();
+    }
   }
 
   @override
@@ -99,4 +71,65 @@ class StickerBubble extends StatelessWidget {
       ],
     );
   }
+}
+
+/// Asks before taking back a sticker I sent (from the chat, or from the
+/// picker): what undoing does, and that the Beans spent on it aren't given
+/// back. True: undo it.
+Future<bool> confirmStickerUndo(BuildContext context,
+    {required String name, String? imageUrl}) async {
+  final undo = await showModalBottomSheet<bool>(
+    context: context,
+    showDragHandle: true,
+    builder: (sheetContext) => SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          StickerImage(url: imageUrl, name: name, size: 96),
+          const SizedBox(height: 10),
+          Text('Undo “$name”?',
+              style:
+                  const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 6),
+          const Text(
+              'It leaves the chat and stops counting on their profile. '
+              'You can send it again later.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: HuntrColors.muted, height: 1.4)),
+          const SizedBox(height: 12),
+          Container(
+            key: const Key('undoBeansNote'),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: HuntrColors.orange.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              const BeanIcon(size: 15),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                    "Undoing doesn't give back the Beans you spent on it.",
+                    style: TextStyle(
+                        color: HuntrColors.orange,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600)),
+              ),
+            ]),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              key: const Key('undoStickerConfirm'),
+              icon: const Icon(Icons.undo_rounded),
+              label: const Text('Undo sticker'),
+              onPressed: () => Navigator.of(sheetContext).pop(true),
+            ),
+          ),
+        ]),
+      ),
+    ),
+  );
+  return undo == true;
 }

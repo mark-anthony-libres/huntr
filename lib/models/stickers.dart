@@ -68,6 +68,7 @@ class HuntrStickerGroup {
     required this.id,
     required this.name,
     required this.stickers,
+    this.description,
     this.sortOrder = 0,
     this.onePerGroupPerRecipient = false,
   });
@@ -76,6 +77,7 @@ class HuntrStickerGroup {
       HuntrStickerGroup(
         id: json['id'] as int,
         name: json['name'] as String? ?? 'Stickers',
+        description: json['description'] as String?,
         sortOrder: json['sort_order'] as int? ?? 0,
         onePerGroupPerRecipient:
             json['one_per_group_per_recipient'] as bool? ?? false,
@@ -89,6 +91,9 @@ class HuntrStickerGroup {
 
   final int id;
   final String name;
+
+  /// A line under its name (e.g. "Show someone some love"), if it has one.
+  final String? description;
   final int sortOrder;
 
   /// Only one active sticker from this group per sender and recipient: once

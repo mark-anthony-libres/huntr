@@ -60,7 +60,7 @@ void main() {
       Set<int> sent = const {},
       int beans = 5000,
       _Catalog? service}) async {
-    tester.view.physicalSize = const Size(420, 900);
+    tester.view.physicalSize = const Size(800, 1000);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     service ??= _Catalog(groups, beans);
@@ -135,11 +135,6 @@ void main() {
     expect(picked, isNull);
     expect(
         find.byKey(const Key('huntrSticker-12')), findsOneWidget); // still open
-
-    // the one already sent: as before
-    await tester.tap(find.byKey(const Key('huntrSticker-11')));
-    await tester.pump();
-    expect(find.textContaining('You already sent “Pogi”'), findsOneWidget);
 
     // another group is free
     await tester.tap(find.byKey(const Key('huntrSticker-22')));
@@ -236,5 +231,59 @@ void main() {
     expect(tile(tester, 32).properties.enabled, isFalse);
     expect(tile(tester, 34).properties.enabled, isFalse);
     expect(tile(tester, 33).properties.enabled, isTrue);
+  });
+
+  testWidgets('my Beans show beside the search on the HUNTR tab only',
+      (tester) async {
+    await open(tester, beans: 4200);
+    expect(
+        find.descendant(
+            of: find.byKey(const Key('beansBalance')),
+            matching: find.text('4,200')),
+        findsOneWidget);
+    await tester.tap(find.text('GIFs'));
+    await tester.pump();
+    expect(find.byKey(const Key('beansBalance')), findsNothing);
+    await tester.tap(find.byKey(const Key('huntrStickersTab')));
+    await tester.pump();
+    expect(find.byKey(const Key('beansBalance')), findsOneWidget);
+  });
+
+  testWidgets('a group shows one row, and See all the rest', (tester) async {
+    tester.view.physicalSize = const Size(380, 1000);
+    final many = HuntrStickerGroup(id: 9, name: 'Many', stickers: [
+      for (var i = 1; i <= 7; i++)
+        HuntrSticker(id: 90 + i, name: 'S$i', groupId: 9),
+    ]);
+    await open(tester, groups: [many]);
+    tester.view.physicalSize = const Size(380, 1000);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('huntrSticker-91')), findsOneWidget);
+    expect(find.byKey(const Key('huntrSticker-97')), findsNothing);
+    await tester.tap(find.byKey(const Key('stickerGroupMore-9')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('huntrSticker-97')), findsOneWidget);
+    expect(find.text('Show less'), findsOneWidget);
+  });
+
+  testWidgets('a sticker already sent asks to undo it (Beans not given back)',
+      (tester) async {
+    await open(tester, sent: {11});
+    await tester.tap(find.byKey(const Key('huntrSticker-11')));
+    await tester.pumpAndSettle();
+    expect(find.text('Undo “Pogi”?'), findsOneWidget);
+    expect(find.byKey(const Key('undoBeansNote')), findsOneWidget);
+    expect(find.textContaining("doesn't give back the Beans"), findsOneWidget);
+    // changed my mind: still in the picker
+    await tester.tapAt(const Offset(10, 10));
+    await tester.pumpAndSettle();
+    expect(picked, isNull);
+    // undo it
+    await tester.tap(find.byKey(const Key('huntrSticker-11')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('undoStickerConfirm')));
+    await tester.pumpAndSettle();
+    expect(picked, isA<UndoPickedSticker>());
+    expect((picked! as UndoPickedSticker).sticker.id, 11);
   });
 }

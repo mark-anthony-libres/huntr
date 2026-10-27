@@ -402,6 +402,18 @@ class _ChatScreenState extends State<ChatScreen> {
         final problem = await _messaging?.sendSticker(id, p, sticker);
         if (problem != null && mounted) _say(problem);
         return;
+      case UndoPickedSticker(:final sticker):
+        final sent = _messaging
+            ?.messagesOf(id)
+            .where((m) =>
+                m.fromMe &&
+                m.id != null &&
+                m.type == ChatMessageType.sticker &&
+                m.sticker?.id == sticker.id &&
+                m.sticker!.active)
+            .lastOrNull;
+        if (sent != null) await _undoSticker(sent);
+        return;
     }
     _scrollToNewest();
   }
