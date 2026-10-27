@@ -2,26 +2,48 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../models/stickers.dart';
 import '../../services/huntr_backend.dart';
 import '../../state/messaging_state.dart';
 import '../../theme.dart';
 import 'gif_bubble.dart';
 
-/// The GIF picker (GIFs and stickers, from GIPHY): trending until something
-/// is searched. Returns the one picked (null: closed).
-Future<ChatGif?> showGifPicker(BuildContext context) =>
-    showModalBottomSheet<ChatGif>(
+/// What the picker returns: a GIF or sticker from GIPHY, or one of HUNTR's
+/// stickers.
+sealed class ChatPick {
+  const ChatPick();
+}
+
+class PickedGif extends ChatPick {
+  const PickedGif(this.gif);
+  final ChatGif gif;
+}
+
+class PickedSticker extends ChatPick {
+  const PickedSticker(this.sticker);
+  final HuntrSticker sticker;
+}
+
+/// The GIF picker: HUNTR's stickers first ([sentStickers]: the ones already
+/// sent to this person, which can't be sent again until undone), then GIFs
+/// and stickers from GIPHY, trending until something is searched. Returns
+/// the one picked (null: closed).
+Future<ChatPick?> showGifPicker(BuildContext context,
+        {Set<String> sentStickers = const {}}) =>
+    showModalBottomSheet<ChatPick>(
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
       builder: (context) => FractionallySizedBox(
         heightFactor: 0.75,
-        child: const _GifPicker(),
+        child: _GifPicker(sentStickers: sentStickers),
       ),
     );
 
 class _GifPicker extends StatefulWidget {
-  const _GifPicker();
+  const _GifPicker({required this.sentStickers});
+
+  final Set<String> sentStickers;
 
   @override
   State<_GifPicker> createState() => _GifPickerState();
@@ -61,7 +83,7 @@ class _GifPickerState extends State<_GifPicker> {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 2,
+      length: 3,
       child: SafeArea(
         top: false,
         child: Column(children: [
@@ -75,7 +97,7 @@ class _GifPickerState extends State<_GifPicker> {
               textInputAction: TextInputAction.search,
               style: const TextStyle(fontSize: 16),
               decoration: InputDecoration(
-                hintText: 'Search GIFs and stickers',
+                hintText: 'Search stickers and GIFs',
                 hintStyle: const TextStyle(color: HuntrColors.muted),
                 fillColor: HuntrColors.surfaceHigh,
                 prefixIcon: const Icon(Icons.search_rounded),
@@ -102,9 +124,14 @@ class _GifPickerState extends State<_GifPicker> {
               ),
             ),
           ),
-          const TabBar(tabs: [Tab(text: 'GIFs'), Tab(text: 'Stickers')]),
+          const TabBar(tabs: [
+            Tab(key: Key('huntrStickersTab'), text: 'HUNTR'),
+            Tab(text: 'GIFs'),
+            Tab(text: 'Stickers'),
+          ]),
           Expanded(
             child: TabBarView(children: [
+              _HuntrStickers(query: _query, sent: widget.sentStickers),
               _GifResults(key: ValueKey('gif:$_query'), query: _query),
               _GifResults(
                   key: ValueKey('sticker:$_query'),
@@ -214,7 +241,7 @@ class _GifResultsState extends State<_GifResults> {
             child: InkWell(
               key: Key('gif-${gif.id}'),
               borderRadius: BorderRadius.circular(12),
-              onTap: () => Navigator.of(context).pop(gif),
+              onTap: () => Navigator.of(context).pop(PickedGif(gif)),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(12),
                 child: GifImage(
@@ -225,6 +252,84 @@ class _GifResultsState extends State<_GifResults> {
           );
         },
       ),
+    );
+  }
+}
+
+/// HUNTR's stickers (bundled, so they show at once). One already sent to
+/// this person says Sent: it counts on their profile until it's undone.
+class _HuntrStickers extends StatelessWidget {
+  const _HuntrStickers({required this.query, required this.sent});
+
+  final String query;
+  final Set<String> sent;
+
+  @override
+  Widget build(BuildContext context) {
+    final q = query.toLowerCase();
+    final shown = [
+      for (final sticker in HuntrSticker.all)
+        if (q.isEmpty || sticker.name.toLowerCase().contains(q)) sticker,
+    ];
+    if (shown.isEmpty) {
+      return const Center(
+          child: Text('No HUNTR stickers found',
+              style: TextStyle(color: HuntrColors.muted)));
+    }
+    return GridView.builder(
+      padding: const EdgeInsets.all(10),
+      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+          maxCrossAxisExtent: 130, mainAxisSpacing: 8, crossAxisSpacing: 8),
+      itemCount: shown.length,
+      itemBuilder: (context, i) {
+        final sticker = shown[i];
+        final already = sent.contains(sticker.id);
+        return Semantics(
+          button: true,
+          label: already ? '${sticker.name}, already sent' : sticker.name,
+          child: InkWell(
+            key: Key('huntrSticker-${sticker.id}'),
+            borderRadius: BorderRadius.circular(14),
+            onTap: already
+                ? () => ScaffoldMessenger.of(context)
+                  ..hideCurrentSnackBar()
+                  ..showSnackBar(SnackBar(
+                      content: Text('You already sent “${sticker.name}”. '
+                          'Tap it in the chat to undo it.')))
+                : () => Navigator.of(context).pop(PickedSticker(sticker)),
+            child: Stack(fit: StackFit.expand, children: [
+              Opacity(
+                opacity: already ? 0.4 : 1,
+                child: Padding(
+                  padding: const EdgeInsets.all(4),
+                  child: Image.asset(sticker.asset, fit: BoxFit.contain),
+                ),
+              ),
+              if (already)
+                Align(
+                  alignment: Alignment.bottomCenter,
+                  child: Container(
+                    margin: const EdgeInsets.only(bottom: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: HuntrColors.surfaceHigh,
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(color: HuntrColors.border),
+                    ),
+                    child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                      Icon(Icons.check_rounded, size: 13, color: Colors.white),
+                      SizedBox(width: 3),
+                      Text('Sent',
+                          style: TextStyle(
+                              fontSize: 11, fontWeight: FontWeight.w700)),
+                    ]),
+                  ),
+                ),
+            ]),
+          ),
+        );
+      },
     );
   }
 }

@@ -26,6 +26,7 @@ import '../flows/open_person_profile.dart';
 import '../widgets/chat/gif_bubble.dart';
 import '../widgets/chat/story_reply_label.dart';
 import '../widgets/chat/gif_picker.dart';
+import '../widgets/chat/sticker_bubble.dart';
 import '../widgets/chat/media_bubble.dart';
 import '../widgets/chat/trade_card.dart';
 import 'chat_media_viewer_screen.dart';
@@ -385,15 +386,39 @@ class _ChatScreenState extends State<ChatScreen> {
     _scrollToNewest();
   }
 
-  /// The GIF picker (GIFs and stickers); the one picked is sent at once.
+  /// The GIF picker (HUNTR's stickers, GIFs and stickers); the one picked
+  /// is sent at once.
   Future<void> _pickGif(Profile p) async {
     final id = _conversationId;
     if (id == null) return;
-    final gif = await showGifPicker(context);
-    if (gif == null || !mounted) return;
-    _messaging?.sendGif(id, p, gif);
+    final picked = await showGifPicker(context,
+        sentStickers: _messaging?.activeStickersSent(id) ?? const {});
+    if (picked == null || !mounted) return;
+    switch (picked) {
+      case PickedGif(:final gif):
+        _messaging?.sendGif(id, p, gif);
+      case PickedSticker(:final sticker):
+        _scrollToNewest();
+        final problem = await _messaging?.sendSticker(id, p, sticker);
+        if (problem != null && mounted) _say(problem);
+        return;
+    }
     _scrollToNewest();
   }
+
+  /// Takes back my sticker (it leaves the chat and their profile's count).
+  Future<void> _undoSticker(ChatMessage m) async {
+    final id = _conversationId;
+    final messageId = m.id;
+    if (id == null || messageId == null) return;
+    final problem = await _messaging?.undoSticker(id, messageId);
+    if (!mounted) return;
+    _say(problem ?? '“${m.sticker?.name ?? 'Sticker'}” undone.');
+  }
+
+  void _say(String text) => ScaffoldMessenger.of(context)
+    ..hideCurrentSnackBar()
+    ..showSnackBar(SnackBar(content: Text(text)));
 
   /// After I send something: down to it, once it's in the list.
   void _scrollToNewest() {
@@ -1333,6 +1358,26 @@ class _ChatScreenState extends State<ChatScreen> {
                                     ),
                                   ChatMessageType.gif when m.gif == null =>
                                     const SizedBox.shrink(),
+                                  // HUNTR's stickers: no bubble; mine can be undone
+                                  ChatMessageType.sticker => Reactable(
+                                      message: m,
+                                      enabled: !blocked,
+                                      onReact: (e) => _react(m, e),
+                                      onReply: () => _startReply(m),
+                                      otherName: p.name,
+                                      onQuoteTap: _jumpTo,
+                                      highlighted: _highlight == m.id,
+                                      below: showStatus
+                                          ? MessageStatusLine(
+                                              status: asMessage(m).status,
+                                              detail: m.failed ? m.error : null)
+                                          : null,
+                                      child: StickerBubble(
+                                          message: m,
+                                          onUndo: blocked
+                                              ? null
+                                              : () => _undoSticker(m)),
+                                    ),
                                   // photos, videos and GIFs
                                   _ => Reactable(
                                       message: m,

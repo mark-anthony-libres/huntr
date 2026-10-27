@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/widgets.dart';
 
 import '../models/models.dart';
+import '../models/stickers.dart';
 import '../services/huntr_backend.dart';
 import '../services/device_location.dart';
 import '../services/location_service.dart' show LocationException;
@@ -1027,6 +1028,113 @@ class MessagingState extends ChangeNotifier {
   Future<void> sendGif(int conversationId, Profile recipient, ChatGif gif) =>
       _showAndSend(conversationId, recipient, gif: gif);
 
+  /// One of HUNTR's stickers: shown at once, then saved. Null when it went
+  /// through; otherwise why not (e.g. it's already been sent to them), and
+  /// it's taken out of the chat again.
+  Future<String?> sendSticker(
+      int conversationId, Profile recipient, HuntrSticker sticker) async {
+    final anonymous = isAnonymous(conversationId);
+    if (recipient.backendId == null && !anonymous) return null;
+    final pending = ChatMessage(
+      id: null,
+      conversationId: conversationId,
+      fromMe: true,
+      body: '',
+      sentAt: DateTime.now(),
+      clientId: newClientId(),
+      type: ChatMessageType.sticker,
+      sticker: ChatSticker(id: sticker.id, name: sticker.name),
+    );
+    final thread = _threads.putIfAbsent(
+        conversationId, () => _Thread()..loaded = true)
+      ..add(pending);
+    _touchSummary(conversationId, recipient, pending, unreadDelta: 0);
+    notifyListeners();
+    try {
+      final saved = await _call((t) => anonymous
+          ? service.sendAnonymous(t,
+              conversationId: conversationId,
+              body: '',
+              clientId: pending.clientId!,
+              stickerId: sticker.id)
+          : service.send(t,
+              recipientId: recipient.backendId!,
+              body: '',
+              clientId: pending.clientId!,
+              stickerId: sticker.id));
+      if (saved == null) return null;
+      thread.confirm(pending.clientId!, saved);
+      final current = summary(conversationId);
+      if (current != null &&
+          current.lastMessage?.clientId == pending.clientId) {
+        _replaceSummary(current.copyWith(lastMessage: saved));
+      }
+      notifyListeners();
+      return null;
+    } catch (error) {
+      debugPrint('Sticker not sent: $error');
+      final mine = thread.byClientId(pending.clientId!);
+      if (mine != null) thread.messages.remove(mine);
+      _afterRemoval(conversationId, clientId: pending.clientId);
+      notifyListeners();
+      return error is BackendException
+          ? error.message
+          : "The sticker couldn't be sent. Please try again.";
+    }
+  }
+
+  /// Takes back a sticker I sent: it leaves the chat (and their profile's
+  /// count). Null when done; otherwise why not.
+  Future<String?> undoSticker(int conversationId, int messageId) async {
+    try {
+      final done = await _call((t) => service.undoSticker(t, messageId));
+      if (done == null) return null;
+      _removeMessage(conversationId, messageId);
+      return null;
+    } catch (error) {
+      return error is BackendException
+          ? error.message
+          : "The sticker couldn't be undone. Please try again.";
+    }
+  }
+
+  /// HUNTR's stickers I've sent in this conversation that still count
+  /// (sending one again is refused until it's undone).
+  Set<String> activeStickersSent(int conversationId) => {
+        for (final m in _threads[conversationId]?.messages ?? const <ChatMessage>[])
+          if (m.fromMe &&
+              m.type == ChatMessageType.sticker &&
+              m.sticker != null &&
+              m.sticker!.active)
+            m.sticker!.id,
+      };
+
+  /// A message gone from a conversation (a sticker taken back, here or on
+  /// another device): out of the chat, and the list's preview follows.
+  void _removeMessage(int conversationId, int messageId) {
+    final thread = _threads[conversationId];
+    thread?.messages.removeWhere((m) => m.id == messageId);
+    _afterRemoval(conversationId, messageId: messageId);
+    notifyListeners();
+  }
+
+  /// The conversation list's last message was removed: the one before it
+  /// when this chat is loaded, otherwise the list again from the server.
+  void _afterRemoval(int conversationId, {int? messageId, String? clientId}) {
+    final current = summary(conversationId);
+    final last = current?.lastMessage;
+    if (current == null || last == null) return;
+    final wasLast = (messageId != null && last.id == messageId) ||
+        (clientId != null && last.clientId == clientId);
+    if (!wasLast) return;
+    final remaining = _threads[conversationId]?.messages;
+    if (remaining != null && remaining.isNotEmpty) {
+      _replaceSummary(current.copyWith(lastMessage: remaining.last));
+    } else {
+      unawaited(refresh());
+    }
+  }
+
   /// GIFs or stickers for the GIF picker (trending when [query] is empty;
   /// null when signed out).
   Future<GifPage?> gifs(
@@ -1373,6 +1481,14 @@ class MessagingState extends ChangeNotifier {
     }
     if (event['type'] == 'message.read') return _handleRead(event);
     if (event['type'] == 'message.updated') return _handleUpdated(event);
+    if (event['type'] == 'message.removed') {
+      final conversationId = event['conversation_id'];
+      final messageId = event['message_id'];
+      if (conversationId is int && messageId is int) {
+        _removeMessage(conversationId, messageId);
+      }
+      return;
+    }
     if (event['type'] == 'typing') return _handleTyping(event);
     if (event['type'] == 'location') return _handleLocation(event);
     if (event['type'] == 'live_location.position') {

@@ -40,7 +40,8 @@ class MessagingService {
           required String body,
           required String clientId,
           int? replyToId,
-          String? gifId}) async =>
+          String? gifId,
+          String? stickerId}) async =>
       backend.sendAnonymousMessage(
           backendUrl: await _url(),
           token: token,
@@ -48,7 +49,8 @@ class MessagingService {
           body: body,
           clientId: clientId,
           replyToId: replyToId,
-          gifId: gifId);
+          gifId: gifId,
+          stickerId: stickerId);
 
   Future<AnonymousProfile> fetchAnonymousProfile(
           String token, int conversationId) async =>
@@ -139,7 +141,8 @@ class MessagingService {
           required String body,
           required String clientId,
           int? replyToId,
-          String? gifId}) async =>
+          String? gifId,
+          String? stickerId}) async =>
       backend.sendMessage(
           backendUrl: await _url(),
           token: token,
@@ -147,7 +150,13 @@ class MessagingService {
           body: body,
           clientId: clientId,
           replyToId: replyToId,
-          gifId: gifId);
+          gifId: gifId,
+          stickerId: stickerId);
+
+  /// Takes back a sticker I sent (true: removed now).
+  Future<bool> undoSticker(String token, int messageId) async =>
+      backend.undoSticker(
+          backendUrl: await _url(), token: token, messageId: messageId);
 
   /// GIFs or stickers for the GIF picker (trending when [query] is empty).
   Future<GifPage> fetchGifs(String token,

@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import 'profile_stats.dart';
+import 'stickers.dart';
 
 export 'profile_stats.dart';
 
@@ -320,6 +321,7 @@ class Profile {
     this.unmatched = false,
     this.hasStory = false,
     this.storySeen = false,
+    this.stickers,
   });
 
   /// Someone anonymous to me (the sender of an anonymous conversation): only
@@ -388,10 +390,17 @@ class Profile {
       unmatched: json['unmatched'] == true,
       hasStory: json['has_story'] == true,
       storySeen: json['story_seen'] == true,
+      stickers: json.containsKey('stickers')
+          ? StickerCount.listFromJson(json['stickers'])
+          : null,
     );
   }
 
   final int? backendId;
+
+  /// "The word on you": the stickers people sent them, with counts (only on
+  /// a profile loaded by itself; null in lists).
+  final List<StickerCount>? stickers;
 
   /// Shown as this cartoon animal (wolf, fox, ...): they're anonymous to me.
   final String? anonymousAvatar;
@@ -442,6 +451,7 @@ class Profile {
         unmatched: unmatched,
         hasStory: hasStory ?? this.hasStory,
         storySeen: storySeen ?? this.storySeen,
+        stickers: stickers,
       );
 
   /// A block between us (as the chat list knows it): I block them, or they

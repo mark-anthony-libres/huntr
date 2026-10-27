@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../models/models.dart';
+import '../models/stickers.dart';
 import 'rate_limit.dart';
 
 class BackendException implements Exception {
@@ -1197,7 +1198,11 @@ enum ChatMessageType {
 
   /// Its sender is interested in my album (they said so after viewing it
   /// in a trade): "❤️ Sam is interested in your album!".
-  albumInterest;
+  albumInterest,
+
+  /// One of HUNTR's stickers ([ChatMessage.sticker]); it counts on its
+  /// recipient's profile until its sender undoes it.
+  sticker;
 
   static ChatMessageType parse(String? value) => switch (value) {
         'gif' => gif,
@@ -1210,6 +1215,7 @@ enum ChatMessageType {
         'album_trade' => albumTrade,
         'album_trade_return' => albumTradeReturn,
         'album_interest' => albumInterest,
+        'sticker' => sticker,
         'location' => location,
         'live_location' => liveLocation,
         _ => text,
@@ -1242,6 +1248,7 @@ class ChatMessage {
     this.revealedMutual = false,
     this.tapAnswers = const [],
     this.gif,
+    this.sticker,
     this.storyId,
     this.storyAvailable = false,
     this.storyThumbnailUrl,
@@ -1289,6 +1296,9 @@ class ChatMessage {
         gif: json['gif'] == null
             ? null
             : ChatGif.fromJson(json['gif'] as Map<String, dynamic>),
+        sticker: json['sticker'] == null
+            ? null
+            : ChatSticker.fromJson(json['sticker'] as Map<String, dynamic>),
         storyId:
             (json['story_reply'] as Map<String, dynamic>?)?['story_id'] as int?,
         storyAvailable: (json['story_reply']
@@ -1310,6 +1320,9 @@ class ChatMessage {
 
   /// A GIF or sticker message: what to show.
   final ChatGif? gif;
+
+  /// One of HUNTR's stickers: which, and whether it still counts.
+  final ChatSticker? sticker;
 
   /// A reveal: the animal the sender was shown as while anonymous.
   final String? revealedAvatar;
@@ -1342,7 +1355,8 @@ class ChatMessage {
       (type == ChatMessageType.text ||
           type == ChatMessageType.image ||
           type == ChatMessageType.video ||
-          type == ChatMessageType.gif);
+          type == ChatMessageType.gif ||
+          type == ChatMessageType.sticker);
 
   /// My reaction, if I reacted.
   String? get myReaction =>
@@ -1395,6 +1409,7 @@ class ChatMessage {
           revealedMutual: revealedMutual,
           tapAnswers: tapAnswers,
           gif: gif,
+          sticker: sticker,
           storyId: storyId,
           storyAvailable: storyAvailable,
           storyThumbnailUrl: storyThumbnailUrl,
@@ -1423,7 +1438,25 @@ class ChatMessage {
         ChatMessageType.albumInterest => fromMe
             ? '✨ You sent a little spark'
             : '✨ Loves your album',
+        ChatMessageType.sticker => '✨ ${sticker?.name ?? 'Sticker'} sticker',
       };
+}
+
+/// One of HUNTR's stickers in a message: which, and whether it still counts
+/// on its recipient's profile (its sender can undo it while it does; a
+/// block ends it for good).
+class ChatSticker {
+  const ChatSticker({required this.id, required this.name, this.active = true});
+
+  factory ChatSticker.fromJson(Map<String, dynamic> json) => ChatSticker(
+        id: json['id'] as String? ?? '',
+        name: json['name'] as String? ?? 'Sticker',
+        active: json['active'] as bool? ?? false,
+      );
+
+  final String id;
+  final String name;
+  final bool active;
 }
 
 /// A GIF or sticker from GIPHY, as GIF search returns it and a GIF message
@@ -1506,6 +1539,7 @@ class ReplyPreview {
       body: switch (message.type) {
         ChatMessageType.text => message.body,
         ChatMessageType.albumTrade => message.trade?.offeredAlbum?.name ?? '',
+        ChatMessageType.sticker => message.sticker?.name ?? '',
         _ => '',
       });
 
@@ -1531,6 +1565,7 @@ class ReplyPreview {
         ChatMessageType.gif => '🎞️ GIF',
         ChatMessageType.storyReply => '↩ $body',
         ChatMessageType.albumInterest => '✨ Loves an album',
+        ChatMessageType.sticker => body.isEmpty ? '✨ Sticker' : '✨ $body sticker',
       };
 }
 
@@ -2194,6 +2229,7 @@ Future<ChatMessage> sendAnonymousMessage(
         required String clientId,
         int? replyToId,
         String? gifId,
+        String? stickerId,
         http.Client? client}) =>
     _sendAuthorized(
       client,
@@ -2201,7 +2237,7 @@ Future<ChatMessage> sendAnonymousMessage(
           _anonymous(backendUrl, '/conversations/$conversationId/messages'),
           headers: _json(token),
           body: jsonEncode({
-            ..._textOrGif(body, gifId),
+            ..._textOrGif(body, gifId, stickerId),
             'client_id': clientId,
             if (replyToId != null) 'reply_to_id': replyToId,
           })),
@@ -2209,8 +2245,14 @@ Future<ChatMessage> sendAnonymousMessage(
     );
 
 /// What a send carries: the text, or the GIF picked instead of text.
-Map<String, String> _textOrGif(String body, String? gifId) =>
-    gifId != null ? {'gif_id': gifId} : {'body': body};
+/// What a message is: one of HUNTR's stickers, a GIF, or text.
+Map<String, String> _textOrGif(String body, String? gifId,
+        [String? stickerId]) =>
+    stickerId != null
+        ? {'sticker_id': stickerId}
+        : gifId != null
+            ? {'gif_id': gifId}
+            : {'body': body};
 
 /// GET .../gifs/trending or .../gifs/search: GIFs (or [stickers]) for the
 /// chat's GIF picker; trending when [query] is empty.
@@ -2597,7 +2639,8 @@ Future<MessagePage> fetchMessages(
     );
 
 /// POST {backendUrl}/messages: saved once per [clientId] (a retry returns
-/// the stored message). Text, or a GIF/sticker ([gifId]) instead.
+/// the stored message). Text, a GIF/sticker ([gifId]), or one of HUNTR's
+/// stickers ([stickerId]) instead.
 Future<ChatMessage> sendMessage(
         {required String backendUrl,
         required String token,
@@ -2606,6 +2649,7 @@ Future<ChatMessage> sendMessage(
         required String clientId,
         int? replyToId,
         String? gifId,
+        String? stickerId,
         http.Client? client}) =>
     _sendAuthorized(
       client,
@@ -2616,11 +2660,42 @@ Future<ChatMessage> sendMessage(
           },
           body: jsonEncode({
             'recipient_id': recipientId,
-            ..._textOrGif(body, gifId),
+            ..._textOrGif(body, gifId, stickerId),
             'client_id': clientId,
             if (replyToId != null) 'reply_to_id': replyToId,
           })),
       ChatMessage.fromJson,
+    );
+
+/// POST .../stickers/messages/{id}/undo: takes back a sticker I sent (it
+/// stops counting on their profile and leaves the chat). True when it was
+/// removed now; false when it already had been.
+Future<bool> undoSticker(
+        {required String backendUrl,
+        required String token,
+        required int messageId,
+        http.Client? client}) =>
+    _sendAuthorized(
+      client,
+      (httpClient) => httpClient.post(
+          _endpoint(backendUrl, '/stickers/messages/$messageId/undo'),
+          headers: _authorization(token)),
+      (data) => data['removed'] as bool? ?? false,
+    );
+
+/// GET .../stickers/people/{id}: the stickers on someone's profile (or
+/// mine), with how many people sent each, most first.
+Future<List<StickerCount>> fetchProfileStickers(
+        {required String backendUrl,
+        required String token,
+        required int userId,
+        http.Client? client}) =>
+    _sendAuthorized(
+      client,
+      (httpClient) => httpClient.get(
+          _endpoint(backendUrl, '/stickers/people/$userId'),
+          headers: _authorization(token)),
+      (data) => StickerCount.listFromJson(data['stickers']),
     );
 
 /// POST .../conversations/{id}/read: my unread messages there are read.

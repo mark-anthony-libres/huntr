@@ -2,6 +2,7 @@ import '../config/google_oauth_config.dart';
 import 'huntr_backend.dart' as backend;
 import 'huntr_backend.dart' show MapArea, NearbyPage;
 import '../models/models.dart';
+import '../models/stickers.dart';
 
 /// People nearby, from the backend.
 class ExploreService {
@@ -35,6 +36,13 @@ class ExploreService {
           token: token,
           offset: offset,
           newest: newest);
+
+  /// The stickers on someone's profile (or mine), with counts.
+  Future<List<StickerCount>> fetchStickers(String token, int userId) async =>
+      backend.fetchProfileStickers(
+          backendUrl: await GoogleOAuthConfig.loadBackendUrl(),
+          token: token,
+          userId: userId);
 
   /// One person with all their photos.
   Future<Profile> fetchPerson(String token, int userId) async =>

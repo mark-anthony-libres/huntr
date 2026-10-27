@@ -16,6 +16,7 @@ import '../widgets/avatar.dart';
 import '../widgets/network_photo.dart';
 import '../widgets/share_sheet.dart';
 import 'chat_screen.dart';
+import '../widgets/profile/sticker_shelf.dart';
 import '../widgets/profile/gradient_button.dart';
 import '../widgets/profile/status_pill.dart';
 import '../widgets/profile/profile_meta.dart';
@@ -194,7 +195,15 @@ class ProfileScreen extends StatelessWidget {
                 ProfileMeta(icon: Icons.height, label: '${p.heightCm} cm'),
             ],
           ),
-          const SizedBox(height: 28),
+          const SizedBox(height: 24),
+          // "The word on you": stickers people sent them (mine in a preview);
+          // nobody anonymous has one shown
+          if ((_isPreview ? app.myUserId : p.backendId) case final userId?
+              when !p.isAnonymous)
+            StickerShelf(
+                key: ValueKey('stickers-$userId'),
+                userId: userId,
+                initial: _isPreview ? null : p.stickers),
           if (!_isPreview && conn == Connection.incoming)
             Container(
               margin: const EdgeInsets.only(bottom: 22),
