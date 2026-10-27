@@ -398,7 +398,7 @@ class Profile {
 
   final int? backendId;
 
-  /// "The word on you": the stickers people sent them, with counts (only on
+  /// "What others say about you": the stickers people sent them, with counts (only on
   /// a profile loaded by itself; null in lists).
   final List<StickerCount>? stickers;
 

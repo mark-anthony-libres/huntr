@@ -1,7 +1,7 @@
 name: huntr
 description: "Huntr - meet people nearby. Explore, connect and chat."
 publish_to: 'none'
-version: 0.1.0+2
+version: 0.1.0+3
 
 environment:
   sdk: ^3.5.0
@@ -40,8 +40,6 @@ flutter:
     - assets/huntr_logo.png
     # the logo's H alone (transparent), for the loading animation
     - assets/huntr_mark.png
-    # HUNTR's stickers (lib/models/stickers.dart)
-    - assets/stickers/
     # the launcher icons to choose from (copies of res/mipmap-xhdpi)
     - assets/app_icons/
     - assets/google_g_logo.png

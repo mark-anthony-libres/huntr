@@ -7,6 +7,7 @@ import '../../services/huntr_backend.dart';
 import '../../state/messaging_state.dart';
 import '../../theme.dart';
 import 'gif_bubble.dart';
+import 'sticker_image.dart';
 
 /// What the picker returns: a GIF or sticker from GIPHY, or one of HUNTR's
 /// stickers.
@@ -29,7 +30,7 @@ class PickedSticker extends ChatPick {
 /// and stickers from GIPHY, trending until something is searched. Returns
 /// the one picked (null: closed).
 Future<ChatPick?> showGifPicker(BuildContext context,
-        {Set<String> sentStickers = const {}}) =>
+        {Set<int> sentStickers = const {}}) =>
     showModalBottomSheet<ChatPick>(
       context: context,
       showDragHandle: true,
@@ -43,7 +44,7 @@ Future<ChatPick?> showGifPicker(BuildContext context,
 class _GifPicker extends StatefulWidget {
   const _GifPicker({required this.sentStickers});
 
-  final Set<String> sentStickers;
+  final Set<int> sentStickers;
 
   @override
   State<_GifPicker> createState() => _GifPickerState();
@@ -256,80 +257,244 @@ class _GifResultsState extends State<_GifResults> {
   }
 }
 
-/// HUNTR's stickers (bundled, so they show at once). One already sent to
-/// this person says Sent: it counts on their profile until it's undone.
-class _HuntrStickers extends StatelessWidget {
+/// HUNTR's stickers, in the server's groups (sections, in their order; run
+/// from the admin dashboard). One already sent to this person says Sent: it
+/// counts on their profile until it's undone. In a one-per-person group,
+/// once one is sent to them the others wait until it's undone (the server
+/// checks too; this says so before trying).
+class _HuntrStickers extends StatefulWidget {
   const _HuntrStickers({required this.query, required this.sent});
 
   final String query;
-  final Set<String> sent;
+  final Set<int> sent;
+
+  @override
+  State<_HuntrStickers> createState() => _HuntrStickersState();
+}
+
+class _HuntrStickersState extends State<_HuntrStickers>
+    with AutomaticKeepAliveClientMixin {
+  List<HuntrStickerGroup>? _groups;
+  String? _error;
+
+  // loaded once while the picker is open, not again on each visit to the tab
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final messaging = MessagingScope.read(context);
+    if (messaging == null) return setState(() => _groups = const []);
+    setState(() => _error = null);
+    try {
+      final groups = await messaging.stickerCatalog();
+      if (mounted) setState(() => _groups = groups ?? const []);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _error = error is BackendException
+          ? error.message
+          : "Stickers couldn't load. Check your connection and try again.");
+    }
+  }
+
+  void _explain(String text) => ScaffoldMessenger.of(context)
+    ..hideCurrentSnackBar()
+    ..showSnackBar(SnackBar(content: Text(text)));
 
   @override
   Widget build(BuildContext context) {
-    final q = query.toLowerCase();
+    super.build(context);
+    final groups = _groups;
+    if (_error != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Text(_error!, textAlign: TextAlign.center),
+            const SizedBox(height: 12),
+            OutlinedButton(onPressed: _load, child: const Text('Try again')),
+          ]),
+        ),
+      );
+    }
+    if (groups == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    final q = widget.query.toLowerCase();
     final shown = [
-      for (final sticker in HuntrSticker.all)
-        if (q.isEmpty || sticker.name.toLowerCase().contains(q)) sticker,
+      for (final group in groups)
+        if (group.stickers
+                .where((s) => q.isEmpty || s.name.toLowerCase().contains(q))
+                .toList()
+            case final stickers when stickers.isNotEmpty)
+          (group: group, stickers: stickers),
     ];
     if (shown.isEmpty) {
-      return const Center(
-          child: Text('No HUNTR stickers found',
-              style: TextStyle(color: HuntrColors.muted)));
+      return Center(
+          child: Text(
+              q.isEmpty ? 'No HUNTR stickers yet' : 'No HUNTR stickers found',
+              style: const TextStyle(color: HuntrColors.muted)));
     }
-    return GridView.builder(
-      padding: const EdgeInsets.all(10),
-      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-          maxCrossAxisExtent: 130, mainAxisSpacing: 8, crossAxisSpacing: 8),
-      itemCount: shown.length,
-      itemBuilder: (context, i) {
-        final sticker = shown[i];
-        final already = sent.contains(sticker.id);
-        return Semantics(
-          button: true,
-          label: already ? '${sticker.name}, already sent' : sticker.name,
-          child: InkWell(
-            key: Key('huntrSticker-${sticker.id}'),
-            borderRadius: BorderRadius.circular(14),
-            onTap: already
-                ? () => ScaffoldMessenger.of(context)
-                  ..hideCurrentSnackBar()
-                  ..showSnackBar(SnackBar(
-                      content: Text('You already sent “${sticker.name}”. '
-                          'Tap it in the chat to undo it.')))
-                : () => Navigator.of(context).pop(PickedSticker(sticker)),
-            child: Stack(fit: StackFit.expand, children: [
-              Opacity(
-                opacity: already ? 0.4 : 1,
-                child: Padding(
-                  padding: const EdgeInsets.all(4),
-                  child: Image.asset(sticker.asset, fit: BoxFit.contain),
-                ),
-              ),
-              if (already)
-                Align(
-                  alignment: Alignment.bottomCenter,
-                  child: Container(
-                    margin: const EdgeInsets.only(bottom: 4),
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: HuntrColors.surfaceHigh,
-                      borderRadius: BorderRadius.circular(999),
-                      border: Border.all(color: HuntrColors.border),
-                    ),
-                    child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                      Icon(Icons.check_rounded, size: 13, color: Colors.white),
-                      SizedBox(width: 3),
-                      Text('Sent',
-                          style: TextStyle(
-                              fontSize: 11, fontWeight: FontWeight.w700)),
-                    ]),
-                  ),
-                ),
-            ]),
+    return CustomScrollView(
+      slivers: [
+        for (final (:group, :stickers) in shown) ...[
+          SliverToBoxAdapter(
+            child: _GroupHeader(
+              group: group,
+              // what I've sent them from this group, if it's one per person
+              usedBy: group.onePerGroupPerRecipient
+                  ? group.stickers
+                      .where((s) => widget.sent.contains(s.id))
+                      .firstOrNull
+                  : null,
+            ),
           ),
-        );
-      },
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+            sliver: SliverGrid(
+              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                  maxCrossAxisExtent: 130,
+                  mainAxisSpacing: 8,
+                  crossAxisSpacing: 8),
+              delegate: SliverChildBuilderDelegate(
+                childCount: stickers.length,
+                (context, i) => _stickerTile(group, stickers[i]),
+              ),
+            ),
+          ),
+        ],
+      ],
     );
   }
+
+  Widget _stickerTile(HuntrStickerGroup group, HuntrSticker sticker) {
+    final already = widget.sent.contains(sticker.id);
+    // another of a one-per-person group is out with them
+    final groupTaken = !already &&
+        group.onePerGroupPerRecipient &&
+        group.stickers.any((s) => widget.sent.contains(s.id));
+    final VoidCallback onTap;
+    final String label;
+    if (already) {
+      label = '${sticker.name}, already sent';
+      onTap = () => _explain('You already sent “${sticker.name}”. '
+          'Tap it in the chat to undo it.');
+    } else if (groupTaken) {
+      label = '${sticker.name}, unavailable: one from ${group.name} per person';
+      onTap = () => _explain(
+          'You can send them one sticker from “${group.name}”. '
+          'Undo the one you sent (tap it in the chat) to send a different one.');
+    } else {
+      label = sticker.name;
+      onTap = () => Navigator.of(context).pop(PickedSticker(sticker));
+    }
+    return Semantics(
+      button: true,
+      label: label,
+      excludeSemantics: true,
+      child: InkWell(
+        key: Key('huntrSticker-${sticker.id}'),
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Stack(fit: StackFit.expand, children: [
+          Opacity(
+            opacity: already ? 0.4 : (groupTaken ? 0.25 : 1),
+            child: Padding(
+              padding: const EdgeInsets.all(4),
+              child: StickerImage(url: sticker.imageUrl, name: sticker.name),
+            ),
+          ),
+          if (already)
+            const Align(
+              alignment: Alignment.bottomCenter,
+              child: _Badge(icon: Icons.check_rounded, text: 'Sent'),
+            ),
+        ]),
+      ),
+    );
+  }
+}
+
+/// A group's name over its stickers; for a one-per-person group, the rule
+/// (and which one they already have from me).
+class _GroupHeader extends StatelessWidget {
+  const _GroupHeader({required this.group, this.usedBy});
+
+  final HuntrStickerGroup group;
+  final HuntrSticker? usedBy;
+
+  @override
+  Widget build(BuildContext context) {
+    final used = usedBy;
+    return Padding(
+      key: Key('stickerGroup-${group.id}'),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Flexible(
+            child: Text(group.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800)),
+          ),
+          if (group.onePerGroupPerRecipient) ...[
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: HuntrColors.orange.withValues(alpha: 0.14),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text('One per person',
+                  style: TextStyle(
+                      color: HuntrColors.orange,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700)),
+            ),
+          ],
+        ]),
+        if (used != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 3),
+            child: Text(
+                'You sent them “${used.name}”. Undo it to send a different one.',
+                key: Key('stickerGroupUsed-${group.id}'),
+                style: const TextStyle(color: HuntrColors.muted, fontSize: 12)),
+          ),
+      ]),
+    );
+  }
+}
+
+class _Badge extends StatelessWidget {
+  const _Badge({required this.icon, required this.text});
+
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        margin: const EdgeInsets.only(bottom: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: HuntrColors.surfaceHigh,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: HuntrColors.border),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(icon, size: 13, color: Colors.white),
+          const SizedBox(width: 3),
+          Text(text,
+              style:
+                  const TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
+        ]),
+      );
 }

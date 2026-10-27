@@ -1442,20 +1442,24 @@ class ChatMessage {
       };
 }
 
-/// One of HUNTR's stickers in a message: which, and whether it still counts
-/// on its recipient's profile (its sender can undo it while it does; a
-/// block ends it for good).
+/// One of HUNTR's stickers in a message: which (its name and picture as
+/// they are now), and whether it still counts on its recipient's profile
+/// (its sender can undo it while it does; a block ends it for good).
 class ChatSticker {
-  const ChatSticker({required this.id, required this.name, this.active = true});
+  const ChatSticker(
+      {required this.id, required this.name, this.imageUrl, this.active = true});
 
   factory ChatSticker.fromJson(Map<String, dynamic> json) => ChatSticker(
-        id: json['id'] as String? ?? '',
+        id: json['id'] as int?,
         name: json['name'] as String? ?? 'Sticker',
+        imageUrl: json['image_url'] as String?,
         active: json['active'] as bool? ?? false,
       );
 
-  final String id;
+  /// Null for a sticker that's no longer known.
+  final int? id;
   final String name;
+  final String? imageUrl;
   final bool active;
 }
 
@@ -2229,7 +2233,7 @@ Future<ChatMessage> sendAnonymousMessage(
         required String clientId,
         int? replyToId,
         String? gifId,
-        String? stickerId,
+        int? stickerId,
         http.Client? client}) =>
     _sendAuthorized(
       client,
@@ -2244,10 +2248,9 @@ Future<ChatMessage> sendAnonymousMessage(
       ChatMessage.fromJson,
     );
 
-/// What a send carries: the text, or the GIF picked instead of text.
-/// What a message is: one of HUNTR's stickers, a GIF, or text.
-Map<String, String> _textOrGif(String body, String? gifId,
-        [String? stickerId]) =>
+/// What a send carries: one of HUNTR's stickers, a GIF, or text.
+Map<String, Object> _textOrGif(String body, String? gifId,
+        [int? stickerId]) =>
     stickerId != null
         ? {'sticker_id': stickerId}
         : gifId != null
@@ -2649,7 +2652,7 @@ Future<ChatMessage> sendMessage(
         required String clientId,
         int? replyToId,
         String? gifId,
-        String? stickerId,
+        int? stickerId,
         http.Client? client}) =>
     _sendAuthorized(
       client,
@@ -2681,6 +2684,19 @@ Future<bool> undoSticker(
           _endpoint(backendUrl, '/stickers/messages/$messageId/undo'),
           headers: _authorization(token)),
       (data) => data['removed'] as bool? ?? false,
+    );
+
+/// GET .../stickers: the chat's sticker picker: its groups in order, each
+/// with the stickers that can be sent (with links to their pictures).
+Future<List<HuntrStickerGroup>> fetchStickerCatalog(
+        {required String backendUrl,
+        required String token,
+        http.Client? client}) =>
+    _sendAuthorized(
+      client,
+      (httpClient) => httpClient.get(_endpoint(backendUrl, '/stickers'),
+          headers: _authorization(token)),
+      (data) => HuntrStickerGroup.listFromJson(data['groups']),
     );
 
 /// GET .../stickers/people/{id}: the stickers on someone's profile (or

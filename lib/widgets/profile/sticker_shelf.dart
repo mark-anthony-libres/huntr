@@ -5,10 +5,12 @@ import '../../services/huntr_backend.dart' show BackendException;
 import '../../services/services_scope.dart';
 import '../../state/app_state.dart';
 import '../../theme.dart';
+import '../chat/sticker_image.dart';
 
-/// "The word on you 👀": the stickers people sent this person in chat, each
+/// "What others say about you": the stickers people sent this person in chat, each
 /// with how many sent it (never who), most first, in a row that scrolls
-/// sideways; See all opens the whole collection. Uses the counts the
+/// sideways; See all opens the whole collection. Nothing shows until
+/// someone has sent one (nor while loading, nor when they couldn't load). Uses the counts the
 /// profile came with ([initial]); without them (my own preview) it loads
 /// them. The backend counts only active stickers, and none between two
 /// people where one blocks the other.
@@ -23,6 +25,8 @@ class StickerShelf extends StatefulWidget {
 }
 
 class _StickerShelfState extends State<StickerShelf> {
+  static const _gap = 10.0;
+
   List<StickerCount>? _stickers;
   bool _failed = false;
 
@@ -65,91 +69,78 @@ class _StickerShelfState extends State<StickerShelf> {
   @override
   Widget build(BuildContext context) {
     final stickers = _stickers;
+    if (_failed || stickers == null || stickers.isEmpty) {
+      return const SizedBox.shrink();
+    }
     return Padding(
       key: const Key('stickerShelf'),
       padding: const EdgeInsets.only(bottom: 24),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+        Row(children: [
+          Icon(Icons.textsms_outlined, color: HuntrColors.orange, size: 30),
+          const SizedBox(width: 14),
           const Expanded(
-            child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('The word on you 👀',
-                      style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 17,
-                          fontWeight: FontWeight.w800)),
-                  SizedBox(height: 2),
-                  Text('Stickers others have sent',
-                      style:
-                          TextStyle(color: HuntrColors.muted, fontSize: 13)),
-                ]),
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('What others say about you',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800)),
+              SizedBox(height: 2),
+              Text('Stickers from other users',
+                  style: TextStyle(color: HuntrColors.muted, fontSize: 13)),
+            ]),
           ),
-          if (stickers != null && stickers.isNotEmpty)
-            TextButton(
-              key: const Key('stickersSeeAll'),
-              style: TextButton.styleFrom(
-                  foregroundColor: HuntrColors.orange,
-                  padding: const EdgeInsets.symmetric(horizontal: 8)),
-              onPressed: () => showStickerCollection(context, widget.userId,
-                  initial: stickers),
-              child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                Text('See all',
-                    style: TextStyle(fontWeight: FontWeight.w700)),
-                Icon(Icons.chevron_right_rounded, size: 20),
-              ]),
-            ),
+          TextButton(
+            key: const Key('stickersSeeAll'),
+            style: TextButton.styleFrom(
+                foregroundColor: HuntrColors.orange,
+                padding: const EdgeInsets.symmetric(horizontal: 8)),
+            onPressed: () => showStickerCollection(context, widget.userId,
+                initial: stickers),
+            child: const Row(mainAxisSize: MainAxisSize.min, children: [
+              Text('See all', style: TextStyle(fontWeight: FontWeight.w700)),
+              Icon(Icons.chevron_right_rounded, size: 20),
+            ]),
+          ),
         ]),
-        const SizedBox(height: 12),
-        if (_failed)
-          TextButton.icon(
-            onPressed: () {
-              setState(() => _failed = false);
-              _load();
-            },
-            icon: const Icon(Icons.refresh_rounded, size: 18),
-            label: const Text("Stickers couldn't load. Try again"),
-          )
-        else if (stickers == null)
-          const SizedBox(
-              height: _StickerCard.height,
-              child: Center(
-                  child: SizedBox.square(
-                      dimension: 22,
-                      child: CircularProgressIndicator(strokeWidth: 2.5))))
-        else if (stickers.isEmpty)
-          const Text('No stickers yet — be the first to send one.',
-              key: Key('stickersEmpty'),
-              style: TextStyle(color: HuntrColors.muted, fontSize: 14))
-        else
-          SizedBox(
-            height: _StickerCard.height,
+        const SizedBox(height: 14),
+        // four across the profile's width; more scroll sideways
+        LayoutBuilder(builder: (context, constraints) {
+          final width =
+              ((constraints.maxWidth - 3 * _gap) / 4).clamp(78.0, 130.0);
+          return SizedBox(
+            height: _StickerCard.heightFor(width),
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               itemCount: stickers.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 10),
-              itemBuilder: (_, i) => _StickerCard(sticker: stickers[i]),
+              separatorBuilder: (_, __) => const SizedBox(width: _gap),
+              itemBuilder: (_, i) => SizedBox(
+                  width: width, child: _StickerCard(sticker: stickers[i])),
             ),
-          ),
+          );
+        }),
       ]),
     );
   }
 }
 
-/// One kind of sticker with its count: compact, the sticker leading.
+/// One kind of sticker with how many sent it: the sticker big, its name,
+/// then the count (people, never who). Fills the width it's given.
 class _StickerCard extends StatelessWidget {
   const _StickerCard({required this.sticker});
 
   final StickerCount sticker;
 
-  static const width = 100.0;
-  static const height = 128.0;
+  /// The height for a card [width] wide: a square for the sticker, then
+  /// the name and count.
+  static double heightFor(double width) => width - 8 + 52;
 
   @override
   Widget build(BuildContext context) => Container(
         key: Key('stickerCount-${sticker.id}'),
-        width: width,
-        padding: const EdgeInsets.fromLTRB(8, 8, 8, 10),
+        padding: const EdgeInsets.fromLTRB(4, 8, 4, 10),
         decoration: BoxDecoration(
           color: HuntrColors.surface,
           borderRadius: BorderRadius.circular(18),
@@ -157,26 +148,34 @@ class _StickerCard extends StatelessWidget {
         ),
         child: Column(children: [
           Expanded(
-            child: Image.asset(sticker.asset,
-                fit: BoxFit.contain,
-                semanticLabel: '${sticker.name} sticker',
-                errorBuilder: (_, __, ___) =>
-                    const Icon(Icons.auto_awesome, color: HuntrColors.muted)),
+            child: StickerImage(url: sticker.imageUrl, name: sticker.name),
           ),
           const SizedBox(height: 6),
-          Text(sticker.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w700)),
-          const SizedBox(height: 1),
-          Text('${sticker.count}',
-              style: TextStyle(
-                  color: HuntrColors.orange,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w800)),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(sticker.name,
+                maxLines: 1,
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700)),
+          ),
+          const SizedBox(height: 4),
+          Semantics(
+            label: '${sticker.count} '
+                '${sticker.count == 1 ? 'person' : 'people'}',
+            excludeSemantics: true,
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              const Icon(Icons.people_alt_rounded,
+                  size: 16, color: HuntrColors.muted),
+              const SizedBox(width: 6),
+              Text('${sticker.count}',
+                  style: const TextStyle(
+                      color: HuntrColors.muted,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700)),
+            ]),
+          ),
         ]),
       );
 }
@@ -238,7 +237,7 @@ class _StickerCollectionState extends State<_StickerCollection> {
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         const Padding(
           padding: EdgeInsets.fromLTRB(20, 0, 20, 4),
-          child: Text('The word on you 👀',
+          child: Text('What others say about you',
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
         ),
         const Padding(
@@ -257,9 +256,9 @@ class _StickerCollectionState extends State<_StickerCollection> {
               : GridView.builder(
                   key: const Key('stickerCollection'),
                   padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                  gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
                       maxCrossAxisExtent: 120,
-                      mainAxisExtent: _StickerCard.height,
+                      mainAxisExtent: _StickerCard.heightFor(110),
                       mainAxisSpacing: 10,
                       crossAxisSpacing: 10),
                   itemCount: _stickers.length,

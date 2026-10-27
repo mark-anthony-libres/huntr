@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../../models/stickers.dart';
 import '../../services/huntr_backend.dart';
 import '../../theme.dart';
+import 'sticker_image.dart';
 
 /// One of HUNTR's stickers in the chat: the sticker itself, no bubble. My
 /// own, while it still counts on their profile, can be undone ([onUndo]):
@@ -26,8 +26,7 @@ class StickerBubble extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Image.asset(stickerAsset(message.sticker!.id),
-                width: 96, height: 96, errorBuilder: (_, __, ___) => const SizedBox()),
+            StickerImage(url: message.sticker?.imageUrl, name: name, size: 96),
             const SizedBox(height: 10),
             Text('Undo “$name”?',
                 style:
@@ -59,19 +58,13 @@ class StickerBubble extends StatelessWidget {
   Widget build(BuildContext context) {
     final sticker = message.sticker;
     if (sticker == null) return const SizedBox.shrink();
-    final canUndo = onUndo != null && message.fromMe && sticker.active &&
-        !message.pending;
-    final picture = Image.asset(
-      stickerAsset(sticker.id),
+    final canUndo =
+        onUndo != null && message.fromMe && sticker.active && !message.pending;
+    final picture = StickerImage(
       key: Key('sticker-${message.id ?? message.clientId}'),
-      width: size,
-      height: size,
-      fit: BoxFit.contain,
-      semanticLabel: '${sticker.name} sticker',
-      errorBuilder: (_, __, ___) => SizedBox(
-          width: size,
-          height: size,
-          child: Center(child: Text('✨ ${sticker.name}'))),
+      url: sticker.imageUrl,
+      name: sticker.name,
+      size: size,
     );
     return Column(
       crossAxisAlignment:
@@ -80,13 +73,18 @@ class StickerBubble extends StatelessWidget {
       children: [
         Opacity(
           opacity: message.pending ? 0.6 : 1,
+          // just the sticker: no hover box or tooltip over it
           child: canUndo
-              ? Tooltip(
-                  message: 'Tap to undo',
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(16),
-                    onTap: () => _askUndo(context),
-                    child: picture,
+              ? Semantics(
+                  button: true,
+                  hint: 'Tap to undo',
+                  child: MouseRegion(
+                    cursor: SystemMouseCursors.click,
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => _askUndo(context),
+                      child: picture,
+                    ),
                   ),
                 )
               : picture,

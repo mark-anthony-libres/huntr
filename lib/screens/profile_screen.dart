@@ -195,9 +195,9 @@ class ProfileScreen extends StatelessWidget {
                 ProfileMeta(icon: Icons.height, label: '${p.heightCm} cm'),
             ],
           ),
-          const SizedBox(height: 24),
-          // "The word on you": stickers people sent them (mine in a preview);
-          // nobody anonymous has one shown
+          const SizedBox(height: 28),
+          // "What others say about you": stickers people sent them (mine in a
+          // preview; only when there are some); nobody anonymous has one shown
           if ((_isPreview ? app.myUserId : p.backendId) case final userId?
               when !p.isAnonymous)
             StickerShelf(

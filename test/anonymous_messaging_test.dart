@@ -179,7 +179,7 @@ class _Fake extends MessagingService {
       required String clientId,
       int? replyToId,
       String? gifId,
-      String? stickerId}) async {
+      int? stickerId}) async {
     calls.add('direct $recipientId $body');
     throw StateError('an anonymous chat must not send directly');
   }
@@ -191,7 +191,7 @@ class _Fake extends MessagingService {
       required String clientId,
       int? replyToId,
       String? gifId,
-      String? stickerId}) async {
+      int? stickerId}) async {
     calls.add('anonymous $conversationId $body');
     return ChatMessage(
         id: 70,

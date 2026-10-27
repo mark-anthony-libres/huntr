@@ -1,5 +1,6 @@
 import '../config/google_oauth_config.dart';
 import '../models/models.dart' show Profile;
+import '../models/stickers.dart';
 import 'huntr_backend.dart' as backend;
 import 'huntr_backend.dart'
     show
@@ -41,7 +42,7 @@ class MessagingService {
           required String clientId,
           int? replyToId,
           String? gifId,
-          String? stickerId}) async =>
+          int? stickerId}) async =>
       backend.sendAnonymousMessage(
           backendUrl: await _url(),
           token: token,
@@ -142,7 +143,7 @@ class MessagingService {
           required String clientId,
           int? replyToId,
           String? gifId,
-          String? stickerId}) async =>
+          int? stickerId}) async =>
       backend.sendMessage(
           backendUrl: await _url(),
           token: token,
@@ -157,6 +158,10 @@ class MessagingService {
   Future<bool> undoSticker(String token, int messageId) async =>
       backend.undoSticker(
           backendUrl: await _url(), token: token, messageId: messageId);
+
+  /// The sticker picker's groups, each with the stickers that can be sent.
+  Future<List<HuntrStickerGroup>> fetchStickers(String token) async =>
+      backend.fetchStickerCatalog(backendUrl: await _url(), token: token);
 
   /// GIFs or stickers for the GIF picker (trending when [query] is empty).
   Future<GifPage> fetchGifs(String token,

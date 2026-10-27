@@ -1043,7 +1043,8 @@ class MessagingState extends ChangeNotifier {
       sentAt: DateTime.now(),
       clientId: newClientId(),
       type: ChatMessageType.sticker,
-      sticker: ChatSticker(id: sticker.id, name: sticker.name),
+      sticker: ChatSticker(
+          id: sticker.id, name: sticker.name, imageUrl: sticker.imageUrl),
     );
     final thread = _threads.putIfAbsent(
         conversationId, () => _Thread()..loaded = true)
@@ -1100,13 +1101,14 @@ class MessagingState extends ChangeNotifier {
 
   /// HUNTR's stickers I've sent in this conversation that still count
   /// (sending one again is refused until it's undone).
-  Set<String> activeStickersSent(int conversationId) => {
-        for (final m in _threads[conversationId]?.messages ?? const <ChatMessage>[])
+  Set<int> activeStickersSent(int conversationId) => {
+        for (final m
+            in _threads[conversationId]?.messages ?? const <ChatMessage>[])
           if (m.fromMe &&
               m.type == ChatMessageType.sticker &&
-              m.sticker != null &&
+              m.sticker?.id != null &&
               m.sticker!.active)
-            m.sticker!.id,
+            m.sticker!.id!,
       };
 
   /// A message gone from a conversation (a sticker taken back, here or on
@@ -1134,6 +1136,10 @@ class MessagingState extends ChangeNotifier {
       unawaited(refresh());
     }
   }
+
+  /// The sticker picker's groups and stickers (null when signed out).
+  Future<List<HuntrStickerGroup>?> stickerCatalog() =>
+      _call((t) => service.fetchStickers(t));
 
   /// GIFs or stickers for the GIF picker (trending when [query] is empty;
   /// null when signed out).
