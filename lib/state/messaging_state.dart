@@ -1137,8 +1137,9 @@ class MessagingState extends ChangeNotifier {
     }
   }
 
-  /// The sticker picker's groups and stickers (null when signed out).
-  Future<List<HuntrStickerGroup>?> stickerCatalog() =>
+  /// The sticker picker's groups, stickers and my Beans, fresh each time
+  /// it opens (null when signed out).
+  Future<StickerCatalog?> stickerCatalog() =>
       _call((t) => service.fetchStickers(t));
 
   /// GIFs or stickers for the GIF picker (trending when [query] is empty;

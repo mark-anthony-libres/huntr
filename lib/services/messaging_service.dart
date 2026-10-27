@@ -159,8 +159,9 @@ class MessagingService {
       backend.undoSticker(
           backendUrl: await _url(), token: token, messageId: messageId);
 
-  /// The sticker picker's groups, each with the stickers that can be sent.
-  Future<List<HuntrStickerGroup>> fetchStickers(String token) async =>
+  /// The sticker picker's groups (each with the stickers that can be sent,
+  /// and their prices) and my Beans.
+  Future<StickerCatalog> fetchStickers(String token) async =>
       backend.fetchStickerCatalog(backendUrl: await _url(), token: token);
 
   /// GIFs or stickers for the GIF picker (trending when [query] is empty).

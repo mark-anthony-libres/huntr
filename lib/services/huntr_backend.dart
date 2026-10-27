@@ -2687,8 +2687,9 @@ Future<bool> undoSticker(
     );
 
 /// GET .../stickers: the chat's sticker picker: its groups in order, each
-/// with the stickers that can be sent (with links to their pictures).
-Future<List<HuntrStickerGroup>> fetchStickerCatalog(
+/// with the stickers that can be sent (with links to their pictures and
+/// their prices), and my Beans.
+Future<StickerCatalog> fetchStickerCatalog(
         {required String backendUrl,
         required String token,
         http.Client? client}) =>
@@ -2696,7 +2697,7 @@ Future<List<HuntrStickerGroup>> fetchStickerCatalog(
       client,
       (httpClient) => httpClient.get(_endpoint(backendUrl, '/stickers'),
           headers: _authorization(token)),
-      (data) => HuntrStickerGroup.listFromJson(data['groups']),
+      StickerCatalog.fromJson,
     );
 
 /// GET .../stickers/people/{id}: the stickers on someone's profile (or

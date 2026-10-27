@@ -6,7 +6,9 @@ import 'package:flutter/material.dart';
 import '../state/block_state.dart';
 import '../widgets/block_gate.dart';
 import '../models/models.dart';
+import '../models/stickers.dart';
 import '../services/huntr_backend.dart';
+import '../services/services_scope.dart';
 import '../state/app_state.dart';
 import '../state/messaging_state.dart';
 import '../state/tap_state.dart';
@@ -64,7 +66,11 @@ class ProfileScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (_isPreview) return _page(context);
+    // my own profile comes without its stickers: they're loaded for it
+    if (_isPreview) {
+      return _MyStickers(
+          builder: (context, mine) => _page(context, myStickers: mine));
+    }
     final p = person ?? AppScope.of(context).profileById(profileId!);
     // a block shows only that (checked again each time this opens); each
     // opening is one visit in their Viewers
@@ -73,7 +79,7 @@ class ProfileScreen extends StatelessWidget {
         child: BlockGate(userId: p?.backendId, child: Builder(builder: _page)));
   }
 
-  Widget _page(BuildContext context) {
+  Widget _page(BuildContext context, {List<StickerCount>? myStickers}) {
     final app = AppScope.of(context);
     final p = previewProfile ?? person ?? app.profileById(profileId!);
     if (p == null) {
@@ -196,14 +202,6 @@ class ProfileScreen extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 28),
-          // "What others say about you": stickers people sent them (mine in a
-          // preview; only when there are some); nobody anonymous has one shown
-          if ((_isPreview ? app.myUserId : p.backendId) case final userId?
-              when !p.isAnonymous)
-            StickerShelf(
-                key: ValueKey('stickers-$userId'),
-                userId: userId,
-                initial: _isPreview ? null : p.stickers),
           if (!_isPreview && conn == Connection.incoming)
             Container(
               margin: const EdgeInsets.only(bottom: 22),
@@ -260,6 +258,17 @@ class ProfileScreen extends StatelessWidget {
                   ],
                 ),
               ),
+            // Testimonials ("What others say about you" on mine): stickers
+            // people sent them, right after Expectation, when there are
+            // some; nobody anonymous has them shown
+            if ((_isPreview ? app.myUserId : p.backendId) case final userId?
+                when !p.isAnonymous)
+              if ((_isPreview ? myStickers : p.stickers) case final stickers?
+                  when stickers.isNotEmpty)
+                StickerShelf(
+                    key: ValueKey('stickers-$userId'),
+                    userId: userId,
+                    stickers: stickers),
             if (p.interests.isNotEmpty)
               ProfileSection(
                 title: 'Interests',
@@ -768,6 +777,39 @@ class _CountsAsVisitState extends State<_CountsAsVisit> {
 
   @override
   Widget build(BuildContext context) => widget.child;
+}
+
+/// The stickers on my own profile, for its preview (none until they're in,
+/// or when they can't load).
+class _MyStickers extends StatefulWidget {
+  const _MyStickers({required this.builder});
+
+  final Widget Function(BuildContext, List<StickerCount>?) builder;
+
+  @override
+  State<_MyStickers> createState() => _MyStickersState();
+}
+
+class _MyStickersState extends State<_MyStickers> {
+  List<StickerCount>? _stickers;
+  bool _asked = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_asked) return;
+    _asked = true;
+    final explore = ServicesScope.exploreOf(context);
+    final app = AppScope.read(context);
+    final token = app.sessionToken, userId = app.myUserId;
+    if (explore == null || token == null || userId == null) return;
+    explore.fetchStickers(token, userId).then(
+        (stickers) => mounted ? setState(() => _stickers = stickers) : null,
+        onError: (_) {});
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.builder(context, _stickers);
 }
 
 /// [sections] with a thin line between each.

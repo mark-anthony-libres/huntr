@@ -7,8 +7,9 @@ import 'package:huntr/state/messaging_state.dart';
 import 'package:huntr/theme.dart';
 import 'package:huntr/widgets/chat/gif_picker.dart';
 
-// The chat's sticker picker: HUNTR's stickers in the server's groups, and a
-// one-per-person group's rule shown before sending.
+// The chat's sticker picker: HUNTR's stickers in the server's groups, a
+// one-per-person group's rule shown before sending, and prices in Beans
+// (what I can't afford is greyed out and can't be picked).
 
 const _compliments = HuntrStickerGroup(
   id: 1,
@@ -29,28 +30,40 @@ const _roasts = HuntrStickerGroup(
 );
 
 class _Catalog extends MessagingService {
-  _Catalog(this.groups);
+  _Catalog(this.groups, this.beans);
 
   final List<HuntrStickerGroup> groups;
+  int beans;
   int loads = 0;
 
   @override
-  Future<List<HuntrStickerGroup>> fetchStickers(String token) async {
+  Future<StickerCatalog> fetchStickers(String token) async {
     loads++;
-    return groups;
+    return StickerCatalog(groups: groups, beansBalance: beans);
   }
 }
+
+// Beans prices (the example: 500 Beans to spend)
+const _priced = HuntrStickerGroup(id: 3, name: 'Priced', stickers: [
+  HuntrSticker(id: 31, name: 'Pogi', groupId: 3, beansCost: 500),
+  HuntrSticker(id: 32, name: 'Chudai', groupId: 3, beansCost: 1000),
+  HuntrSticker(id: 33, name: 'Cheap', groupId: 3, beansCost: 300),
+  HuntrSticker(id: 34, name: 'Pricey', groupId: 3, beansCost: 700),
+  HuntrSticker(id: 35, name: 'Gift', groupId: 3),
+]);
 
 void main() {
   late ChatPick? picked;
 
   Future<_Catalog> open(WidgetTester tester,
       {List<HuntrStickerGroup> groups = const [_compliments, _roasts],
-      Set<int> sent = const {}}) async {
+      Set<int> sent = const {},
+      int beans = 5000,
+      _Catalog? service}) async {
     tester.view.physicalSize = const Size(420, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
-    final service = _Catalog(groups);
+    service ??= _Catalog(groups, beans);
     picked = null;
     await tester.pumpWidget(AppScope(
       state: AppState()..startSession('t'),
@@ -73,8 +86,14 @@ void main() {
     ));
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
-    return service;
+    return service!;
   }
+
+  Semantics tile(WidgetTester tester, int id) => tester.widget<Semantics>(find
+      .ancestor(
+          of: find.byKey(Key('huntrSticker-$id')),
+          matching: find.byType(Semantics))
+      .first);
 
   double top(WidgetTester tester, String key) =>
       tester.getTopLeft(find.byKey(Key(key))).dy;
@@ -151,5 +170,71 @@ void main() {
   testWidgets('no stickers yet', (tester) async {
     await open(tester, groups: const []);
     expect(find.text('No HUNTR stickers yet'), findsOneWidget);
+  });
+
+  testWidgets(
+      'with 500 Beans: what costs more is greyed out and can\'t be picked',
+      (tester) async {
+    await open(tester, groups: const [_priced], beans: 500);
+    expect(
+        find.descendant(
+            of: find.byKey(const Key('beansBalance')),
+            matching: find.text('500')),
+        findsOneWidget);
+    // prices under each sticker
+    expect(
+        find.descendant(
+            of: find.byKey(const Key('stickerPrice-32')),
+            matching: find.text('1,000')),
+        findsOneWidget);
+    expect(
+        find.descendant(
+            of: find.byKey(const Key('stickerPrice-35')),
+            matching: find.text('Free')),
+        findsOneWidget);
+    // enabled: 500 (exactly enough), 300, free; disabled: 1,000 and 700
+    for (final id in [31, 33, 35]) {
+      expect(tile(tester, id).properties.enabled, isTrue,
+          reason: 'sticker $id');
+    }
+    for (final id in [32, 34]) {
+      expect(tile(tester, id).properties.enabled, isFalse,
+          reason: 'sticker $id');
+      expect(
+          find.descendant(
+              of: find.byKey(Key('huntrSticker-$id')),
+              matching: find.byType(ColorFiltered)),
+          findsOneWidget);
+    }
+    // a greyed one does nothing
+    await tester.tap(find.byKey(const Key('huntrSticker-32')));
+    await tester.pumpAndSettle();
+    expect(picked, isNull);
+    expect(find.byKey(const Key('huntrSticker-32')), findsOneWidget);
+    // one I can afford is picked
+    await tester.tap(find.byKey(const Key('huntrSticker-31')));
+    await tester.pumpAndSettle();
+    expect((picked! as PickedSticker).sticker.id, 31);
+  });
+
+  testWidgets('after a send the balance and what I can afford are fresh',
+      (tester) async {
+    final service = _Catalog(const [_priced], 1000);
+    await open(tester, service: service);
+    expect(tile(tester, 32).properties.enabled, isTrue);
+    await tester.tap(find.byKey(const Key('huntrSticker-34'))); // 700
+    await tester.pumpAndSettle();
+    service.beans = 300; // what the server says now
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    expect(service.loads, 2);
+    expect(
+        find.descendant(
+            of: find.byKey(const Key('beansBalance')),
+            matching: find.text('300')),
+        findsOneWidget);
+    expect(tile(tester, 32).properties.enabled, isFalse);
+    expect(tile(tester, 34).properties.enabled, isFalse);
+    expect(tile(tester, 33).properties.enabled, isTrue);
   });
 }

@@ -258,10 +258,11 @@ class _GifResultsState extends State<_GifResults> {
 }
 
 /// HUNTR's stickers, in the server's groups (sections, in their order; run
-/// from the admin dashboard). One already sent to this person says Sent: it
-/// counts on their profile until it's undone. In a one-per-person group,
-/// once one is sent to them the others wait until it's undone (the server
-/// checks too; this says so before trying).
+/// from the admin dashboard), each with its price in Beans and my balance
+/// over them: one I can't afford is greyed out and can't be picked. One
+/// already sent to this person says Sent: it counts on their profile until
+/// it's undone. In a one-per-person group, once one is sent to them the
+/// others wait until it's undone. (The server checks all of it again.)
 class _HuntrStickers extends StatefulWidget {
   const _HuntrStickers({required this.query, required this.sent});
 
@@ -274,7 +275,7 @@ class _HuntrStickers extends StatefulWidget {
 
 class _HuntrStickersState extends State<_HuntrStickers>
     with AutomaticKeepAliveClientMixin {
-  List<HuntrStickerGroup>? _groups;
+  StickerCatalog? _catalog;
   String? _error;
 
   // loaded once while the picker is open, not again on each visit to the tab
@@ -289,11 +290,15 @@ class _HuntrStickersState extends State<_HuntrStickers>
 
   Future<void> _load() async {
     final messaging = MessagingScope.read(context);
-    if (messaging == null) return setState(() => _groups = const []);
+    if (messaging == null) {
+      return setState(() => _catalog = const StickerCatalog(groups: []));
+    }
     setState(() => _error = null);
     try {
-      final groups = await messaging.stickerCatalog();
-      if (mounted) setState(() => _groups = groups ?? const []);
+      final catalog = await messaging.stickerCatalog();
+      if (mounted) {
+        setState(() => _catalog = catalog ?? const StickerCatalog(groups: []));
+      }
     } catch (error) {
       if (!mounted) return;
       setState(() => _error = error is BackendException
@@ -309,7 +314,7 @@ class _HuntrStickersState extends State<_HuntrStickers>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    final groups = _groups;
+    final catalog = _catalog;
     if (_error != null) {
       return Center(
         child: Padding(
@@ -322,12 +327,12 @@ class _HuntrStickersState extends State<_HuntrStickers>
         ),
       );
     }
-    if (groups == null) {
+    if (catalog == null) {
       return const Center(child: CircularProgressIndicator());
     }
     final q = widget.query.toLowerCase();
     final shown = [
-      for (final group in groups)
+      for (final group in catalog.groups)
         if (group.stickers
                 .where((s) => q.isEmpty || s.name.toLowerCase().contains(q))
                 .toList()
@@ -342,6 +347,7 @@ class _HuntrStickersState extends State<_HuntrStickers>
     }
     return CustomScrollView(
       slivers: [
+        SliverToBoxAdapter(child: _BeansBalance(beans: catalog.beansBalance)),
         for (final (:group, :stickers) in shown) ...[
           SliverToBoxAdapter(
             child: _GroupHeader(
@@ -363,7 +369,8 @@ class _HuntrStickersState extends State<_HuntrStickers>
                   crossAxisSpacing: 8),
               delegate: SliverChildBuilderDelegate(
                 childCount: stickers.length,
-                (context, i) => _stickerTile(group, stickers[i]),
+                (context, i) =>
+                    _stickerTile(group, stickers[i], catalog.beansBalance),
               ),
             ),
           ),
@@ -372,13 +379,16 @@ class _HuntrStickersState extends State<_HuntrStickers>
     );
   }
 
-  Widget _stickerTile(HuntrStickerGroup group, HuntrSticker sticker) {
+  Widget _stickerTile(
+      HuntrStickerGroup group, HuntrSticker sticker, int beans) {
     final already = widget.sent.contains(sticker.id);
     // another of a one-per-person group is out with them
     final groupTaken = !already &&
         group.onePerGroupPerRecipient &&
         group.stickers.any((s) => widget.sent.contains(s.id));
-    final VoidCallback onTap;
+    // exactly enough is enough
+    final affordable = sticker.beansCost <= beans;
+    final VoidCallback? onTap;
     final String label;
     if (already) {
       label = '${sticker.name}, already sent';
@@ -389,31 +399,49 @@ class _HuntrStickersState extends State<_HuntrStickers>
       onTap = () => _explain(
           'You can send them one sticker from “${group.name}”. '
           'Undo the one you sent (tap it in the chat) to send a different one.');
+    } else if (!affordable) {
+      label = '${sticker.name}, costs ${formatBeans(sticker.beansCost)} Beans, '
+          'you have ${formatBeans(beans)}';
+      onTap = null; // greyed out: can't be picked
     } else {
       label = sticker.name;
       onTap = () => Navigator.of(context).pop(PickedSticker(sticker));
     }
+    final cantAfford = !already && !groupTaken && !affordable;
+    Widget picture = Padding(
+      padding: const EdgeInsets.fromLTRB(4, 4, 4, 22),
+      child: StickerImage(url: sticker.imageUrl, name: sticker.name),
+    );
+    // greyed (the picture itself is never changed)
+    if (cantAfford) {
+      picture = ColorFiltered(colorFilter: _greyscale, child: picture);
+    }
     return Semantics(
       button: true,
+      enabled: onTap != null,
       label: label,
       excludeSemantics: true,
       child: InkWell(
         key: Key('huntrSticker-${sticker.id}'),
         borderRadius: BorderRadius.circular(14),
         onTap: onTap,
+        mouseCursor: onTap == null
+            ? SystemMouseCursors.forbidden
+            : SystemMouseCursors.click,
         child: Stack(fit: StackFit.expand, children: [
           Opacity(
-            opacity: already ? 0.4 : (groupTaken ? 0.25 : 1),
-            child: Padding(
-              padding: const EdgeInsets.all(4),
-              child: StickerImage(url: sticker.imageUrl, name: sticker.name),
-            ),
+            opacity: already ? 0.4 : (groupTaken || cantAfford ? 0.35 : 1),
+            child: picture,
           ),
-          if (already)
-            const Align(
-              alignment: Alignment.bottomCenter,
-              child: _Badge(icon: Icons.check_rounded, text: 'Sent'),
-            ),
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: already
+                ? const _Badge(icon: Icons.check_rounded, text: 'Sent')
+                : _Price(
+                    key: Key('stickerPrice-${sticker.id}'),
+                    beans: sticker.beansCost,
+                    short: cantAfford),
+          ),
         ]),
       ),
     );
@@ -495,6 +523,87 @@ class _Badge extends StatelessWidget {
           Text(text,
               style:
                   const TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
+        ]),
+      );
+}
+
+/// Greys a sticker I can't afford.
+const _greyscale = ColorFilter.matrix([
+  0.2126, 0.7152, 0.0722, 0, 0, //
+  0.2126, 0.7152, 0.0722, 0, 0, //
+  0.2126, 0.7152, 0.0722, 0, 0, //
+  0, 0, 0, 1, 0,
+]);
+
+/// My Beans, over the stickers.
+class _BeansBalance extends StatelessWidget {
+  const _BeansBalance({required this.beans});
+
+  final int beans;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+        child: Container(
+          key: const Key('beansBalance'),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: HuntrColors.orange.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(14),
+            border:
+                Border.all(color: HuntrColors.orange.withValues(alpha: 0.35)),
+          ),
+          child: Row(children: [
+            Icon(Icons.toll_rounded, color: HuntrColors.orange, size: 22),
+            const SizedBox(width: 10),
+            const Expanded(
+              child: Text('Your Beans',
+                  style: TextStyle(color: HuntrColors.muted, fontSize: 13.5)),
+            ),
+            Text(formatBeans(beans),
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800)),
+          ]),
+        ),
+      );
+}
+
+/// A sticker's price under it: Free, or its Beans (muted when I don't have
+/// enough).
+class _Price extends StatelessWidget {
+  const _Price({super.key, required this.beans, required this.short});
+
+  final int beans;
+
+  /// I don't have enough.
+  final bool short;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        margin: const EdgeInsets.only(bottom: 2),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: HuntrColors.surfaceHigh,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+              color: short
+                  ? HuntrColors.border
+                  : HuntrColors.orange.withValues(alpha: 0.45)),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          if (beans > 0) ...[
+            Icon(Icons.toll_rounded,
+                size: 13,
+                color: short ? HuntrColors.muted : HuntrColors.orange),
+            const SizedBox(width: 3),
+          ],
+          Text(beans > 0 ? formatBeans(beans) : 'Free',
+              style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                  color: short ? HuntrColors.muted : Colors.white)),
         ]),
       );
 }

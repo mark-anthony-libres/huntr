@@ -4,13 +4,18 @@
 /// dashboard): adding or changing one needs no new app.
 class HuntrSticker {
   const HuntrSticker(
-      {required this.id, required this.name, this.groupId, this.imageUrl});
+      {required this.id,
+      required this.name,
+      this.groupId,
+      this.imageUrl,
+      this.beansCost = 0});
 
   factory HuntrSticker.fromJson(Map<String, dynamic> json) => HuntrSticker(
         id: json['id'] as int,
         name: json['name'] as String? ?? 'Sticker',
         groupId: json['group_id'] as int?,
         imageUrl: json['image_url'] as String?,
+        beansCost: json['beans_cost'] as int? ?? 0,
       );
 
   static List<HuntrSticker> listFromJson(Object? json) => [
@@ -24,6 +29,35 @@ class HuntrSticker {
 
   /// Its picture (a temporary link; null when it couldn't be made).
   final String? imageUrl;
+
+  /// What sending it costs (0: free). The server charges it, from its own
+  /// price, never this one.
+  final int beansCost;
+}
+
+/// The chat's sticker picker: its groups, and how many Beans I have (to
+/// show which stickers I can afford; the server checks again on sending).
+class StickerCatalog {
+  const StickerCatalog({required this.groups, this.beansBalance = 0});
+
+  factory StickerCatalog.fromJson(Map<String, dynamic> json) => StickerCatalog(
+        groups: HuntrStickerGroup.listFromJson(json['groups']),
+        beansBalance: json['beans_balance'] as int? ?? 0,
+      );
+
+  final List<HuntrStickerGroup> groups;
+  final int beansBalance;
+}
+
+/// A number of Beans as people read it: 1,000.
+String formatBeans(int beans) {
+  final digits = beans.abs().toString();
+  final grouped = StringBuffer();
+  for (var i = 0; i < digits.length; i++) {
+    if (i > 0 && (digits.length - i) % 3 == 0) grouped.write(',');
+    grouped.write(digits[i]);
+  }
+  return '${beans < 0 ? '-' : ''}$grouped';
 }
 
 /// A section of the chat's sticker picker, with its stickers in order (as
