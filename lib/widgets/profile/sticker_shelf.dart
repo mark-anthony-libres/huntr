@@ -106,10 +106,10 @@ class _StickerShelfState extends State<StickerShelf> {
           ),
         ]),
         const SizedBox(height: 14),
-        // four across the profile's width; more scroll sideways
+        // compact: five across a phone, at most 92 wide; more scroll sideways
         LayoutBuilder(builder: (context, constraints) {
           final width =
-              ((constraints.maxWidth - 3 * _gap) / 4).clamp(78.0, 130.0);
+              ((constraints.maxWidth - 4 * _gap) / 5).clamp(64.0, 92.0);
           return SizedBox(
             height: _StickerCard.heightFor(width),
             child: ListView.separated(
@@ -135,12 +135,12 @@ class _StickerCard extends StatelessWidget {
 
   /// The height for a card [width] wide: a square for the sticker, then
   /// the name and count.
-  static double heightFor(double width) => width - 8 + 52;
+  static double heightFor(double width) => width - 8 + 44;
 
   @override
   Widget build(BuildContext context) => Container(
         key: Key('stickerCount-${sticker.id}'),
-        padding: const EdgeInsets.fromLTRB(4, 8, 4, 10),
+        padding: const EdgeInsets.fromLTRB(4, 6, 4, 8),
         decoration: BoxDecoration(
           color: HuntrColors.surface,
           borderRadius: BorderRadius.circular(18),
@@ -150,29 +150,29 @@ class _StickerCard extends StatelessWidget {
           Expanded(
             child: StickerImage(url: sticker.imageUrl, name: sticker.name),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 4),
           FittedBox(
             fit: BoxFit.scaleDown,
             child: Text(sticker.name,
                 maxLines: 1,
                 style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 14,
+                    fontSize: 12.5,
                     fontWeight: FontWeight.w700)),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 2),
           Semantics(
             label: '${sticker.count} '
                 '${sticker.count == 1 ? 'person' : 'people'}',
             excludeSemantics: true,
             child: Row(mainAxisSize: MainAxisSize.min, children: [
               const Icon(Icons.people_alt_rounded,
-                  size: 16, color: HuntrColors.muted),
-              const SizedBox(width: 6),
+                  size: 14, color: HuntrColors.muted),
+              const SizedBox(width: 4),
               Text('${sticker.count}',
                   style: const TextStyle(
                       color: HuntrColors.muted,
-                      fontSize: 14,
+                      fontSize: 12.5,
                       fontWeight: FontWeight.w700)),
             ]),
           ),
@@ -257,8 +257,8 @@ class _StickerCollectionState extends State<_StickerCollection> {
                   key: const Key('stickerCollection'),
                   padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
                   gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-                      maxCrossAxisExtent: 120,
-                      mainAxisExtent: _StickerCard.heightFor(110),
+                      maxCrossAxisExtent: 100,
+                      mainAxisExtent: _StickerCard.heightFor(92),
                       mainAxisSpacing: 10,
                       crossAxisSpacing: 10),
                   itemCount: _stickers.length,
