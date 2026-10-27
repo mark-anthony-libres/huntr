@@ -33,6 +33,8 @@ class StickerImage extends StatelessWidget {
       height: size,
       fit: BoxFit.contain,
       semanticLabel: '$name sticker',
+      // on the web, S3 (no CORS) only serves it to a plain <img>, as for photos
+      webHtmlElementStrategy: WebHtmlElementStrategy.fallback,
       // a new link for the same picture (they're renewed daily) keeps the
       // old one on screen until it's in
       gaplessPlayback: true,
