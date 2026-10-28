@@ -35,9 +35,17 @@ Future<bool> installWebsite(BuildContext context) async {
 /// "Install HUNTR" (the sign-in page): installs the website as an app, where
 /// it can be (it shows once the browser offers it).
 class InstallWebsiteButton extends StatefulWidget {
-  const InstallWebsiteButton({super.key, this.fontSize = 16});
+  const InstallWebsiteButton(
+      {super.key, this.fontSize = 16, this.style, this.leadingGap = 0});
 
   final double fontSize;
+
+  /// How it looks (a plain text button without one).
+  final ButtonStyle? style;
+
+  /// Space before it, only while it shows (so what's beside it stays
+  /// centered when it doesn't).
+  final double leadingGap;
 
   @override
   State<InstallWebsiteButton> createState() => _InstallWebsiteButtonState();
@@ -56,8 +64,9 @@ class _InstallWebsiteButtonState extends State<InstallWebsiteButton> {
   @override
   Widget build(BuildContext context) {
     if (!canInstallWebsite) return const SizedBox.shrink();
-    return TextButton.icon(
+    final button = TextButton.icon(
       key: const Key('signInInstallWebsite'),
+      style: widget.style,
       onPressed: () async {
         await installWebsite(context);
         if (mounted) setState(() {});
@@ -67,6 +76,10 @@ class _InstallWebsiteButtonState extends State<InstallWebsiteButton> {
           style: TextStyle(
               fontSize: widget.fontSize, fontWeight: FontWeight.w700)),
     );
+    return widget.leadingGap == 0
+        ? button
+        : Padding(
+            padding: EdgeInsets.only(left: widget.leadingGap), child: button);
   }
 }
 

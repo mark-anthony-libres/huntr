@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../services/agreement_service.dart';
 import '../services/services_scope.dart';
@@ -10,6 +11,22 @@ import '../widgets/sign_in/sign_in_button.dart';
 import '../widgets/sign_in/privacy_card.dart';
 import '../widgets/install_banner.dart' show InstallWebsiteButton;
 import '../widgets/sign_in/brand_marks.dart';
+
+/// The HUNTR website: everything the app does, for people deciding to join.
+final huntrWebsite = Uri.parse('https://web.huntr.online/');
+
+/// The buttons under sign-in (See all features, Install HUNTR): pills with
+/// a soft orange tint, the text and icon in orange; full height on every
+/// screen (desktops otherwise squeeze buttons), in the chosen theme color.
+ButtonStyle get _pillStyle => TextButton.styleFrom(
+      foregroundColor: HuntrColors.orange,
+      backgroundColor: HuntrColors.orange.withValues(alpha: 0.08),
+      side: BorderSide(color: HuntrColors.orange.withValues(alpha: 0.35)),
+      shape: const StadiumBorder(),
+      minimumSize: const Size(0, 46),
+      visualDensity: VisualDensity.standard,
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+    );
 
 class SignInScreen extends StatelessWidget {
   const SignInScreen({
@@ -139,15 +156,36 @@ class SignInScreen extends StatelessWidget {
                                 const AgreementService(),
                             fontSize: dense || narrow ? 13 : 15,
                           ),
-                          // the website: install it as an app (where the
-                          // browser can; nothing shows otherwise)
-                          if (kIsWeb) ...[
-                            SizedBox(height: gap * 0.6),
-                            Center(
-                              child: InstallWebsiteButton(
-                                  fontSize: dense || narrow ? 14 : 16),
-                            ),
-                          ],
+                          // curious first? everything HUNTR does, on the
+                          // website (a new tab on the web); and, where the
+                          // browser can, installing the website as an app.
+                          // Two pills side by side (they wrap on very
+                          // narrow screens)
+                          SizedBox(height: gap * 0.9),
+                          Wrap(
+                            alignment: WrapAlignment.center,
+                            runSpacing: 10,
+                            children: [
+                              TextButton.icon(
+                                key: const Key('signInSeeFeatures'),
+                                style: _pillStyle,
+                                onPressed: () => launchUrl(huntrWebsite,
+                                    mode: LaunchMode.externalApplication,
+                                    webOnlyWindowName: '_blank'),
+                                icon: const Icon(Icons.auto_awesome_rounded,
+                                    size: 18),
+                                label: Text('See all features',
+                                    style: TextStyle(
+                                        fontSize: dense || narrow ? 14 : 15,
+                                        fontWeight: FontWeight.w700)),
+                              ),
+                              if (kIsWeb)
+                                InstallWebsiteButton(
+                                    fontSize: dense || narrow ? 14 : 15,
+                                    style: _pillStyle,
+                                    leadingGap: 10),
+                            ],
+                          ),
                         ],
                       ),
                     ),
