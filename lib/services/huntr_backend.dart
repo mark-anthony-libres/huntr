@@ -88,6 +88,7 @@ class MyProfile {
   const MyProfile({
     this.id,
     this.isNew = false,
+    this.verified = false,
     required this.name,
     required this.displayName,
     this.bio,
@@ -105,6 +106,7 @@ class MyProfile {
   factory MyProfile.fromJson(Map<String, dynamic> json) => MyProfile(
         id: json['id'] as int?,
         isNew: json['is_new'] as bool? ?? false,
+        verified: json['verified'] as bool? ?? false,
         name: json['name'] as String?,
         displayName: json['display_name'] as String?,
         bio: json['bio'] as String?,
@@ -138,6 +140,9 @@ class MyProfile {
 
   /// Joined in the last week (others see a "New" badge).
   final bool isNew;
+
+  /// Our team confirmed who I am (others see a blue check).
+  final bool verified;
   final String? name;
   final String? displayName;
   final String? bio;

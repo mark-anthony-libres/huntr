@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/models.dart';
 import '../theme.dart';
+import 'verified_badge.dart';
 import 'avatar.dart';
 
 /// One person in the Explore grid, a rounded card: portrait, status and
@@ -144,9 +145,9 @@ class ProfileTile extends StatelessWidget {
                               alignment: PlaceholderAlignment.middle,
                               child: Padding(
                                 padding: const EdgeInsets.only(left: 4),
-                                child: Icon(Icons.verified,
+                                child: VerifiedBadge(
                                     size: compact ? 13 : 15,
-                                    color: HuntrColors.orange),
+                                    interactive: false),
                               ),
                             ),
                         ]),
@@ -259,8 +260,8 @@ class ProfileRowTile extends StatelessWidget {
                                 alignment: PlaceholderAlignment.middle,
                                 child: Padding(
                                   padding: const EdgeInsets.only(left: 4),
-                                  child: Icon(Icons.verified,
-                                      size: 15, color: HuntrColors.orange),
+                                  child: VerifiedBadge(
+                                      size: 15, interactive: false),
                                 ),
                               ),
                           ]),

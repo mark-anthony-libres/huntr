@@ -10,6 +10,7 @@ import '../services/services_scope.dart';
 import '../state/app_state.dart';
 import '../state/messaging_state.dart';
 import '../theme.dart';
+import '../widgets/verified_badge.dart';
 import '../widgets/anonymous_avatar.dart';
 import '../widgets/avatar.dart';
 import 'profile_screen.dart';
@@ -1025,9 +1026,20 @@ class _ChatScreenState extends State<ChatScreen> {
                         child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(p.nameAndAge,
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.w700)),
+                              Row(children: [
+                                Flexible(
+                                  child: Text(p.nameAndAge,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.w700)),
+                                ),
+                                // (an anonymous person never has it)
+                                if (p.verified) ...[
+                                  const SizedBox(width: 4),
+                                  VerifiedBadge(size: 16, name: p.name),
+                                ],
+                              ]),
                               // where I'm anonymous: whom they see
                               if (anonymous != null && anonymous.iAmAnonymous)
                                 Row(children: [

@@ -175,7 +175,8 @@ class _SessionGateState extends State<SessionGate> {
   void _applyProfile(AppState app, MyProfile profile) {
     app
       ..myUserId = profile.id
-      ..myIsNew = profile.isNew;
+      ..myIsNew = profile.isNew
+      ..myVerified = profile.verified;
     final latitude = profile.latitude;
     final longitude = profile.longitude;
     app.completeOnboarding(

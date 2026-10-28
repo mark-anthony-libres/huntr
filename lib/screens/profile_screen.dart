@@ -14,6 +14,7 @@ import '../state/messaging_state.dart';
 import '../state/tap_state.dart';
 import '../theme.dart';
 import '../widgets/profile_tile.dart';
+import '../widgets/verified_badge.dart';
 import '../widgets/avatar.dart';
 import '../widgets/network_photo.dart';
 import '../widgets/share_sheet.dart';
@@ -94,6 +95,8 @@ class ProfileScreen extends StatelessWidget {
 
     // Wide screens (web, tablets): photo card left, details right.
     final wide = MediaQuery.sizeOf(context).width >= 900;
+    // phones: a smaller name and closer edges, so the details fit
+    final phone = MediaQuery.sizeOf(context).width < 480;
     final List<Widget> actions = _isPreview
         ? const []
         : [
@@ -150,7 +153,8 @@ class ProfileScreen extends StatelessWidget {
       ],
     );
     final Widget details = Padding(
-      padding: EdgeInsets.fromLTRB(20, 24, 20, wide ? 24 : 120),
+      padding: EdgeInsets.fromLTRB(
+          phone ? 16 : 20, phone ? 18 : 24, phone ? 16 : 20, wide ? 24 : 120),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -159,16 +163,14 @@ class ProfileScreen extends StatelessWidget {
               Flexible(
                 child: Text(p.nameAndAge,
                     style: text.headlineLarge?.copyWith(
-                        fontSize: 40,
+                        fontSize: phone ? 30 : 40,
                         height: 1.1,
                         fontWeight: FontWeight.w800,
                         color: Colors.white)),
               ),
               if (p.verified) ...[
                 const SizedBox(width: 8),
-                Tooltip(
-                    message: 'Verified',
-                    child: Icon(Icons.verified, color: HuntrColors.orange)),
+                VerifiedBadge(size: phone ? 24 : 30, name: p.name),
               ],
               if (p.isNew) ...[
                 const SizedBox(width: 12),
@@ -176,9 +178,9 @@ class ProfileScreen extends StatelessWidget {
               ],
             ],
           ),
-          const SizedBox(height: 14),
+          SizedBox(height: phone ? 10 : 14),
           Wrap(
-            spacing: 20,
+            spacing: phone ? 14 : 20,
             runSpacing: 8,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
@@ -201,7 +203,7 @@ class ProfileScreen extends StatelessWidget {
                 ProfileMeta(icon: Icons.height, label: '${p.heightCm} cm'),
             ],
           ),
-          const SizedBox(height: 28),
+          SizedBox(height: phone ? 20 : 28),
           if (!_isPreview && conn == Connection.incoming)
             Container(
               margin: const EdgeInsets.only(bottom: 22),
@@ -248,18 +250,11 @@ class ProfileScreen extends StatelessWidget {
             if (p.lookingFor.isNotEmpty)
               ProfileSection(
                 title: 'Expectation',
-                child: Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    // exactly what they picked, all alike
-                    for (final choice in p.lookingFor)
-                      LookingForPill(choice: choice),
-                  ],
-                ),
+                // exactly what they picked, all alike, in even columns
+                child: LookingForGrid(
+                    key: const Key('profileLookingFor'), choices: p.lookingFor),
               ),
-            // Testimonials ("What others say about you" on mine): stickers
-            // people sent them, right after Expectation, when there are
+            // "What people say" (mine too): stickers people sent them, right after Expectation, when there are
             // some; nobody anonymous has them shown
             if ((_isPreview ? app.myUserId : p.backendId) case final userId?
                 when !p.isAnonymous)
@@ -843,9 +838,12 @@ class _StatsGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(builder: (context, box) {
-        const gap = 16.0;
-        final across = box.maxWidth >= 360 ? 2 : 1;
+        const gap = 12.0;
+        final across = box.maxWidth >= 280 ? 2 : 1;
         final width = (box.maxWidth - gap * (across - 1)) / across;
+        // narrow columns (phones): a smaller circle and text
+        final small = width < 200;
+        final circle = small ? 36.0 : 44.0;
         return Wrap(
           spacing: gap,
           runSpacing: 14,
@@ -855,30 +853,31 @@ class _StatsGrid extends StatelessWidget {
                 width: width,
                 child: Row(children: [
                   Container(
-                    width: 44,
-                    height: 44,
+                    width: circle,
+                    height: circle,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: HuntrColors.surface,
                       border: Border.all(color: HuntrColors.border),
                     ),
                     child: Icon(_icons[label] ?? Icons.info_outline_rounded,
-                        size: 20, color: Colors.white70),
+                        size: small ? 17 : 20, color: Colors.white70),
                   ),
-                  const SizedBox(width: 14),
+                  SizedBox(width: small ? 10 : 14),
                   Expanded(
                     child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(label,
-                              style: const TextStyle(
-                                  color: HuntrColors.muted, fontSize: 14)),
+                              style: TextStyle(
+                                  color: HuntrColors.muted,
+                                  fontSize: small ? 12.5 : 14)),
                           const SizedBox(height: 2),
                           Text(value,
                               key: Key('profileStat-$label'),
-                              style: const TextStyle(
+                              style: TextStyle(
                                   color: Colors.white,
-                                  fontSize: 16,
+                                  fontSize: small ? 14.5 : 16,
                                   fontWeight: FontWeight.w600)),
                         ]),
                   ),

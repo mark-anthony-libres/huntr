@@ -361,6 +361,8 @@ class Profile {
       // No alias, no name: only the age is shown.
       name: (json['display_name'] as String?)?.trim() ?? '',
       isNew: json['is_new'] as bool? ?? false,
+      // the blue check: our team confirmed who they are
+      verified: json['verified'] as bool? ?? false,
       // null: they hide their age
       age: json['age'] as int? ?? 0,
       ageHidden: json['age'] == null,

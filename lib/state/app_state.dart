@@ -76,6 +76,7 @@ class AppState extends ChangeNotifier {
     _notificationSound = NotificationSound.phoneDefault;
     _anonymousName = null;
     myIsNew = false;
+    myVerified = false;
     albumLimits = null;
     onboarded = false;
     agreementAccepted = false;
@@ -161,6 +162,9 @@ class AppState extends ChangeNotifier {
   int? myUserId;
   bool myIsNew = false;
 
+  /// I have the blue check (my preview shows it).
+  bool myVerified = false;
+
   /// Built by the same rules as other people's profiles, so the preview
   /// matches what they see: no alias means no name, the same avatar colour,
   /// and the "New" badge.
@@ -170,6 +174,7 @@ class AppState extends ChangeNotifier {
         backendId: myUserId,
         name: myName.trim(),
         isNew: myIsNew,
+        verified: myVerified,
         age: myAge,
         distanceKm: 0,
         bio: myBio,
