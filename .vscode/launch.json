@@ -5,6 +5,9 @@
       "name": "Huntr (Chrome :7357)",
       "request": "launch",
       "type": "dart",
+      // a run left over on the port (VS Code lost it: no Stop button) is
+      // stopped first
+      "preLaunchTask": "Stop web debug (free port 7357)",
       "deviceId": "chrome",
       "args": [
         "--web-hostname", "localhost",

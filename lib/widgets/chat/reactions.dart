@@ -10,7 +10,10 @@ const quickReactions = ['❤️', '😆', '😮', '😢', '😡', '👍'];
 /// A message in the chat, with what can be done to it: reply (the arrow on
 /// hover, or swipe it right), and react to their text, photos and videos
 /// (long-press, right-click, or the smiley on hover; the emoji bar opens
-/// above it). Its reactions show in a small pill under it, and a reply
+/// above it). A double tap on their text, stickers and GIFs gives it the
+/// first quick reaction (❤️) at once, with a heart that pops over it; it
+/// only ever adds it (never takes it back). Photos and videos open on a tap,
+/// so they don't wait to see if a second one comes (long-press reacts). Its reactions show in a small pill under it, and a reply
 /// shows the message it answers above it.
 class Reactable extends StatefulWidget {
   const Reactable(
@@ -62,6 +65,16 @@ class _ReactableState extends State<Reactable> {
 
   /// How far it's been swiped right (to reply).
   double _swipe = 0;
+
+  /// The heart over the bubble after a double tap (its key replays it).
+  int _hearts = 0;
+
+  void _doubleTapped() {
+    final first = quickReactions.first;
+    if (widget.message.myReaction != first) widget.onReact(first);
+    setState(() => _hearts++);
+  }
+
   static const _swipeToReply = 56.0;
 
   Future<void> _pick() async {
@@ -123,6 +136,11 @@ class _ReactableState extends State<Reactable> {
     final bubble = GestureDetector(
       key: Key('reactable-${m.id}'),
       onLongPress: can ? _pick : null,
+      onDoubleTap: can &&
+              m.type != ChatMessageType.image &&
+              m.type != ChatMessageType.video
+          ? _doubleTapped
+          : null,
       onSecondaryTap: can ? _pick : null,
       onHorizontalDragUpdate: reply == null
           ? null
@@ -131,7 +149,23 @@ class _ReactableState extends State<Reactable> {
       onHorizontalDragEnd: reply == null ? null : _swiped,
       onHorizontalDragCancel:
           reply == null ? null : () => setState(() => _swipe = 0),
-      child: KeyedSubtree(key: _bubble, child: widget.child),
+      child: Stack(
+          clipBehavior: Clip.none,
+          alignment: Alignment.center,
+          children: [
+            KeyedSubtree(key: _bubble, child: widget.child),
+            // floats over the bubble (it takes no room, so nothing moves)
+            if (_hearts > 0)
+              Positioned.fill(
+                child: Center(
+                  child: OverflowBox(
+                    maxWidth: double.infinity,
+                    maxHeight: double.infinity,
+                    child: _HeartPop(key: ValueKey(_hearts)),
+                  ),
+                ),
+              ),
+          ]),
     );
     final quote = m.replyTo;
     final content = Column(
@@ -443,3 +477,35 @@ const _allEmojis = [
         '🍸 🌈 🌹 🌸 🌻 🐶 🐱 🐻 🐼 🦄 🐍 🙈 🙉 🙊'
   ),
 ];
+
+/// The heart that pops over a message when it's double tapped: grows in,
+/// then fades away.
+class _HeartPop extends StatelessWidget {
+  const _HeartPop({super.key});
+
+  @override
+  Widget build(BuildContext context) => IgnorePointer(
+        child: TweenAnimationBuilder<double>(
+          key: const Key('doubleTapHeart'),
+          tween: Tween(begin: 0, end: 1),
+          duration: const Duration(milliseconds: 750),
+          builder: (context, t, _) {
+            // pop in with a little overshoot, hold, fade out
+            final scale = t < 0.3
+                ? Curves.easeOutBack.transform(t / 0.3)
+                : 1.0 + (t - 0.3) * 0.15;
+            final opacity = t < 0.6 ? 1.0 : (1 - (t - 0.6) / 0.4);
+            return Opacity(
+              opacity: opacity.clamp(0.0, 1.0),
+              child: Transform.scale(
+                scale: scale,
+                child: Text(quickReactions.first,
+                    style: const TextStyle(fontSize: 46, shadows: [
+                      Shadow(color: Colors.black54, blurRadius: 12),
+                    ])),
+              ),
+            );
+          },
+        ),
+      );
+}

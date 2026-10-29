@@ -48,6 +48,8 @@ class _FilterSheetState extends State<FilterSheet> {
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               title: const Text('Online now only'),
+              subtitle:
+                  const Text('Includes people active in the last 30 minutes'),
               value: f.onlineOnly,
               onChanged: (v) => setState(() => f = f.copyWith(onlineOnly: v)),
             ),

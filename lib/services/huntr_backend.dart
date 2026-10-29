@@ -3972,6 +3972,8 @@ class NearbyPost {
     required this.mine,
     this.radiusM,
     this.tags = const [],
+    this.official = false,
+    this.media = const [],
   });
 
   factory NearbyPost.fromJson(Map<String, dynamic> json) => NearbyPost(
@@ -3988,6 +3990,11 @@ class NearbyPost {
         tags: [
           for (final t in json['tags'] as List? ?? const [])
             NearbyTag.fromJson(t as Map<String, dynamic>),
+        ],
+        official: json['official'] as bool? ?? false,
+        media: [
+          for (final m in json['media'] as List? ?? const [])
+            NearbyMedia.fromJson(m as Map<String, dynamic>),
         ],
       );
 
@@ -4009,6 +4016,12 @@ class NearbyPost {
   /// Its tags: Looking for first, then Meet preference.
   final List<NearbyTag> tags;
 
+  /// HUNTR's own post: for everyone, wherever they are (no distance).
+  final bool official;
+
+  /// An official post's photos and videos, in order.
+  final List<NearbyMedia> media;
+
   NearbyPost copyWith({int? likeCount, bool? liked, int? commentCount}) =>
       NearbyPost(
         id: id,
@@ -4022,7 +4035,45 @@ class NearbyPost {
         mine: mine,
         radiusM: radiusM,
         tags: tags,
+        official: official,
+        media: media,
       );
+}
+
+/// A photo or video on an official Threads post: [url] in full quality,
+/// [previewUrl] a smaller still for the grid.
+class NearbyMedia {
+  const NearbyMedia({
+    required this.id,
+    required this.isVideo,
+    required this.url,
+    required this.previewUrl,
+    required this.width,
+    required this.height,
+    this.duration,
+  });
+
+  factory NearbyMedia.fromJson(Map<String, dynamic> json) => NearbyMedia(
+        id: json['id'] as int,
+        isVideo: json['type'] == 'video',
+        url: json['url'] as String,
+        previewUrl: json['preview_url'] as String,
+        width: json['width'] as int,
+        height: json['height'] as int,
+        duration: json['duration_ms'] == null
+            ? null
+            : Duration(milliseconds: json['duration_ms'] as int),
+      );
+
+  final int id;
+  final bool isVideo;
+  final String url;
+  final String previewUrl;
+  final int width;
+  final int height;
+  final Duration? duration;
+
+  double get aspectRatio => height == 0 ? 1 : width / height;
 }
 
 /// A comment on a Nearby post (with its replies, when it's a top-level one).

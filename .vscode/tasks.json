@@ -13,6 +13,19 @@
       ],
       "presentation": { "reveal": "always", "focus": true, "panel": "dedicated", "clear": true },
       "problemMatcher": []
+    },
+    {
+      "label": "Stop web debug (free port 7357)",
+      "detail": "Stops a Chrome debug run still on port 7357 (and its Chrome), when VS Code shows no Stop button",
+      "type": "process",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy", "Bypass",
+        "-File", "${workspaceFolder}/tool/free_web_port.ps1"
+      ],
+      "presentation": { "reveal": "silent", "panel": "dedicated", "clear": true },
+      "problemMatcher": []
     }
   ]
 }

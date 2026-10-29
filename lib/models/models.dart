@@ -303,6 +303,7 @@ class Profile {
     required this.lookingFor,
     required this.online,
     required this.lastActive,
+    this.lastActiveKnown = true,
     required this.hue,
     this.pronouns,
     this.heightCm,
@@ -381,6 +382,8 @@ class Profile {
       lastActive: lastSeen == null
           ? DateTime.now()
           : DateTime.parse(lastSeen).toLocal(),
+      // none: they hide when they're online
+      lastActiveKnown: lastSeen != null,
       hue: avatarHueFor(id),
       // All their photos when loaded one by one; the main one in lists.
       photoUrls: json['photo_urls'] != null
@@ -435,6 +438,7 @@ class Profile {
         lookingFor: lookingFor,
         online: online,
         lastActive: lastActive,
+        lastActiveKnown: lastActiveKnown,
         hue: hue,
         pronouns: pronouns,
         heightCm: heightCm,
@@ -495,6 +499,15 @@ class Profile {
   final bool online;
   final DateTime lastActive;
 
+  /// [lastActive] is real: false when they hide when they're online (the
+  /// backend then sends no last-seen time), so it's never taken as recent.
+  final bool lastActiveKnown;
+
+  /// Online, or active within [window] (how "Online now" in Explore counts).
+  bool activeWithin(Duration window, DateTime now) =>
+      online ||
+      (lastActiveKnown && !isAnonymous && now.difference(lastActive) <= window);
+
   /// Base hue (0-360) for this person's generated avatar.
   final double hue;
   final String? pronouns;
@@ -534,8 +547,8 @@ class Profile {
 
   String activeLabel(DateTime now) {
     if (online) return 'Online now';
-    // no last-seen time for someone anonymous
-    if (isAnonymous) return 'Offline';
+    // no last-seen time for someone anonymous, or someone who hides it
+    if (isAnonymous || !lastActiveKnown) return 'Offline';
     final d = now.difference(lastActive);
     // A time ahead of this device's clock (clock skew) is just now.
     if (d.inMinutes < 1) return 'Active just now';
@@ -641,6 +654,10 @@ enum ExploreSort {
   final IconData icon;
 }
 
+/// How recent counts as "Online now" in Explore's filter: online, or active
+/// within this long ("Active just now", "Active 30m ago").
+const onlineNowWindow = Duration(minutes: 30);
+
 class ExploreFilters {
   const ExploreFilters({
     this.sort = ExploreSort.nearest,
@@ -688,7 +705,9 @@ class ExploreFilters {
   }
 
   bool matches(Profile p) {
-    if (onlineOnly && !p.online) return false;
+    if (onlineOnly && !p.activeWithin(onlineNowWindow, DateTime.now())) {
+      return false;
+    }
     // A hidden distance never counts as near (nor reveals anything).
     if (maxDistanceKm != null &&
         (p.distanceHidden || p.distanceKm > maxDistanceKm!)) {
