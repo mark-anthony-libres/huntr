@@ -3495,13 +3495,16 @@ Future<ProfileConfig> fetchProfileConfig({
       ProfileConfig.fromJson,
     );
 
-/// Records where the user is now (PUT {backendUrl}/profile/me/location).
-/// The sign-up location on the account is not changed.
+/// Records where the user is now (PUT {backendUrl}/profile/me/location),
+/// with how accurate it is (metres): the backend keeps a recent precise fix
+/// over a much rougher one. The sign-up location on the account is not
+/// changed.
 Future<void> updateMyLocation({
   required String backendUrl,
   required String token,
   required double latitude,
   required double longitude,
+  double? accuracy,
   http.Client? client,
 }) =>
     _sendAuthorized(
@@ -3509,7 +3512,11 @@ Future<void> updateMyLocation({
       (httpClient) => httpClient.put(
         _endpoint(backendUrl, '/profile/me/location'),
         headers: {..._authorization(token), 'Content-Type': 'application/json'},
-        body: jsonEncode({'latitude': latitude, 'longitude': longitude}),
+        body: jsonEncode({
+          'latitude': latitude,
+          'longitude': longitude,
+          if (accuracy != null) 'accuracy': accuracy,
+        }),
       ),
       (_) {},
     );

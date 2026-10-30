@@ -14,7 +14,9 @@ echo "==> Building web app (production backend)"
 # options, and doesn't always remake it when plugins are added: a stale one
 # left Firebase (push notifications) out of the site. Start fresh each time.
 rm -rf .dart_tool/flutter_build
-flutter build web --release --dart-define-from-file=env/prod.json
+# the Flutter engine (CanvasKit) from huntr.online itself, not www.gstatic.com:
+# content blockers (Brave, Safari's) can't keep the app from starting
+flutter build web --release --no-web-resources-cdn --dart-define-from-file=env/prod.json
 # the plugins this app needs on the web must be in the build
 # (Firebase's web plugin logs "Initializing Firebase" when it registers)
 if ! grep -q "Initializing Firebase" build/web/main.dart.js; then

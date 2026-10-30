@@ -77,13 +77,21 @@ class LocationAccess extends ChangeNotifier {
 
   bool _busy = false;
 
-  /// The status now (never shows a dialog).
+  /// The status now (never shows a dialog). Some browsers can't say (the
+  /// iPhone's WebKit browsers - Brave, in-app browsers like Messenger's -
+  /// throw on the permission question): then, the first time, it counts as
+  /// not asked yet, so Enable Location shows (asking for the position works
+  /// there) instead of a check that never ends. Once known, a failed recheck
+  /// keeps what was known.
   Future<void> refresh() async {
     if (_busy) return;
     try {
       _set(await permissions.check());
     } catch (error) {
       debugPrint('Location permission not checked: $error');
+      if (_status == LocationAccessStatus.unknown) {
+        _set(LocationAccessStatus.denied);
+      }
     }
   }
 

@@ -32,11 +32,39 @@ Future<GeoPoint> locateDevice() async {
   try {
     final position = await _recentPosition() ??
         await Geolocator.getCurrentPosition(locationSettings: _quickFix);
-    return GeoPoint(latitude: position.latitude, longitude: position.longitude);
+    return _point(position);
   } catch (_) {
     throw const LocationException(
         'Your location could not be found. Check that location is on for this '
         'device and browser, then try again.');
+  }
+}
+
+GeoPoint _point(Position p) => GeoPoint(
+    latitude: p.latitude, longitude: p.longitude, accuracy: p.accuracy);
+
+/// Where the device is, as precisely as it can tell (GPS on a phone), after
+/// the quick rough fix: distances to people and posts are measured from it.
+/// Only when permission is already given (never asks); null when it can't
+/// be found in time.
+Future<GeoPoint?> locateDevicePrecisely() async {
+  try {
+    final permission = await Geolocator.checkPermission();
+    if (permission != LocationPermission.always &&
+        permission != LocationPermission.whileInUse) {
+      return null;
+    }
+    return _point(await Geolocator.getCurrentPosition(
+        locationSettings: kIsWeb
+            ? WebSettings(
+                accuracy: LocationAccuracy.high,
+                maximumAge: const Duration(minutes: 1),
+                timeLimit: const Duration(seconds: 20))
+            : const LocationSettings(
+                accuracy: LocationAccuracy.high,
+                timeLimit: Duration(seconds: 20))));
+  } catch (_) {
+    return null;
   }
 }
 

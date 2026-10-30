@@ -191,6 +191,15 @@
       50%, 88% { opacity: 1; transform: none; }
       97%, 100% { opacity: 0; transform: translateY(-20px); }
     }
+    /* only when HUNTR hasn't started after a while (see the script below) */
+    #huntr-loading .slow {
+      position: absolute; left: 24px; right: 24px; bottom: max(40px, env(safe-area-inset-bottom));
+      text-align: center; color: #9A9FAD; font-size: 15px; line-height: 1.5;
+    }
+    #huntr-loading .slow button {
+      margin-top: 14px; padding: 12px 28px; border: 0; border-radius: 999px;
+      background: #FF7A1A; color: #0C0C0F; font: inherit; font-weight: 700; cursor: pointer;
+    }
     @media (prefers-reduced-motion: reduce) {
       /* just the logo, still */
       #huntr-loading .logo, #huntr-loading .logo img { animation: none; }
@@ -249,12 +258,40 @@
   </noscript>
   <script>
     // Flutter has drawn: fade the loader out, then remove it.
+    var huntrStarted = false;
     window.addEventListener('flutter-first-frame', function () {
+      huntrStarted = true;
       var loading = document.getElementById('huntr-loading');
       if (!loading) return;
       loading.classList.add('done');
       setTimeout(function () { loading.remove(); }, 300);
     });
+    // Not started after 20 s (a bad connection, a content blocker, files
+    // left over from an older version): say so, with a way to reload that
+    // first drops what this site saved for offline use.
+    setTimeout(function () {
+      var loading = document.getElementById('huntr-loading');
+      if (huntrStarted || !loading) return;
+      var slow = document.createElement('div');
+      slow.className = 'slow';
+      slow.innerHTML = 'HUNTR is taking longer than usual to open.<br>' +
+        'Check your connection, then reload.<br><button type="button">Reload</button>';
+      slow.querySelector('button').addEventListener('click', function () {
+        var steps = [];
+        if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
+          steps.push(navigator.serviceWorker.getRegistrations().then(function (all) {
+            return Promise.all(all.map(function (r) { return r.unregister(); }));
+          }));
+        }
+        if (window.caches && caches.keys) {
+          steps.push(caches.keys().then(function (keys) {
+            return Promise.all(keys.map(function (k) { return caches.delete(k); }));
+          }));
+        }
+        Promise.all(steps).catch(function () {}).then(function () { location.reload(); });
+      });
+      loading.appendChild(slow);
+    }, 20000);
   </script>
   <!--
     You can customize the "flutter_bootstrap.js" script.

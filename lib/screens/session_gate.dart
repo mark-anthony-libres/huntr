@@ -28,6 +28,7 @@ class SessionGate extends StatefulWidget {
     this.profiles,
     this.agreements,
     this.locate = locateDevice,
+    this.locatePrecisely = locateDevicePrecisely,
     this.locationAccess,
   });
 
@@ -41,6 +42,9 @@ class SessionGate extends StatefulWidget {
   final AgreementService? agreements;
 
   final LocateDevice locate;
+
+  /// The precise fix that follows the quick one (null: none found).
+  final Future<GeoPoint?> Function() locatePrecisely;
 
   /// The location permission (required; the app's gate asks for it). Null:
   /// the location is read as before.
@@ -93,7 +97,10 @@ class _SessionGateState extends State<SessionGate> {
     String? token;
     String? error;
     try {
-      token = await sessions.restoreVerifiedToken();
+      token = await sessions.restoreVerifiedToken().timeout(startupTimeout);
+    } on TimeoutException {
+      error = 'HUNTR took too long to answer. Check your connection, then '
+          'sign in again.';
     } on BackendException catch (e) {
       error = '${e.message} Sign in again when it is back.';
     } catch (_) {
@@ -110,7 +117,8 @@ class _SessionGateState extends State<SessionGate> {
 
   Future<void> _loadProfile(ProfileService profiles, String token) async {
     try {
-      final profile = await profiles.fetchMine(token);
+      final profile =
+          await profiles.fetchMine(token).timeout(startupTimeout);
       if (!mounted) return;
       final app = AppScope.read(context);
       // The saved privacy settings apply everywhere, onboarded or not.
@@ -147,15 +155,20 @@ class _SessionGateState extends State<SessionGate> {
       await _endSession(e.message);
     } on BackendException catch (e) {
       _profileError = e.message;
+    } on TimeoutException {
+      _profileError =
+          'HUNTR took too long to answer. Check your connection and try again.';
     } catch (_) {
       _profileError = 'Your profile could not be loaded.';
     }
     if (mounted) setState(() => _loadingProfile = false);
   }
 
-  /// Each app open records where the user is now. The app works without it,
-  /// so a failure (no permission, offline) is only logged. Without the
-  /// permission it waits: the location gate asks, then this runs again.
+  /// Each app open records where the user is now: a quick rough fix first
+  /// (so nothing waits), then a precise one (distances are measured from
+  /// it). The app works without it, so a failure (no permission, offline)
+  /// is only logged. Without the permission it waits: the location gate
+  /// asks, then this runs again.
   Future<void> _refreshLocation(ProfileService profiles, String token) async {
     final access = widget.locationAccess;
     if (access != null && !access.granted) {
@@ -167,6 +180,10 @@ class _SessionGateState extends State<SessionGate> {
       final location = await widget.locate();
       await profiles.updateLocation(token, location);
       if (mounted) AppScope.read(context).updateMyLocation(location);
+      final precise = await widget.locatePrecisely();
+      if (precise == null) return;
+      await profiles.updateLocation(token, precise);
+      if (mounted) AppScope.read(context).updateMyLocation(precise);
     } catch (error) {
       debugPrint('Current location not updated: $error');
     }
@@ -295,6 +312,11 @@ class _SessionGateState extends State<SessionGate> {
     );
   }
 }
+
+/// The longest the app waits, while opening, for the saved session to be
+/// checked or the profile to load: after it, sign-in (or Try again) shows
+/// instead of loading for ever.
+const startupTimeout = Duration(seconds: 20);
 
 class _CheckingSession extends StatelessWidget {
   const _CheckingSession({super.key});

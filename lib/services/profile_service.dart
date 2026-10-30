@@ -80,6 +80,7 @@ class ProfileService {
         token: token,
         latitude: location.latitude,
         longitude: location.longitude,
+        accuracy: location.accuracy,
       );
 
   static String? _blankToNull(String value) =>

@@ -51,9 +51,13 @@ enum SexualPosition {
 
 /// A point on the map, in degrees.
 class GeoPoint {
-  const GeoPoint({required this.latitude, required this.longitude});
+  const GeoPoint(
+      {required this.latitude, required this.longitude, this.accuracy});
   final double latitude;
   final double longitude;
+
+  /// How far off the device says it may be, in metres (when known).
+  final double? accuracy;
 }
 
 /// What the user entered during onboarding.
