@@ -1030,9 +1030,13 @@ class MessagingState extends ChangeNotifier {
 
   /// One of HUNTR's stickers: shown at once, then saved. Null when it went
   /// through; otherwise why not (e.g. it's already been sent to them), and
-  /// it's taken out of the chat again.
+  /// it's taken out of the chat again. A meme's [caption] is drawn over it
+  /// until the server's meme (with the caption on it) comes back.
   Future<String?> sendSticker(
-      int conversationId, Profile recipient, HuntrSticker sticker) async {
+      int conversationId, Profile recipient, HuntrSticker sticker,
+      {String? caption}) async {
+    final text = caption?.trim();
+    final withCaption = text == null || text.isEmpty ? null : text;
     final anonymous = isAnonymous(conversationId);
     if (recipient.backendId == null && !anonymous) return null;
     final pending = ChatMessage(
@@ -1044,7 +1048,12 @@ class MessagingState extends ChangeNotifier {
       clientId: newClientId(),
       type: ChatMessageType.sticker,
       sticker: ChatSticker(
-          id: sticker.id, name: sticker.name, imageUrl: sticker.imageUrl),
+          id: sticker.id,
+          name: sticker.name,
+          imageUrl: sticker.imageUrl,
+          caption: withCaption,
+          captionOnPicture: false,
+          captionColor: sticker.captionColor),
     );
     final thread = _threads.putIfAbsent(
         conversationId, () => _Thread()..loaded = true)
@@ -1057,12 +1066,14 @@ class MessagingState extends ChangeNotifier {
               conversationId: conversationId,
               body: '',
               clientId: pending.clientId!,
-              stickerId: sticker.id)
+              stickerId: sticker.id,
+              stickerCaption: withCaption)
           : service.send(t,
               recipientId: recipient.backendId!,
               body: '',
               clientId: pending.clientId!,
-              stickerId: sticker.id));
+              stickerId: sticker.id,
+              stickerCaption: withCaption));
       if (saved == null) return null;
       thread.confirm(pending.clientId!, saved);
       final current = summary(conversationId);

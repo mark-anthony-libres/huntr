@@ -18,6 +18,7 @@ import '../widgets/chat/tap_card.dart';
 import '../widgets/chat/chat_intro.dart';
 import '../widgets/chat/message_bubble.dart';
 import '../widgets/chat/chat_notice.dart';
+import '../widgets/chat/meme_caption.dart' show askMemeCaption;
 import '../widgets/chat/album_bubble.dart';
 import '../widgets/chat/time_divider.dart';
 import '../widgets/chat/typing_bubble.dart';
@@ -399,8 +400,15 @@ class _ChatScreenState extends State<ChatScreen> {
       case PickedGif(:final gif):
         _messaging?.sendGif(id, p, gif);
       case PickedSticker(:final sticker):
+        // a meme: an optional caption first (cancelled: nothing is sent)
+        String? caption;
+        if (sticker.allowsCaption) {
+          caption = await askMemeCaption(context, sticker);
+          if (caption == null || !mounted) return;
+        }
         _scrollToNewest();
-        final problem = await _messaging?.sendSticker(id, p, sticker);
+        final problem =
+            await _messaging?.sendSticker(id, p, sticker, caption: caption);
         if (problem != null && mounted) _say(problem);
         return;
       case UndoPickedSticker(:final sticker):

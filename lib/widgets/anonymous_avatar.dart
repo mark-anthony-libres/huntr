@@ -25,9 +25,16 @@ const anonymousAnimals = {
 /// with an orange ring. Never their photo.
 class AnonymousArt extends StatelessWidget {
   const AnonymousArt(
-      {super.key, required this.animal, this.radius = 0, this.size = 72});
+      {super.key,
+      required this.animal,
+      this.radius = 0,
+      this.size = 72,
+      this.ring});
 
   final String animal;
+
+  /// The ring's colour (round pictures; the accent when not given).
+  final Color? ring;
 
   /// Corner radius (half the size for a circle).
   final double radius;
@@ -49,7 +56,7 @@ class AnonymousArt extends StatelessWidget {
           // a ring on round pictures; tiles fill edge to edge
           border: radius > 0
               ? Border.all(
-                  color: HuntrColors.orange.withValues(alpha: 0.85),
+                  color: (ring ?? HuntrColors.orange).withValues(alpha: 0.85),
                   width: (size / 30).clamp(1.5, 3))
               : null,
         ),

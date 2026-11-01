@@ -390,9 +390,16 @@ class AppState extends ChangeNotifier {
   }
 
   /// How Explore lays people out (Settings → Appearance); remembered on
-  /// this device.
-  ExploreLayout _exploreLayout = ExploreLayout.standard;
-  ExploreLayout get exploreLayout => _exploreLayout;
+  /// this device. Null until chosen: then it's the default for the screen
+  /// ([exploreLayoutFor]).
+  ExploreLayout? _exploreLayout;
+
+  /// The layout chosen in Settings → Appearance, or else the default: 3
+  /// across on mobile (the app, and the website on a phone), 2 across on
+  /// the website on a computer or tablet ([ExploreLayout.standardFor]).
+  ExploreLayout exploreLayoutFor(double screenWidth) =>
+      _exploreLayout ?? ExploreLayout.standardFor(screenWidth);
+
   set exploreLayout(ExploreLayout layout) {
     if (_exploreLayout == layout) return;
     _exploreLayout = layout;
@@ -401,12 +408,53 @@ class AppState extends ChangeNotifier {
         (Object error) => debugPrint('Explore layout not saved: $error')));
   }
 
+  /// The chat's emoji bar: new users start with these four.
+  static const defaultQuickReactions = ['❤️', '😆', '😮', '👍'];
+
+  /// The most the bar holds (more are picked with +, without staying).
+  static const maxQuickReactions = 8;
+
+  /// The reactions on the chat's emoji bar, in their order (dragged around
+  /// or into the bin there; one picked with + joins them); remembered on
+  /// this device.
+  List<String> _quickReactions = defaultQuickReactions;
+  List<String> get quickReactions => _quickReactions;
+  set quickReactions(List<String> reactions) {
+    final kept = reactions.toSet().take(maxQuickReactions).toList();
+    if (_sameList(kept, _quickReactions)) return;
+    _quickReactions = List.unmodifiable(kept);
+    notifyListeners();
+    unawaited(devicePreferences?.saveQuickReactions(kept).catchError(
+        (Object error) => debugPrint('Reactions not saved: $error')));
+  }
+
+  /// One picked with +: onto the end of the bar, while there's room.
+  void addQuickReaction(String emoji) {
+    if (_quickReactions.contains(emoji) ||
+        _quickReactions.length >= maxQuickReactions) {
+      return;
+    }
+    quickReactions = [..._quickReactions, emoji];
+  }
+
+  static bool _sameList(List<String> a, List<String> b) =>
+      a.length == b.length &&
+      [for (var i = 0; i < a.length; i++) a[i] == b[i]].every((same) => same);
+
   /// What this device remembers, when the app starts.
   Future<void> loadDevicePreferences() async {
     try {
       final show = await devicePreferences?.readShowVibeBanner();
       if (show != null && show != _showVibeBanner) {
         _showVibeBanner = show;
+        notifyListeners();
+      }
+      final reactions = await devicePreferences?.readQuickReactions();
+      if (reactions != null &&
+          !_sameList(
+              reactions.take(maxQuickReactions).toList(), _quickReactions)) {
+        _quickReactions =
+            List.unmodifiable(reactions.toSet().take(maxQuickReactions));
         notifyListeners();
       }
       final layout =
@@ -750,4 +798,8 @@ class AppScope extends InheritedNotifier<AppState> {
 
   static AppState read(BuildContext context) =>
       context.getInheritedWidgetOfExactType<AppScope>()!.notifier!;
+
+  /// [read], or null where there's no app state (some tests).
+  static AppState? maybeRead(BuildContext context) =>
+      context.getInheritedWidgetOfExactType<AppScope>()?.notifier;
 }

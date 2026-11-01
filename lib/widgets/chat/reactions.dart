@@ -1,11 +1,20 @@
 import 'package:flutter/material.dart';
 
 import '../../services/huntr_backend.dart';
+import '../../state/app_state.dart';
 import '../../theme.dart';
 import 'reply.dart';
 
 /// The quick reactions, in the bar above a message.
-const quickReactions = ['❤️', '😆', '😮', '😢', '😡', '👍'];
+/// The reactions on this device's emoji bar, in their order (changed by
+/// dragging them there; the defaults without app state).
+List<String> quickReactionsOf(BuildContext context) =>
+    AppScope.maybeRead(context)?.quickReactions ??
+    AppState.defaultQuickReactions;
+
+/// What a double tap gives: the bar's first reaction (❤️ when it's empty).
+String firstReactionOf(BuildContext context) =>
+    quickReactionsOf(context).firstOrNull ?? '❤️';
 
 /// A message in the chat, with what can be done to it: reply (the arrow on
 /// hover, or swipe it right), and react to their text, photos and videos
@@ -70,7 +79,7 @@ class _ReactableState extends State<Reactable> {
   int _hearts = 0;
 
   void _doubleTapped() {
-    final first = quickReactions.first;
+    final first = firstReactionOf(context);
     if (widget.message.myReaction != first) widget.onReact(first);
     setState(() => _hearts++);
   }
@@ -308,10 +317,15 @@ Future<String?> showReactionBar(BuildContext context,
     ),
   );
   if (picked != '+' || !context.mounted) return picked;
-  return showEmojiPicker(context);
+  final any = await showEmojiPicker(context);
+  // picked with +: it joins the bar (while there's room)
+  if (any != null && context.mounted) {
+    AppScope.maybeRead(context)?.addQuickReaction(any);
+  }
+  return any;
 }
 
-class _ReactionBar extends StatelessWidget {
+class _ReactionBar extends StatefulWidget {
   const _ReactionBar(
       {required this.anchor, required this.mine, required this.alignRight});
 
@@ -322,12 +336,76 @@ class _ReactionBar extends StatelessWidget {
   static const _height = 56.0;
 
   @override
+  State<_ReactionBar> createState() => _ReactionBarState();
+}
+
+/// The bar can be rearranged: press and drag a reaction to another place,
+/// or onto the bin that shows at the bottom to take it off. A tap still
+/// reacts. The new order is kept (on this device) when the drag ends.
+class _ReactionBarState extends State<_ReactionBar> {
+  late final List<String> _order = [...quickReactionsOf(context)];
+
+  /// The reaction being dragged (null: none).
+  String? _dragging;
+  bool _overBin = false;
+
+  void _moveBefore(String emoji, String target) {
+    if (emoji == target) return;
+    setState(() {
+      final to = _order.indexOf(target);
+      _order
+        ..remove(emoji)
+        ..insert(to, emoji);
+    });
+  }
+
+  void _save() => AppScope.maybeRead(context)?.quickReactions = _order;
+
+  Widget _draggable(String emoji) {
+    final button = _EmojiButton(
+        emoji: emoji,
+        selected: emoji == widget.mine,
+        onTap: () => Navigator.of(context).pop(emoji));
+    return DragTarget<String>(
+      // keyed by its emoji: moving it keeps the drag going (and its end)
+      key: ValueKey(emoji),
+      // hovering another reaction moves the dragged one there
+      onWillAcceptWithDetails: (details) {
+        _moveBefore(details.data, emoji);
+        return true;
+      },
+      builder: (context, _, __) => LongPressDraggable<String>(
+        key: Key('dragReaction-$emoji'),
+        data: emoji,
+        delay: const Duration(milliseconds: 250),
+        feedback: Material(
+          color: Colors.transparent,
+          child: Text(emoji, style: const TextStyle(fontSize: 40)),
+        ),
+        childWhenDragging: Opacity(opacity: 0.25, child: button),
+        onDragStarted: () => setState(() => _dragging = emoji),
+        onDragEnd: (_) {
+          setState(() {
+            _dragging = null;
+            _overBin = false;
+          });
+          _save();
+        },
+        child: button,
+      ),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
-    final top = MediaQuery.paddingOf(context).top;
+    final padding = MediaQuery.paddingOf(context);
+    final top = padding.top;
+    final anchor = widget.anchor;
+    final mine = widget.mine;
     // above the message, or below it when there's no room
-    final y = anchor.top - _height - 8 > top + 8
-        ? anchor.top - _height - 8
+    final y = anchor.top - _ReactionBar._height - 8 > top + 8
+        ? anchor.top - _ReactionBar._height - 8
         : anchor.bottom + 8;
     final bar = Material(
       key: const Key('reactionBar'),
@@ -337,14 +415,10 @@ class _ReactionBar extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
-          for (final emoji in quickReactions)
+          for (final emoji in _order) _draggable(emoji),
+          if (mine != null && !_order.contains(mine))
             _EmojiButton(
-                emoji: emoji,
-                selected: emoji == mine,
-                onTap: () => Navigator.of(context).pop(emoji)),
-          if (mine != null && !quickReactions.contains(mine))
-            _EmojiButton(
-                emoji: mine!,
+                emoji: mine,
                 selected: true,
                 onTap: () => Navigator.of(context).pop(mine)),
           Padding(
@@ -364,20 +438,123 @@ class _ReactionBar extends StatelessWidget {
     );
     // lined up with the message's own edge (not the screen's: beside a
     // chat list the message is far from it)
-    final edge = alignRight ? size.width - anchor.right : anchor.left;
+    final edge = widget.alignRight ? size.width - anchor.right : anchor.left;
     return Stack(children: [
       Positioned(
-        top: y.clamp(top + 8, size.height - _height - 8),
-        left: alignRight ? null : edge.clamp(12.0, size.width / 2),
-        right: alignRight ? edge.clamp(12.0, size.width / 2) : null,
+        top: y.clamp(top + 8, size.height - _ReactionBar._height - 8),
+        left: widget.alignRight ? null : edge.clamp(12.0, size.width / 2),
+        right: widget.alignRight ? edge.clamp(12.0, size.width / 2) : null,
         child: ConstrainedBox(
           constraints: BoxConstraints(
               maxWidth: size.width - edge.clamp(12.0, size.width / 2) - 12),
           child: FittedBox(fit: BoxFit.scaleDown, child: bar),
         ),
       ),
+      // while one is dragged: the bin, to take it off the bar
+      if (_dragging != null)
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: padding.bottom + 32,
+          child: Center(
+            child: DragTarget<String>(
+              key: const Key('reactionBin'),
+              onWillAcceptWithDetails: (_) {
+                setState(() => _overBin = true);
+                return true;
+              },
+              onLeave: (_) => setState(() => _overBin = false),
+              onAcceptWithDetails: (details) =>
+                  setState(() => _order.remove(details.data)),
+              // a round bin, its lid opening as one is held over it
+              builder: (context, _, __) => AnimatedScale(
+                scale: _overBin ? 1.18 : 1,
+                duration: const Duration(milliseconds: 160),
+                curve: Curves.easeOutBack,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 160),
+                  width: 64,
+                  height: 64,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color:
+                        _overBin ? HuntrColors.coral : HuntrColors.surfaceHigh,
+                    border: Border.all(color: HuntrColors.coral, width: 2),
+                    boxShadow: const [
+                      BoxShadow(color: Colors.black54, blurRadius: 12),
+                    ],
+                  ),
+                  child: Center(
+                    child: TweenAnimationBuilder<double>(
+                      tween: Tween(end: _overBin ? 1 : 0),
+                      duration: const Duration(milliseconds: 180),
+                      curve: Curves.easeOut,
+                      builder: (context, open, _) => CustomPaint(
+                        key: const Key('reactionBinIcon'),
+                        size: const Size(28, 30),
+                        painter: _BinPainter(
+                            open: open,
+                            color: Color.lerp(
+                                HuntrColors.coral, Colors.white, open)!),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
     ]);
   }
+}
+
+/// A bin: its can, and its lid tipped open by [open] (0 shut, 1 open).
+class _BinPainter extends CustomPainter {
+  _BinPainter({required this.open, required this.color});
+
+  final double open;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width, h = size.height;
+    final stroke = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = w * 0.1
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+    // the can, narrowing to the bottom, with its ribs
+    final can = Path()
+      ..moveTo(w * 0.18, h * 0.32)
+      ..lineTo(w * 0.26, h * 0.95)
+      ..lineTo(w * 0.74, h * 0.95)
+      ..lineTo(w * 0.82, h * 0.32);
+    canvas.drawPath(can, stroke);
+    for (final x in [0.41, 0.59]) {
+      canvas.drawLine(Offset(w * x, h * 0.45), Offset(w * x, h * 0.82), stroke);
+    }
+    // the lid and its handle, hinged at the right and tipped up
+    canvas.save();
+    canvas.translate(w * 0.92, h * 0.22);
+    // up and away from the can (and a little higher)
+    canvas.translate(0, -h * 0.06 * open);
+    canvas.rotate(0.6 * open);
+    canvas.translate(-w * 0.92, -h * 0.22);
+    canvas.drawLine(
+        Offset(w * 0.08, h * 0.22), Offset(w * 0.92, h * 0.22), stroke);
+    canvas.drawPath(
+        Path()
+          ..moveTo(w * 0.38, h * 0.22)
+          ..lineTo(w * 0.42, h * 0.08)
+          ..lineTo(w * 0.58, h * 0.08)
+          ..lineTo(w * 0.62, h * 0.22),
+        stroke);
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(_BinPainter old) => old.open != open || old.color != color;
 }
 
 class _EmojiButton extends StatelessWidget {
@@ -499,7 +676,7 @@ class _HeartPop extends StatelessWidget {
               opacity: opacity.clamp(0.0, 1.0),
               child: Transform.scale(
                 scale: scale,
-                child: Text(quickReactions.first,
+                child: Text(firstReactionOf(context),
                     style: const TextStyle(fontSize: 46, shadows: [
                       Shadow(color: Colors.black54, blurRadius: 12),
                     ])),

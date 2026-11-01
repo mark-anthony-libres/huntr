@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../services/huntr_backend.dart';
 import '../../theme.dart';
 import 'gif_picker.dart' show BeanIcon;
+import 'meme_caption.dart';
 import 'sticker_image.dart';
 
 /// One of HUNTR's stickers in the chat: the sticker itself, no bubble. My
@@ -18,6 +19,9 @@ class StickerBubble extends StatelessWidget {
 
   static const size = 132.0;
 
+  /// A meme (a sticker with a caption): bigger, so the caption reads.
+  static const memeSize = 200.0;
+
   Future<void> _askUndo(BuildContext context) async {
     if (await confirmStickerUndo(context,
         name: message.sticker?.name ?? 'sticker',
@@ -32,12 +36,24 @@ class StickerBubble extends StatelessWidget {
     if (sticker == null) return const SizedBox.shrink();
     final canUndo =
         onUndo != null && message.fromMe && sticker.active && !message.pending;
-    final picture = StickerImage(
+    final side = sticker.isMeme ? memeSize : size;
+    Widget picture = StickerImage(
       key: Key('sticker-${message.id ?? message.clientId}'),
       url: sticker.imageUrl,
       name: sticker.name,
-      size: size,
+      size: side,
     );
+    // mine, on its way: the caption over the sticker until the meme (with
+    // the caption on it) comes back
+    if (sticker.caption != null && !sticker.captionOnPicture) {
+      picture = SizedBox.square(
+        dimension: side,
+        child: Stack(fit: StackFit.expand, children: [
+          picture,
+          MemeText(sticker.caption!, color: memeColor(sticker.captionColor)),
+        ]),
+      );
+    }
     return Column(
       crossAxisAlignment:
           message.fromMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,

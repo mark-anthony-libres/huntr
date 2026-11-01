@@ -436,8 +436,11 @@ class _CommentTile extends StatelessWidget {
         nearbyAuthorTap(
             key: Key('nearbyCommentAuthor-${comment.id}'),
             onTap: onAuthor,
+            // mine (a comment or a reply): the blue ring, to spot myself
             child: NearbyAvatar(
-                animal: comment.author.avatar, size: small ? 34 : 40)),
+                animal: comment.author.avatar,
+                size: small ? 34 : 40,
+                mine: comment.mine)),
         const SizedBox(width: 10),
         Expanded(
           child:

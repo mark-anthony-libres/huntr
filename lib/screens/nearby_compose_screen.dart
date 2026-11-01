@@ -480,7 +480,8 @@ class _MyPost extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 14, 4, 12),
             child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              NearbyAvatar(animal: post.author.avatar, size: 52),
+              NearbyAvatar(
+                  animal: post.author.avatar, size: 52, mine: post.mine),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(

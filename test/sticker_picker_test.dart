@@ -130,8 +130,13 @@ void main() {
       (tester) async {
     final service = await open(tester);
     expect(service.loads, 1);
-    expect(find.text('Compliments'), findsOneWidget);
-    expect(find.text('Roasts'), findsOneWidget);
+    for (final (id, name) in [(1, 'Compliments'), (2, 'Roasts')]) {
+      expect(
+          find.descendant(
+              of: find.byKey(Key('stickerGroup-$id')),
+              matching: find.text(name)),
+          findsOneWidget);
+    }
     // each group's stickers under its own header, groups in order
     expect(top(tester, 'stickerGroup-1'),
         lessThan(top(tester, 'huntrSticker-11')));
@@ -147,6 +152,53 @@ void main() {
     await tester.pumpAndSettle();
     expect(picked, isA<PickedSticker>());
     expect((picked! as PickedSticker).sticker.id, 21);
+  });
+
+  testWidgets(
+      'group names as pills: tapping one goes to its group, lit in view',
+      (tester) async {
+    final big = [
+      for (var g = 1; g <= 4; g++)
+        HuntrStickerGroup(id: g, name: 'Group $g', stickers: [
+          for (var i = 1; i <= 12; i++)
+            HuntrSticker(id: g * 100 + i, name: 'S$g-$i', groupId: g),
+        ]),
+    ];
+    await open(tester, groups: big);
+    bool lit(int id) =>
+        tester
+            .widget<Semantics>(find
+                .ancestor(
+                    of: find.byKey(Key('stickerGroupPill-$id')),
+                    matching: find.byType(Semantics))
+                .first)
+            .properties
+            .selected ==
+        true;
+    // a pill per group, in order; the first lit
+    for (final id in [1, 2, 3, 4]) {
+      expect(
+          find.descendant(
+              of: find.byKey(const Key('stickerGroupPills')),
+              matching: find.text('Group $id')),
+          findsOneWidget);
+    }
+    expect(lit(1), isTrue);
+    expect(lit(3), isFalse);
+
+    // tapping Group 3 brings its header to the top of the list
+    await tester.tap(find.byKey(const Key('stickerGroupPill-3')));
+    await tester.pumpAndSettle();
+    final listTop = tester.getTopLeft(find.byType(CustomScrollView)).dy;
+    expect(top(tester, 'stickerGroup-3'), closeTo(listTop, 1));
+    expect(lit(3), isTrue);
+    expect(lit(1), isFalse);
+
+    // scrolling back up lights the group in view again
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, 3000));
+    await tester.pumpAndSettle();
+    expect(lit(1), isTrue);
+    expect(lit(3), isFalse);
   });
 
   testWidgets('a one-per-person group already used with them waits for an undo',
@@ -302,6 +354,20 @@ void main() {
     expect(service.offsets, [0, 12, 24, 36]);
     // each page once, its stickers added to the group's
     expect(find.byKey(const Key('huntrSticker-140')), findsOneWidget);
+  });
+
+  testWidgets('a sticker that can be sent again sends again, never undo',
+      (tester) async {
+    const again = HuntrStickerGroup(id: 4, name: 'Again', stickers: [
+      HuntrSticker(id: 41, name: 'Kiss', groupId: 4, canSendMultiple: true),
+    ]);
+    await open(tester, groups: const [again], sent: {41});
+    expect(tile(tester, 41).properties.label, isNot(contains('already sent')));
+    await tester.tap(find.byKey(const Key('huntrSticker-41')));
+    await tester.pumpAndSettle();
+    expect(find.text('Undo “Kiss”?'), findsNothing);
+    expect(picked, isA<PickedSticker>());
+    expect((picked! as PickedSticker).sticker.id, 41);
   });
 
   testWidgets('a sticker already sent asks to undo it (Beans not given back)',

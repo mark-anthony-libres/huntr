@@ -147,7 +147,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
     final favorites = app.favoriteProfiles;
     final text = Theme.of(context).textTheme;
     final width = MediaQuery.sizeOf(context).width;
-    final layout = app.exploreLayout;
+    final layout = app.exploreLayoutFor(MediaQuery.sizeOf(context).width);
     // the chosen number across on a phone; more on wider screens, so the
     // cards keep about the same size
     final columns = (layout.columns * width / 430)

@@ -42,7 +42,8 @@ class MessagingService {
           required String clientId,
           int? replyToId,
           String? gifId,
-          int? stickerId}) async =>
+          int? stickerId,
+          String? stickerCaption}) async =>
       backend.sendAnonymousMessage(
           backendUrl: await _url(),
           token: token,
@@ -51,7 +52,8 @@ class MessagingService {
           clientId: clientId,
           replyToId: replyToId,
           gifId: gifId,
-          stickerId: stickerId);
+          stickerId: stickerId,
+          stickerCaption: stickerCaption);
 
   Future<AnonymousProfile> fetchAnonymousProfile(
           String token, int conversationId) async =>
@@ -143,7 +145,8 @@ class MessagingService {
           required String clientId,
           int? replyToId,
           String? gifId,
-          int? stickerId}) async =>
+          int? stickerId,
+          String? stickerCaption}) async =>
       backend.sendMessage(
           backendUrl: await _url(),
           token: token,
@@ -152,7 +155,8 @@ class MessagingService {
           clientId: clientId,
           replyToId: replyToId,
           gifId: gifId,
-          stickerId: stickerId);
+          stickerId: stickerId,
+          stickerCaption: stickerCaption);
 
   /// Takes back a sticker I sent (true: removed now).
   Future<bool> undoSticker(String token, int messageId) async =>

@@ -500,27 +500,43 @@ class _StickerCollectionState extends State<_StickerCollection> {
                   child: Text(
                       _error ?? 'No stickers yet — be the first to send one.',
                       style: const TextStyle(color: HuntrColors.muted)))
-              // cards of one width, each as tall as its name needs
+              // even rows: cards of one width, each row as tall as its
+              // tallest name, so the counts line up at the bottom (room
+              // around them for the top 3's glow and place)
               : SingleChildScrollView(
                   key: const Key('stickerCollection'),
-                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
                   child: LayoutBuilder(builder: (context, box) {
-                    const gap = 10.0;
-                    final across = ((box.maxWidth + gap) / (100 + gap)).ceil();
-                    final width = (box.maxWidth - gap * (across - 1)) / across;
-                    return Wrap(
-                      spacing: gap,
-                      runSpacing: gap,
-                      children: [
-                        for (final (i, sticker)
-                            in mostSentFirst(_stickers).indexed)
-                          SizedBox(
-                              width: width,
-                              child: _StickerCard(
-                                  sticker: sticker,
-                                  rank: topRank(i, _stickers.length))),
+                    const gap = 12.0;
+                    final across = math.max(
+                        1, ((box.maxWidth + gap) / (100 + gap)).ceil());
+                    final sorted = mostSentFirst(_stickers);
+                    return Column(children: [
+                      for (var start = 0;
+                          start < sorted.length;
+                          start += across) ...[
+                        if (start > 0) const SizedBox(height: gap),
+                        IntrinsicHeight(
+                          child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                for (var i = start;
+                                    i < start + across;
+                                    i++) ...[
+                                  if (i > start) const SizedBox(width: gap),
+                                  // a short last row keeps the same widths
+                                  Expanded(
+                                    child: i < sorted.length
+                                        ? _StickerCard(
+                                            sticker: sorted[i],
+                                            rank: topRank(i, sorted.length))
+                                        : const SizedBox(),
+                                  ),
+                                ],
+                              ]),
+                        ),
                       ],
-                    );
+                    ]);
                   }),
                 ),
         ),

@@ -7,21 +7,31 @@ import '../../screens/anonymous_profile_screen.dart' show ThreadsAuthorScreen;
 import '../../screens/chats_screen.dart' show timeLabel;
 import '../anonymous_avatar.dart';
 import '../linked_text.dart';
-import '../verified_badge.dart' show verifiedBlue;
+import '../verified_badge.dart';
 import 'nearby_media.dart';
 import 'nearby_tags.dart';
 
 /// A random animal in a circle: who someone is on a Nearby post.
 class NearbyAvatar extends StatelessWidget {
-  const NearbyAvatar({super.key, required this.animal, this.size = 48});
+  const NearbyAvatar(
+      {super.key, required this.animal, this.size = 48, this.mine = false});
 
   final String animal;
   final double size;
 
+  /// Mine: a blue ring (everyone else's is orange), so my own posts,
+  /// comments and replies are easy to spot.
+  final bool mine;
+
   @override
   Widget build(BuildContext context) => SizedBox.square(
         dimension: size,
-        child: AnonymousArt(animal: animal, radius: size / 2, size: size),
+        child: AnonymousArt(
+            key: mine ? const Key('nearbyAvatarMine') : null,
+            animal: animal,
+            radius: size / 2,
+            size: size,
+            ring: mine ? HuntrColors.active : null),
       );
 }
 
@@ -225,8 +235,10 @@ class NearbyPostCard extends StatelessWidget {
                     : nearbyAuthorTap(
                         key: Key('nearbyAuthor-${post.id}'),
                         onTap: onAuthor,
-                        child:
-                            NearbyAvatar(animal: post.author.avatar, size: 48)),
+                        child: NearbyAvatar(
+                            animal: post.author.avatar,
+                            size: 48,
+                            mine: post.mine)),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -247,14 +259,12 @@ class NearbyPostCard extends StatelessWidget {
                           ),
                           if (official) ...[
                             const SizedBox(width: 4),
-                            const Tooltip(
-                              message: 'Official post from HUNTR',
-                              child: Icon(Icons.verified_rounded,
-                                  key: Key('huntrPostCheck'),
-                                  size: 18,
-                                  color: verifiedBlue,
-                                  semanticLabel: 'Official'),
-                            ),
+                            const VerifiedBadge(
+                                key: Key('huntrPostCheck'),
+                                size: 18,
+                                interactive: false,
+                                tooltip: 'Official post from HUNTR',
+                                semanticLabel: 'Official'),
                           ],
                           Text('  ·  ${timeLabel(post.createdAt, now)}',
                               style: const TextStyle(

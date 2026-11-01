@@ -635,10 +635,18 @@ enum ExploreLayout {
   final String description;
   final IconData icon;
 
-  /// Until one is chosen: 2 across on the web (name, age and distance on
-  /// wide screens), 3 on phones.
-  static ExploreLayout get standard =>
-      kIsWeb ? ExploreLayout.two : ExploreLayout.three;
+  /// The default, for new users and anyone who hasn't chosen a layout in
+  /// Settings → Appearance: 3 across (Compact) on mobile - the app, and the
+  /// website on a phone - and 2 across (name, age and distance) on the
+  /// website on a computer or tablet. (Wider screens get more across; see
+  /// Explore.)
+  static ExploreLayout standardFor(double screenWidth) =>
+      kIsWeb && screenWidth >= phoneMaxWidth
+          ? ExploreLayout.two
+          : ExploreLayout.three;
+
+  /// Narrower than this is a phone.
+  static const phoneMaxWidth = 600.0;
 
   static ExploreLayout? fromName(String? name) =>
       values.where((layout) => layout.name == name).firstOrNull;

@@ -1454,20 +1454,39 @@ class ChatSticker {
       {required this.id,
       required this.name,
       this.imageUrl,
-      this.active = true});
+      this.active = true,
+      this.caption,
+      this.captionOnPicture = true,
+      this.captionColor = '#FFFFFF'});
 
   factory ChatSticker.fromJson(Map<String, dynamic> json) => ChatSticker(
         id: json['id'] as int?,
         name: json['name'] as String? ?? 'Sticker',
         imageUrl: json['image_url'] as String?,
         active: json['active'] as bool? ?? false,
+        caption: json['caption'] as String?,
       );
 
   /// Null for a sticker that's no longer known.
   final int? id;
   final String name;
+
+  /// Its picture: a meme's own GIF, with the caption on it.
   final String? imageUrl;
   final bool active;
+
+  /// A meme's caption (null: sent as it is).
+  final String? caption;
+
+  /// The caption is already on [imageUrl] (the server's meme); false while
+  /// mine is being sent, so the app draws it over the sticker meanwhile.
+  final bool captionOnPicture;
+
+  /// The caption's colour while it's drawn by the app (#RRGGBB).
+  final String captionColor;
+
+  /// A meme, shown a little bigger than a sticker.
+  bool get isMeme => caption != null;
 }
 
 /// A GIF or sticker from GIPHY, as GIF search returns it and a GIF message
@@ -2242,6 +2261,7 @@ Future<ChatMessage> sendAnonymousMessage(
         int? replyToId,
         String? gifId,
         int? stickerId,
+        String? stickerCaption,
         http.Client? client}) =>
     _sendAuthorized(
       client,
@@ -2249,7 +2269,7 @@ Future<ChatMessage> sendAnonymousMessage(
           _anonymous(backendUrl, '/conversations/$conversationId/messages'),
           headers: _json(token),
           body: jsonEncode({
-            ..._textOrGif(body, gifId, stickerId),
+            ..._textOrGif(body, gifId, stickerId, stickerCaption),
             'client_id': clientId,
             if (replyToId != null) 'reply_to_id': replyToId,
           })),
@@ -2257,9 +2277,14 @@ Future<ChatMessage> sendAnonymousMessage(
     );
 
 /// What a send carries: one of HUNTR's stickers, a GIF, or text.
-Map<String, Object> _textOrGif(String body, String? gifId, [int? stickerId]) =>
+Map<String, Object> _textOrGif(String body, String? gifId,
+        [int? stickerId, String? stickerCaption]) =>
     stickerId != null
-        ? {'sticker_id': stickerId}
+        ? {
+            'sticker_id': stickerId,
+            if (stickerCaption != null && stickerCaption.isNotEmpty)
+              'sticker_caption': stickerCaption,
+          }
         : gifId != null
             ? {'gif_id': gifId}
             : {'body': body};
@@ -2660,6 +2685,7 @@ Future<ChatMessage> sendMessage(
         int? replyToId,
         String? gifId,
         int? stickerId,
+        String? stickerCaption,
         http.Client? client}) =>
     _sendAuthorized(
       client,
@@ -2670,7 +2696,7 @@ Future<ChatMessage> sendMessage(
           },
           body: jsonEncode({
             'recipient_id': recipientId,
-            ..._textOrGif(body, gifId, stickerId),
+            ..._textOrGif(body, gifId, stickerId, stickerCaption),
             'client_id': clientId,
             if (replyToId != null) 'reply_to_id': replyToId,
           })),

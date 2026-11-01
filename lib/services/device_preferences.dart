@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 /// Choices remembered on this device between launches (not on the account):
@@ -18,6 +20,11 @@ abstract class DevicePreferences {
   /// Turning notifications on was offered on this device (once).
   Future<bool> readNotificationsOffered();
   Future<void> saveNotificationsOffered();
+
+  /// The reactions on the chat's emoji bar, in their order; null until
+  /// changed.
+  Future<List<String>?> readQuickReactions();
+  Future<void> saveQuickReactions(List<String> reactions);
 }
 
 /// Kept in the platform's secure storage, like the session token (the one
@@ -29,6 +36,7 @@ class SecureDevicePreferences implements DevicePreferences {
   static const _themeKey = 'huntr_theme';
   static const _notificationsOfferedKey = 'huntr_notifications_offered';
   static const _exploreLayoutKey = 'huntr_explore_layout';
+  static const _quickReactionsKey = 'huntr_quick_reactions';
   static const _storage = FlutterSecureStorage();
 
   @override
@@ -64,4 +72,19 @@ class SecureDevicePreferences implements DevicePreferences {
   @override
   Future<void> saveExploreLayout(String name) =>
       _storage.write(key: _exploreLayoutKey, value: name);
+
+  @override
+  Future<List<String>?> readQuickReactions() async {
+    final saved = await _storage.read(key: _quickReactionsKey);
+    if (saved == null) return null;
+    try {
+      return [for (final e in jsonDecode(saved) as List) e as String];
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
+  Future<void> saveQuickReactions(List<String> reactions) =>
+      _storage.write(key: _quickReactionsKey, value: jsonEncode(reactions));
 }

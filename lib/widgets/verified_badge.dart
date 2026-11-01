@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../theme.dart';
@@ -9,9 +12,18 @@ const verifiedBlue = Color(0xFF1D9BF0);
 /// are from documents they sent. Hovering says so briefly; tapping it (when
 /// [interactive]) explains it in full. Lists leave it not [interactive], so
 /// a tap opens the profile as usual.
-class VerifiedBadge extends StatelessWidget {
+///
+/// It's alive - a light sweeps across it every few seconds, with a little
+/// pop - so a check typed into a name (an emoji, a symbol) can't pass for
+/// it. Still for people who turn animations off.
+class VerifiedBadge extends StatefulWidget {
   const VerifiedBadge(
-      {super.key, this.size = 20, this.name, this.interactive = true});
+      {super.key,
+      this.size = 20,
+      this.name,
+      this.interactive = true,
+      this.tooltip = 'Verified: identity confirmed by HUNTR',
+      this.semanticLabel = 'Verified'});
 
   final double size;
 
@@ -19,21 +31,86 @@ class VerifiedBadge extends StatelessWidget {
   final String? name;
   final bool interactive;
 
+  /// What hovering says (HUNTR's own posts say they're official).
+  final String tooltip;
+  final String semanticLabel;
+
+  @override
+  State<VerifiedBadge> createState() => _VerifiedBadgeState();
+}
+
+class _VerifiedBadgeState extends State<VerifiedBadge>
+    with SingleTickerProviderStateMixin {
+  /// One sweep of light, with the pop.
+  late final _shine = AnimationController(
+      vsync: this, duration: const Duration(milliseconds: 1100), value: 1);
+
+  /// A sweep every few seconds; between them nothing moves (no frames).
+  Timer? _every;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _every?.cancel();
+    _every = null;
+    if (MediaQuery.of(context).disableAnimations) {
+      _shine
+        ..stop()
+        ..value = 1;
+      return;
+    }
+    _every = Timer.periodic(
+        const Duration(milliseconds: 3200), (_) => _shine.forward(from: 0));
+  }
+
+  @override
+  void dispose() {
+    _every?.cancel();
+    _shine.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
-    final check = Icon(Icons.verified_rounded,
-        key: const Key('verifiedBadge'),
-        size: size,
-        color: verifiedBlue,
-        semanticLabel: 'Verified');
+    final check = AnimatedBuilder(
+      animation: _shine,
+      builder: (context, icon) {
+        // the sweep and the pop (still at the end, between sweeps)
+        final t = _shine.value;
+        final pop = 1 + 0.12 * math.sin(math.pi * t);
+        return Transform.scale(
+          scale: pop,
+          child: ShaderMask(
+            blendMode: BlendMode.srcATop,
+            shaderCallback: (bounds) => LinearGradient(
+              begin: const Alignment(-1, -0.6),
+              end: const Alignment(1, 0.6),
+              colors: [
+                Colors.transparent,
+                Colors.white.withValues(alpha: 0.85),
+                Colors.transparent,
+              ],
+              // the band of light, moving from off one side to off the other
+              stops: [t * 1.6 - 0.45, t * 1.6 - 0.3, t * 1.6 - 0.15],
+            ).createShader(bounds),
+            child: icon,
+          ),
+        );
+      },
+      child: Icon(Icons.verified_rounded,
+          key: const Key('verifiedBadge'),
+          size: widget.size,
+          color: verifiedBlue,
+          semanticLabel: widget.semanticLabel),
+    );
     return Tooltip(
-      message: 'Verified: identity confirmed by HUNTR',
-      child: !interactive
+      message: widget.tooltip,
+      child: !widget.interactive
           ? check
           : InkResponse(
               key: const Key('verifiedBadgeButton'),
-              radius: size,
-              onTap: () => showVerifiedInfo(context, name: name),
+              radius: widget.size,
+              onTap: () => showVerifiedInfo(context, name: widget.name),
               child: check,
             ),
     );

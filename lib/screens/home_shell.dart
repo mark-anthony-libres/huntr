@@ -139,8 +139,8 @@ class _HomeShellState extends State<HomeShell> {
         ..hideCurrentSnackBar()
         ..showSnackBar(SnackBar(
           content: Text(msg),
-          action:
-              SnackBarAction(label: 'Chats', onPressed: () => _showTab(_chatsTab)),
+          action: SnackBarAction(
+              label: 'Chats', onPressed: () => _showTab(_chatsTab)),
         ));
     });
   }
@@ -233,50 +233,59 @@ class _HomeShellState extends State<HomeShell> {
     final messaging = MessagingScope.of(context);
     final unread = messaging?.unreadTotal ?? AppScope.of(context).chatsBadge;
     final taps = TapScope.of(context);
+    final tabs = IndexedStack(
+      index: _tab,
+      children: [
+        for (final (i, tab) in [
+          const ExploreScreen(),
+          const ThreadsTab(),
+          const TapsScreen(),
+          ChatsScreen(onExplore: () => _showTab(_exploreTab)),
+          const MeScreen(),
+        ].indexed)
+          PageVisits(visits: _visits[i], child: tab),
+      ],
+    );
+    final items = [
+      const HuntrBottomBarItem(
+          icon: Icons.explore_outlined,
+          selectedIcon: Icons.explore,
+          label: 'Explore'),
+      // anonymous posts from people around
+      const HuntrBottomBarItem(
+          icon: Icons.forum_outlined,
+          selectedIcon: Icons.forum_rounded,
+          label: 'Threads'),
+      HuntrBottomBarItem(
+          icon: Icons.waving_hand_outlined,
+          selectedIcon: Icons.waving_hand_rounded,
+          label: 'Taps',
+          // unread taps and new viewers, both under Taps
+          badge: (taps?.unreadCount ?? 0) + (taps?.newViewers ?? 0)),
+      HuntrBottomBarItem(
+          icon: Icons.chat_bubble_outline,
+          selectedIcon: Icons.chat_bubble_rounded,
+          label: 'Chats',
+          badge: unread),
+      const HuntrBottomBarItem(
+          icon: Icons.person_outline,
+          selectedIcon: Icons.person_rounded,
+          label: 'Me'),
+    ];
+    // the website on a wide screen (a computer, a tablet): the tabs down the
+    // left; the app, and the website on a phone: along the bottom
+    if (kIsWeb && MediaQuery.sizeOf(context).width >= huntrSideBarMinWidth) {
+      return Scaffold(
+        body: Row(children: [
+          HuntrSideBar(items: items, selectedIndex: _tab, onSelected: _showTab),
+          Expanded(child: tabs),
+        ]),
+      );
+    }
     return Scaffold(
-      body: IndexedStack(
-        index: _tab,
-        children: [
-          for (final (i, tab) in [
-            const ExploreScreen(),
-            const ThreadsTab(),
-            const TapsScreen(),
-            ChatsScreen(onExplore: () => _showTab(_exploreTab)),
-            const MeScreen(),
-          ].indexed)
-            PageVisits(visits: _visits[i], child: tab),
-        ],
-      ),
+      body: tabs,
       bottomNavigationBar: HuntrBottomBar(
-        selectedIndex: _tab,
-        onSelected: _showTab,
-        items: [
-          const HuntrBottomBarItem(
-              icon: Icons.explore_outlined,
-              selectedIcon: Icons.explore,
-              label: 'Explore'),
-          // anonymous posts from people around
-          const HuntrBottomBarItem(
-              icon: Icons.forum_outlined,
-              selectedIcon: Icons.forum_rounded,
-              label: 'Threads'),
-          HuntrBottomBarItem(
-              icon: Icons.waving_hand_outlined,
-              selectedIcon: Icons.waving_hand_rounded,
-              label: 'Taps',
-              // unread taps and new viewers, both under Taps
-              badge: (taps?.unreadCount ?? 0) + (taps?.newViewers ?? 0)),
-          HuntrBottomBarItem(
-              icon: Icons.chat_bubble_outline,
-              selectedIcon: Icons.chat_bubble_rounded,
-              label: 'Chats',
-              badge: unread),
-          const HuntrBottomBarItem(
-              icon: Icons.person_outline,
-              selectedIcon: Icons.person_rounded,
-              label: 'Me'),
-        ],
-      ),
+          items: items, selectedIndex: _tab, onSelected: _showTab),
     );
   }
 }

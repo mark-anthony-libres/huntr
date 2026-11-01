@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 
 import '../../models/stickers.dart';
 import '../../services/huntr_backend.dart';
@@ -323,11 +324,102 @@ class _HuntrStickersState extends State<_HuntrStickers>
   String? _error;
   bool _loadingMore = false;
   final _scroll = ScrollController();
+  final _pillScroll = ScrollController();
+  final _listKey = GlobalKey();
+
+  /// Each group's header and pill (to jump between them).
+  final _headers = <int, GlobalKey>{};
+  final _pills = <int, GlobalKey>{};
+
+  /// The group in view: its pill is lit.
+  int? _current;
+
+  /// A tapped pill's group, while the list scrolls to it.
+  int? _jumpingTo;
+
+  /// Where each group starts in the list, roughly (for one not built yet).
+  Map<int, double> _starts = const {};
 
   @override
   void dispose() {
     _scroll.dispose();
+    _pillScroll.dispose();
     super.dispose();
+  }
+
+  /// Scrolls [controller] until [target] sits at [alignment] in it.
+  static Future<void> _reveal(
+      ScrollController controller, BuildContext? target, double alignment) {
+    final box = target?.findRenderObject();
+    if (box == null || !box.attached || !controller.hasClients) {
+      return Future.value();
+    }
+    final position = controller.position;
+    final offset = RenderAbstractViewport.of(box)
+        .getOffsetToReveal(box, alignment)
+        .offset
+        .clamp(position.minScrollExtent, position.maxScrollExtent);
+    return controller.animateTo(offset,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOutCubic);
+  }
+
+  void _revealPill(int id) => WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _reveal(_pillScroll, _pills[id]?.currentContext, 0.5));
+
+  /// A pill's group to the top of the list (one not built yet: near where
+  /// it starts first).
+  Future<void> _jumpTo(int id) async {
+    setState(() => _current = _jumpingTo = id);
+    _revealPill(id);
+    if (_headers[id]?.currentContext == null) {
+      final start = _starts[id];
+      if (start != null && _scroll.hasClients) {
+        _scroll.jumpTo(start.clamp(0.0, _scroll.position.maxScrollExtent));
+      }
+      await WidgetsBinding.instance.endOfFrame;
+    }
+    if (!mounted) return;
+    await _reveal(_scroll, _headers[id]?.currentContext, 0);
+    if (mounted && _jumpingTo == id) _jumpingTo = null;
+  }
+
+  bool _syncQueued = false;
+
+  /// The group in view: the last whose header is at the top or above it
+  /// (the last group once the list is at its end). After the frame: a
+  /// scroll is told before the list is laid out where it went.
+  void _syncCurrent(List<HuntrStickerGroup> groups) {
+    if (_syncQueued) return;
+    _syncQueued = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _syncQueued = false;
+      if (mounted) _syncCurrentNow(groups);
+    });
+  }
+
+  void _syncCurrentNow(List<HuntrStickerGroup> groups) {
+    final list = _listKey.currentContext?.findRenderObject();
+    if (_jumpingTo != null || list is! RenderBox || !_scroll.hasClients) {
+      return;
+    }
+    int? current;
+    if (_scroll.position.extentAfter < 1) {
+      current = groups.last.id;
+    } else {
+      for (final (i, group) in groups.indexed) {
+        final header = _headers[group.id]?.currentContext?.findRenderObject();
+        if (header is! RenderBox || !header.attached) continue;
+        if (header.localToGlobal(Offset.zero, ancestor: list).dy > 24) {
+          current = groups[i == 0 ? 0 : i - 1].id;
+          break;
+        }
+        current = group.id;
+      }
+    }
+    if (current == null || current == _current) return;
+    setState(() => _current = current);
+    _revealPill(current);
   }
 
   /// A page that doesn't fill the sheet: the next one at once (there's
@@ -370,6 +462,7 @@ class _HuntrStickersState extends State<_HuntrStickers>
       _error = null;
       _loadedFor = query;
       _catalog = null;
+      _current = _jumpingTo = null;
     });
     try {
       final catalog = await messaging.stickerCatalog(query: query);
@@ -450,64 +543,118 @@ class _HuntrStickersState extends State<_HuntrStickers>
       final across = ((constraints.maxWidth - 24) / (_cardWidth + _gap))
           .floor()
           .clamp(3, 8);
-      return NotificationListener<ScrollNotification>(
-        onNotification: (n) {
-          if (n.metrics.extentAfter < 600) _loadMore();
-          return false;
-        },
-        child: CustomScrollView(
-          controller: _scroll,
-          slivers: [
-            for (final (:group, :stickers) in shown) ...[
-              SliverToBoxAdapter(
-                child: _GroupHeader(
-                  group: group,
-                  // what I've sent them from this group, if it's one per person
-                  usedBy: group.onePerGroupPerRecipient
-                      ? group.stickers
-                          .where((s) => widget.sent.contains(s.id))
-                          .firstOrNull
-                      : null,
-                ),
-              ),
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
-                sliver: SliverGrid(
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: across,
-                      mainAxisSpacing: _gap,
-                      crossAxisSpacing: _gap,
-                      childAspectRatio: 0.8),
-                  delegate: SliverChildBuilderDelegate(
-                    childCount: stickers.length,
-                    (context, i) =>
-                        _stickerCard(group, stickers[i], catalog.beansBalance),
-                  ),
-                ),
-              ),
-            ],
-            if (_loadingMore)
-              const SliverToBoxAdapter(
-                child: Padding(
-                  padding: EdgeInsets.symmetric(vertical: 16),
-                  child: Center(
-                      child: SizedBox.square(
-                          dimension: 24,
-                          child: CircularProgressIndicator(strokeWidth: 2.5))),
-                ),
-              ),
-          ],
+      // where each group starts: its header, then its rows of cards
+      final cardHeight =
+          (constraints.maxWidth - 24 - _gap * (across - 1)) / across / 0.8;
+      final starts = <int, double>{};
+      var start = 0.0;
+      for (final (:group, :stickers) in shown) {
+        starts[group.id] = start;
+        final rows = (stickers.length / across).ceil();
+        start += (group.description?.isNotEmpty == true ? 74 : 54) +
+            rows * (cardHeight + _gap) -
+            _gap +
+            10;
+      }
+      _starts = starts;
+      final groups = [for (final (:group, stickers: _) in shown) group];
+      final current = _current ?? groups.first.id;
+      return Column(children: [
+        SizedBox(
+          height: 46,
+          child: ListView.separated(
+            key: const Key('stickerGroupPills'),
+            controller: _pillScroll,
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            itemCount: groups.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 8),
+            itemBuilder: (context, i) {
+              final group = groups[i];
+              return _GroupPill(
+                key: _pills.putIfAbsent(group.id, GlobalKey.new),
+                pillKey: Key('stickerGroupPill-${group.id}'),
+                name: group.name,
+                selected: group.id == current,
+                onTap: () => _jumpTo(group.id),
+              );
+            },
+          ),
         ),
-      );
+        Expanded(
+          child: NotificationListener<ScrollNotification>(
+            onNotification: (n) {
+              if (n.metrics.axis != Axis.vertical) return false;
+              if (n.metrics.extentAfter < 600) _loadMore();
+              // they scroll it themselves: a pill's jump is over
+              if (n is UserScrollNotification) _jumpingTo = null;
+              _syncCurrent(groups);
+              return false;
+            },
+            child: _stickerList(shown, across, catalog.beansBalance),
+          ),
+        ),
+      ]);
     });
   }
+
+  Widget _stickerList(
+          List<({HuntrStickerGroup group, List<HuntrSticker> stickers})> shown,
+          int across,
+          int beans) =>
+      CustomScrollView(key: _listKey, controller: _scroll, slivers: [
+        for (final (:group, :stickers) in shown) ...[
+          SliverToBoxAdapter(
+            child: KeyedSubtree(
+              key: _headers.putIfAbsent(group.id, GlobalKey.new),
+              child: _GroupHeader(
+                group: group,
+                // what I've sent them from this group, if it's one per
+                // person
+                usedBy: group.onePerGroupPerRecipient
+                    ? group.stickers
+                        .where((s) => widget.sent.contains(s.id))
+                        .firstOrNull
+                    : null,
+              ),
+            ),
+          ),
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+            sliver: SliverGrid(
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: across,
+                  mainAxisSpacing: _gap,
+                  crossAxisSpacing: _gap,
+                  childAspectRatio: 0.8),
+              delegate: SliverChildBuilderDelegate(
+                childCount: stickers.length,
+                (context, i) => _stickerCard(group, stickers[i], beans),
+              ),
+            ),
+          ),
+        ],
+        if (_loadingMore)
+          const SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.symmetric(vertical: 16),
+              child: Center(
+                  child: SizedBox.square(
+                      dimension: 24,
+                      child: CircularProgressIndicator(strokeWidth: 2.5))),
+            ),
+          ),
+      ]);
 
   static const _cardWidth = 104.0;
   static const _gap = 10.0;
 
   Widget _stickerCard(
       HuntrStickerGroup group, HuntrSticker sticker, int beans) {
-    final already = widget.sent.contains(sticker.id);
+    // one that can be sent again and again is never "already sent" here:
+    // tapping it sends another (undo stays in the chat)
+    final already =
+        !sticker.canSendMultiple && widget.sent.contains(sticker.id);
     // another of a one-per-person group is out with them
     final groupTaken = !already &&
         group.onePerGroupPerRecipient &&
@@ -673,6 +820,52 @@ class _GroupHeader extends StatelessWidget {
       ]),
     );
   }
+}
+
+/// A group's name in the bar over the stickers: tapping it goes to the
+/// group; lit while the group is in view.
+class _GroupPill extends StatelessWidget {
+  const _GroupPill(
+      {super.key,
+      required this.pillKey,
+      required this.name,
+      required this.selected,
+      required this.onTap});
+
+  final Key pillKey;
+  final String name;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+        selected: selected,
+        child: Material(
+          key: pillKey,
+          color: selected
+              ? HuntrColors.orange.withValues(alpha: 0.16)
+              : HuntrColors.surfaceHigh,
+          shape: StadiumBorder(
+              side: BorderSide(
+                  color: selected ? HuntrColors.orange : HuntrColors.border)),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              child: Center(
+                widthFactor: 1,
+                child: Text(name,
+                    maxLines: 1,
+                    style: TextStyle(
+                        color: selected ? HuntrColors.orange : Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700)),
+              ),
+            ),
+          ),
+        ),
+      );
 }
 
 /// Greys a sticker I can't afford.

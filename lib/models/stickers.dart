@@ -8,7 +8,11 @@ class HuntrSticker {
       required this.name,
       this.groupId,
       this.imageUrl,
-      this.beansCost = 0});
+      this.beansCost = 0,
+      this.allowsCaption = false,
+      this.captionMaxLength = 40,
+      this.captionColor = '#FFFFFF',
+      this.canSendMultiple = false});
 
   factory HuntrSticker.fromJson(Map<String, dynamic> json) => HuntrSticker(
         id: json['id'] as int,
@@ -16,6 +20,10 @@ class HuntrSticker {
         groupId: json['group_id'] as int?,
         imageUrl: json['image_url'] as String?,
         beansCost: json['beans_cost'] as int? ?? 0,
+        allowsCaption: json['allows_caption'] as bool? ?? false,
+        captionMaxLength: json['caption_max_length'] as int? ?? 40,
+        captionColor: json['caption_color'] as String? ?? '#FFFFFF',
+        canSendMultiple: json['can_send_multiple'] as bool? ?? false,
       );
 
   static List<HuntrSticker> listFromJson(Object? json) => [
@@ -33,6 +41,18 @@ class HuntrSticker {
   /// What sending it costs (0: free). The server charges it, from its own
   /// price, never this one.
   final int beansCost;
+
+  /// A meme: sending it asks for an optional caption (at most
+  /// [captionMaxLength] characters), and the server makes a new GIF with it.
+  final bool allowsCaption;
+  final int captionMaxLength;
+
+  /// The caption's colour, #RRGGBB (chosen in the admin dashboard).
+  final String captionColor;
+
+  /// Can be sent to the same person again and again: tapping it in the
+  /// picker always sends it (each one sent can still be undone in the chat).
+  final bool canSendMultiple;
 }
 
 /// The chat's sticker picker, a page at a time: its groups (with the

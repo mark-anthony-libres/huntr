@@ -106,7 +106,8 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
               for (final layout in ExploreLayout.values)
                 _LayoutOption(
                   layout: layout,
-                  chosen: layout == app.exploreLayout,
+                  chosen: layout ==
+                      app.exploreLayoutFor(MediaQuery.sizeOf(context).width),
                   onTap: () => app.exploreLayout = layout,
                 ),
 

@@ -599,10 +599,9 @@ class _RemoveUnmatchButtonState extends State<_RemoveUnmatchButton> {
 }
 
 /// On a real person's profile, beside Message: one tap and they get it in
-/// their Taps inbox (no chat starts until they reply). Always "Tap": each
-/// one goes (counted up on their side) with a big wave. A burst is one tap:
-/// presses are ignored until [_gap] passes without one (each press starts
-/// the wait again), like the backend.
+/// their Taps inbox (no chat starts until they reply). Each one goes
+/// (counted up on their side) with a big wave. Then it counts down until
+/// the next tap can go ("Tap in 5s", 4s, ...), like the backend's wait.
 class _TapButton extends StatefulWidget {
   const _TapButton({required this.profile});
 
@@ -618,25 +617,31 @@ class _TapButtonState extends State<_TapButton> {
 
   bool _sending = false;
 
-  /// Running for [_gap] after each press: presses meanwhile are ignored,
-  /// and start it again.
-  Timer? _cooling;
+  /// Seconds until the next tap can go (0: now).
+  int _left = 0;
+  Timer? _countdown;
+
+  void _startCountdown() {
+    _countdown?.cancel();
+    setState(() => _left = _gap.inSeconds);
+    _countdown = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) return timer.cancel();
+      setState(() => _left--);
+      if (_left <= 0) timer.cancel();
+    });
+  }
 
   @override
   void dispose() {
-    _cooling?.cancel();
+    _countdown?.cancel();
     super.dispose();
   }
 
   Future<void> _tap() async {
     final taps = TapScope.read(context);
     final userId = widget.profile.backendId;
-    // a burst of presses: only the first
-    if (_sending || taps == null || userId == null) return;
-    final burst = _cooling?.isActive ?? false;
-    _cooling?.cancel();
-    _cooling = Timer(_gap, () {});
-    if (burst) return;
+    if (_sending || _left > 0 || taps == null || userId == null) return;
+    _startCountdown();
     final messenger = ScaffoldMessenger.of(context);
     final app = AppScope.read(context);
     setState(() => _sending = true);
@@ -670,7 +675,10 @@ class _TapButtonState extends State<_TapButton> {
       key: const Key('tapButton'),
       style: OutlinedButton.styleFrom(
         foregroundColor: HuntrColors.orange,
-        side: BorderSide(color: HuntrColors.orange),
+        // counting down: quieter, until the next tap can go
+        disabledForegroundColor: HuntrColors.muted,
+        side: BorderSide(
+            color: _left > 0 ? HuntrColors.border : HuntrColors.orange),
         minimumSize: const Size(0, 52),
         shape: const StadiumBorder(),
       ),
@@ -679,9 +687,13 @@ class _TapButtonState extends State<_TapButton> {
               width: 18,
               height: 18,
               child: CircularProgressIndicator(strokeWidth: 2))
-          : const Icon(Icons.waving_hand_rounded),
-      label: const Text('Tap'),
-      onPressed: _tap,
+          : Icon(_left > 0
+              ? Icons.hourglass_bottom_rounded
+              : Icons.waving_hand_rounded),
+      // waiting: how long until the next tap can go
+      label: Text(_left > 0 ? 'Tap in ${_left}s' : 'Tap',
+          key: const Key('tapButtonLabel')),
+      onPressed: _left > 0 ? null : _tap,
     );
   }
 }

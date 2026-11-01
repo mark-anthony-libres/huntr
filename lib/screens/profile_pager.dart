@@ -4,9 +4,9 @@ import 'package:flutter/services.dart';
 
 import 'profile_screen.dart';
 
-/// Profiles from Explore, one after another: swipe right for the next
-/// person, left for the previous one (a mouse drag or the arrow keys on
-/// desktop). The order is the list as it was when it was opened, so a
+/// Profiles from Explore, one after another: swipe from right to left for
+/// the next person, from left to right for the previous one (a mouse drag,
+/// or the arrow keys on desktop: right next, left previous). The order is the list as it was when it was opened, so a
 /// refresh behind it doesn't reshuffle. A swipe that starts on the photos
 /// moves through that person's photos instead.
 class ProfilePager extends StatefulWidget {
@@ -64,8 +64,6 @@ class _ProfilePagerState extends State<ProfilePager> {
           child: PageView.builder(
             key: const Key('profilePager'),
             controller: _pages,
-            // swiping right brings the next person in
-            reverse: true,
             itemCount: widget.profileIds.length,
             onPageChanged: (i) => widget.onShow?.call(widget.profileIds[i]),
             itemBuilder: (_, i) => ProfileScreen(

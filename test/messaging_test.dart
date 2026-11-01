@@ -106,7 +106,8 @@ class _FakeMessaging extends MessagingService {
       required String clientId,
       int? replyToId,
       String? gifId,
-      int? stickerId}) async {
+      int? stickerId,
+      String? stickerCaption}) async {
     sentClientIds.add(clientId);
     await sendGate?.future;
     if (sendError != null) throw sendError!;
