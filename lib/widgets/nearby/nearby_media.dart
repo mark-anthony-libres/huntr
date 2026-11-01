@@ -153,11 +153,14 @@ class NearbyMediaGrid extends StatelessWidget {
     final Widget grid;
     if (media.length == 1) {
       // wide ones in their own shape (up to 2:1); tall ones (a phone's
-      // video) whole in a square, so they don't take over the feed
+      // video) in a square, so they don't take over the feed. Always whole
+      // (never cropped): where the frame is wider than the picture (on a
+      // computer, capped at nearbyMediaMaxHeight), a blurred copy fills
+      // the sides
       final ratio = media.first.aspectRatio;
       grid = _Frame(
           aspectRatio: ratio < 1 ? 1 : ratio.clamp(1.0, 2.0),
-          child: tile(0, whole: ratio < 1));
+          child: tile(0, whole: true));
     } else if (media.length == 2) {
       grid = _Frame(
           aspectRatio: 16 / 10,
