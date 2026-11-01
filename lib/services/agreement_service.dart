@@ -16,7 +16,7 @@ class AgreementService {
   Future<String> fetchPrivacyPolicy() async => backend.fetchPrivacyPolicy(
       backendUrl: await GoogleOAuthConfig.loadBackendUrl());
 
-  /// Deactivates the signed-in user's account.
+  /// Deletes the signed-in user's account and all their data.
   Future<void> decline(String token) async => declineAgreement(
       backendUrl: await GoogleOAuthConfig.loadBackendUrl(), token: token);
 }

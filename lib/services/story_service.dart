@@ -23,6 +23,27 @@ class StoryService {
   /// The largest video that can be uploaded.
   static const maxUploadBytes = 50 * 1024 * 1024;
 
+  /// Verified people (the blue check): stories up to a minute, chosen from
+  /// the phone's album too (a video, or a photo shown for [photoLength]),
+  /// as the backend's STORY_VERIFIED_* settings allow.
+  static const verifiedMaxLength = Duration(minutes: 1);
+  static const verifiedMaxSourceLength = Duration(minutes: 10);
+  static const verifiedMaxUploadBytes = 200 * 1024 * 1024;
+  static const photoLength = Duration(seconds: 5);
+
+  /// What I may post, verified or not.
+  static StoryLimits limitsFor({required bool verified}) => verified
+      ? const StoryLimits(
+          maxLength: verifiedMaxLength,
+          maxSourceLength: verifiedMaxSourceLength,
+          maxUploadBytes: verifiedMaxUploadBytes,
+          fromAlbum: true)
+      : const StoryLimits(
+          maxLength: maxLength,
+          maxSourceLength: maxSourceLength,
+          maxUploadBytes: maxUploadBytes,
+          fromAlbum: false);
+
   Future<String> _url() => GoogleOAuthConfig.loadBackendUrl();
 
   Future<List<Story>> of(String token, int userId) async => backend
@@ -75,3 +96,24 @@ class StoryService {
           body: body,
           clientId: clientId);
 }
+
+/// How long a story may be, the longest video it can be cut from, the
+/// largest upload, and whether it can come from the album (photos too).
+class StoryLimits {
+  const StoryLimits(
+      {required this.maxLength,
+      required this.maxSourceLength,
+      required this.maxUploadBytes,
+      required this.fromAlbum});
+
+  final Duration maxLength;
+  final Duration maxSourceLength;
+  final int maxUploadBytes;
+  final bool fromAlbum;
+}
+
+/// "5 seconds", "1 minute", "10 minutes".
+String storyLengthWords(Duration d) =>
+    d.inSeconds >= 60 && d.inSeconds % 60 == 0
+        ? '${d.inMinutes} ${d.inMinutes == 1 ? 'minute' : 'minutes'}'
+        : '${d.inSeconds} seconds';

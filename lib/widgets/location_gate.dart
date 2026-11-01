@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../services/location_permission.dart';
+import '../services/location_service.dart' show computerLocationHelp;
 import '../theme.dart';
 
 /// Huntr needs the device location: while [enforce] is on (signed in, past
@@ -131,14 +132,20 @@ class LocationRequiredScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final blocked = access.status == LocationAccessStatus.blocked;
+    final unavailable = access.status == LocationAccessStatus.unavailable;
     final settings = access.permissions.canOpenSettings;
     final String message;
     if (blocked) {
+      // no reload: that would start over (the agreement again)
       message = settings
           ? 'Location access is turned off for Huntr. Open Settings, allow '
               'location for Huntr, then come back.'
-          : 'Location access is blocked for this site. Click the lock icon '
-              'next to the address bar, allow location, then reload the page.';
+          : 'Location access is blocked for this site. Click the icon at the '
+              'left of the address bar, allow location, then click I’ve '
+              'allowed it.';
+    } else if (unavailable) {
+      message = 'Your browser couldn’t find your location. '
+          '${computerLocationHelp()}';
     } else if (access.justDenied) {
       message = 'You didn’t allow location. Huntr needs it to show you '
           'people nearby, so it can’t be used without it.';
@@ -187,9 +194,17 @@ class LocationRequiredScreen extends StatelessWidget {
                 if (!blocked)
                   _Wide(FilledButton.icon(
                     key: const Key('enableLocation'),
-                    onPressed: access.request,
-                    icon: const Icon(Icons.my_location_rounded),
-                    label: const Text('Enable Location'),
+                    onPressed: access.asking ? null : access.request,
+                    icon: access.asking
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Icon(Icons.my_location_rounded),
+                    label: Text(access.asking
+                        ? 'Finding your location…'
+                        : unavailable
+                            ? 'Try again'
+                            : 'Enable Location'),
                   ))
                 else if (settings)
                   _Wide(FilledButton.icon(

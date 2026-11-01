@@ -379,7 +379,7 @@ Future<String> _fetchMarkdown(
   }
 }
 
-/// Declines the agreement, which deactivates the account
+/// Declines the agreement, which deletes the account
 /// (POST {backendUrl}/agreement/decline).
 Future<void> declineAgreement({
   required String backendUrl,
@@ -2941,8 +2941,8 @@ Future<List<Story>> fetchMyStories(
       _storyList,
     );
 
-/// POST .../stories: a video; the backend keeps [length] (at most
-/// [StoryService.maxLength]) from [start], the user's trim. [onProgress] gets
+/// POST .../stories: a video (or a verified person's photo); the backend
+/// keeps [length] (at most my limit) from [start], the user's trim. [onProgress] gets
 /// the share of the file sent so far (0-1).
 Future<Story> postStory({
   required String backendUrl,

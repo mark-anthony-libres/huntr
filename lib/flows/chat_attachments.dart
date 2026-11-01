@@ -31,6 +31,15 @@ class ChatMediaPicker {
   /// A photo or a video from the library (which one is told by its bytes).
   Future<XFile?> pickMedia() => ImagePicker().pickMedia();
 
+  /// A story from the album (verified people): a photo comes as a JPEG
+  /// (an iPhone's HEIC too), no bigger than a story shows it, without its
+  /// metadata; a video as it is (the backend compresses it).
+  Future<XFile?> pickStoryMedia() => ImagePicker().pickMedia(
+      maxWidth: 2048,
+      maxHeight: 2048,
+      imageQuality: 88,
+      requestFullMetadata: false);
+
   bool get hasCamera => ImagePicker().supportsImageSource(ImageSource.camera);
 
   Future<XFile?> takePhoto() =>

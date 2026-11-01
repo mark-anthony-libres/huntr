@@ -41,7 +41,7 @@ class AgreementScreen extends StatefulWidget {
   final AgreementDocument document;
   final VoidCallback? onAccept;
 
-  /// Deactivates the account. Throwing keeps the user here with the error.
+  /// Deletes the account. Throwing keeps the user here with the error.
   final Future<void> Function()? onDecline;
 
   bool get _asksForAcceptance => onAccept != null && onDecline != null;
@@ -145,16 +145,16 @@ class _AgreementScreenState extends State<AgreementScreen> {
     }
   }
 
-  /// Declining deactivates the account, so it's confirmed first.
+  /// Declining deletes the account, so it's confirmed first.
   Future<void> _decline() async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Decline and deactivate?'),
+        title: const Text('Decline and delete your account?'),
         content: const Text(
             'Huntr can only be used if you accept the terms and privacy '
-            'policy. Declining '
-            'deactivates your account and signs you out.'),
+            'policy. Declining deletes your account and everything in it. '
+            'You can sign up again any time.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),

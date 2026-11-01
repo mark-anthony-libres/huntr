@@ -13,6 +13,20 @@ class PageVisits extends InheritedNotifier<ValueNotifier<int>> {
       context.dependOnInheritedWidgetOfExactType<PageVisits>()?.notifier;
 }
 
+/// Whether this tab is the one shown (HomeShell keeps the others built,
+/// out of sight); true outside a tab.
+class TabShown extends InheritedWidget {
+  const TabShown({super.key, required this.shown, required super.child});
+
+  final bool shown;
+
+  static bool of(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<TabShown>()?.shown ?? true;
+
+  @override
+  bool updateShouldNotify(TabShown oldWidget) => shown != oldWidget.shown;
+}
+
 /// A page's big title (like "Me"), opening with the brand: "huntr"
 /// comes in letter by letter, stays a moment, then gives way to the title.
 /// It plays each time the page is opened (once when it's outside a tab),

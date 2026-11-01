@@ -70,14 +70,14 @@ void main() {
     expect(find.text('Meet people\nright around you.'), findsOneWidget);
   });
 
-  testWidgets('declining deactivates the account and signs out',
+  testWidgets('declining deletes the account and signs out',
       (tester) async {
     final agreements = _FakeAgreements();
     final state = AppState()..startSession('token');
     await _open(tester, state, agreements: agreements);
     await tester.tap(find.byKey(const Key('agreementDecline')));
     await tester.pumpAndSettle();
-    expect(find.text('Decline and deactivate?'), findsOneWidget);
+    expect(find.text('Decline and delete your account?'), findsOneWidget);
     await tester.tap(find.byKey(const Key('agreementDeclineConfirm')));
     await tester.pumpAndSettle();
     expect(agreements.declinedWith, ['token']);
@@ -137,7 +137,7 @@ void main() {
         expect(
             request.url.toString(), 'http://huntr.test/api/agreement/decline');
         expect(request.headers['Authorization'], 'Bearer abc');
-        return http.Response('{"data": {"deactivated": true}}', 200);
+        return http.Response('{"data": {"deleted": true}}', 200);
       }),
     );
   });

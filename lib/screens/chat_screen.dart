@@ -45,6 +45,7 @@ import 'my_album_screen.dart';
 import 'story_viewer_screen.dart';
 import 'anonymous_profile_screen.dart';
 import '../widgets/chat/anonymous_chat.dart';
+import '../widgets/page_title.dart';
 import '../widgets/chat/album_interest.dart';
 import '../flows/my_albums.dart';
 
@@ -79,6 +80,9 @@ class _ChatScreenState extends State<ChatScreen> {
   final _input = TextEditingController();
   final _scroll = ScrollController();
   AppState? _appRef;
+
+  /// Its tab is the one shown (see [TabShown]).
+  bool _shown = true;
   AppState get _app => _appRef!;
   MessagingState? _messaging;
 
@@ -329,6 +333,16 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    // beside the chat list, on another tab: out of sight, so what arrives
+    // stays unread (and counts on the Chats badge) until it's back
+    final shown = TabShown.of(context);
+    if (_appRef != null && shown != _shown) {
+      final id = _conversationId;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && id != null) _messaging?.setViewing(_shown ? id : null);
+      });
+    }
+    _shown = shown;
     if (_appRef != null) {
       return; // runs again on every app-state change; set up only once
     }

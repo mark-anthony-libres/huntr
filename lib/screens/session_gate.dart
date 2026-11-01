@@ -235,17 +235,17 @@ class _SessionGateState extends State<SessionGate> {
     AppScope.read(context).endSession();
   }
 
-  /// Declining deactivates the account on the backend, then signs out.
+  /// Declining deletes the account on the backend, then signs out.
   /// Other failures are thrown so the agreement screen can show them.
   Future<void> _declineAgreement(
       AgreementService agreements, String token) async {
     try {
       await agreements.decline(token);
     } on SessionRejectedException {
-      // Already signed out on the backend; nothing left to deactivate here.
+      // Already signed out on the backend; nothing left to delete here.
     }
-    await _endSession(
-        'Your account was deactivated because you declined the terms.');
+    await _endSession('Your account was deleted because you declined the '
+        'terms. You can sign up again any time.');
   }
 
   void _retryProfile() => setState(() {

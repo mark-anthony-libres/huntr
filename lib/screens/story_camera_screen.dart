@@ -10,17 +10,22 @@ import '../services/story_service.dart';
 import '../theme.dart';
 import '../widgets/stories/story_round_button.dart';
 
-/// Records a story right now, with the camera: up to
-/// [StoryService.maxLength], and it stops by itself then. There's no way to
-/// pick a video from the gallery: a story is a moment as it happens. Pops
-/// with the recording, or null.
+/// Records a story right now, with the camera: up to [maxLength]
+/// ([StoryService.maxLength]), and it stops by itself then. Only verified
+/// people ([album]) can pick from the gallery (a video or a photo): for
+/// everyone else a story is a moment as it happens. Pops with the
+/// recording (or the file), or null.
 ///
 /// With [story] false it's the chat's camera on a computer's browser (whose
 /// file input can't open the webcam): a [photo], or a video up to
 /// [maxLength]; without a camera, a file can be chosen instead.
 class StoryCameraScreen extends StatefulWidget {
   const StoryCameraScreen(
-      {super.key, this.story = true, this.photo = false, this.maxLength});
+      {super.key,
+      this.story = true,
+      this.photo = false,
+      this.maxLength,
+      this.album = false});
 
   /// A story (the default); false: a photo or video for a chat.
   final bool story;
@@ -30,6 +35,10 @@ class StoryCameraScreen extends StatefulWidget {
 
   /// The longest recording (stories: [StoryService.maxLength]).
   final Duration? maxLength;
+
+  /// A video or photo from the album may be chosen too (verified people's
+  /// stories), on phones as well.
+  final bool album;
 
   /// The shortest recording a story takes.
   static const minLength = Duration(seconds: 1);
@@ -338,12 +347,19 @@ class _StoryCameraScreenState extends State<StoryCameraScreen>
     }
   }
 
-  /// A file instead (the website on a computer only).
+  /// A file can be chosen instead: the website on a computer, or a
+  /// verified person's album.
+  bool get _canChoose => StoryCameraScreen.canChooseFile || widget.album;
+
+  /// A file instead (the website on a computer; the album when verified).
   Future<void> _chooseFile() async {
     if (_isRecording) return;
     final picker = ChatMediaPicker.instance;
-    final file =
-        widget.photo ? await picker.pickImage() : await picker.pickVideo();
+    final file = widget.album
+        ? await picker.pickStoryMedia()
+        : widget.photo
+            ? await picker.pickImage()
+            : await picker.pickVideo();
     if (file != null && mounted) Navigator.of(context).pop(file);
   }
 
@@ -397,7 +413,10 @@ class _StoryCameraScreenState extends State<StoryCameraScreen>
               // what stories are for (not over a problem: that says enough)
               if (_problem == null && widget.story) ...[
                 const SizedBox(height: 12),
-                _LiveOnlyLabel(fileToo: StoryCameraScreen.canChooseFile),
+                _LiveOnlyLabel(
+                    fileToo: StoryCameraScreen.canChooseFile,
+                    album: widget.album,
+                    length: _maxLength),
               ],
             ]),
           ),
@@ -475,15 +494,19 @@ class _StoryCameraScreenState extends State<StoryCameraScreen>
                         onPressed: _tryAgain,
                         child: const Text('Try again'),
                       ),
-                    if (StoryCameraScreen.canChooseFile) ...[
+                    if (_canChoose) ...[
                       const SizedBox(height: 8),
                       TextButton.icon(
                         key: const Key('storyChooseFile'),
                         onPressed: _chooseFile,
-                        icon: const Icon(Icons.upload_file_rounded),
-                        label: Text(widget.photo
-                            ? 'Choose a photo instead'
-                            : 'Choose a video file instead'),
+                        icon: Icon(widget.album
+                            ? Icons.photo_library_rounded
+                            : Icons.upload_file_rounded),
+                        label: Text(widget.album
+                            ? 'Choose from your album instead'
+                            : widget.photo
+                                ? 'Choose a photo instead'
+                                : 'Choose a video file instead'),
                       ),
                     ],
                   ]),
@@ -510,7 +533,7 @@ class _StoryCameraScreenState extends State<StoryCameraScreen>
                               ? '${seconds.toStringAsFixed(1)}s / '
                                   '${_maxLength.inSeconds}s'
                               : 'Tap to record · up to '
-                                  '${_maxLength.inSeconds} seconds',
+                                  '${storyLengthWords(_maxLength)}',
                       style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.w600,
@@ -534,14 +557,18 @@ class _StoryCameraScreenState extends State<StoryCameraScreen>
                                 : _start,
                       ),
                       Expanded(
-                        child: StoryCameraScreen.canChooseFile && !_isRecording
+                        child: _canChoose && !_isRecording
                             ? Center(
                                 child: StoryRoundButton(
                                   key: const Key('storyChooseFile'),
-                                  tooltip: widget.photo
-                                      ? 'Choose a photo'
-                                      : 'Choose a video file',
-                                  icon: Icons.upload_file_rounded,
+                                  tooltip: widget.album
+                                      ? 'Choose from your album'
+                                      : widget.photo
+                                          ? 'Choose a photo'
+                                          : 'Choose a video file',
+                                  icon: widget.album
+                                      ? Icons.photo_library_rounded
+                                      : Icons.upload_file_rounded,
                                   size: 52,
                                   onPressed: _chooseFile,
                                 ),
@@ -562,13 +589,18 @@ class _StoryCameraScreenState extends State<StoryCameraScreen>
 /// A friendly note on what stories are: a moment from right now. With
 /// [fileToo] (a computer's browser) a short clip can be uploaded too.
 class _LiveOnlyLabel extends StatelessWidget {
-  const _LiveOnlyLabel({required this.fileToo});
+  const _LiveOnlyLabel(
+      {required this.fileToo, required this.album, required this.length});
 
   final bool fileToo;
 
+  /// From the album too (verified).
+  final bool album;
+  final Duration length;
+
   @override
   Widget build(BuildContext context) {
-    final seconds = StoryService.maxLength.inSeconds;
+    final upTo = storyLengthWords(length);
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 360),
@@ -595,10 +627,12 @@ class _LiveOnlyLabel extends StatelessWidget {
             ]),
             const SizedBox(height: 2),
             Text(
-                fileToo
-                    ? 'Record a quick clip, or upload one up to $seconds '
-                        'seconds.'
-                    : 'Quick and real, up to $seconds seconds.',
+                album
+                    ? 'Record a clip, or choose a video or photo from your '
+                        'album. Up to $upTo.'
+                    : fileToo
+                        ? 'Record a quick clip, or upload one up to $upTo.'
+                        : 'Quick and real, up to $upTo.',
                 textAlign: TextAlign.center,
                 style: const TextStyle(color: Colors.white70, fontSize: 12.5)),
           ]),

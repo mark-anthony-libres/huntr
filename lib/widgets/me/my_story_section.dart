@@ -113,7 +113,11 @@ class _MyStorySectionState extends State<MyStorySection> {
                     Text(
                       has
                           ? '${mine.length} ${mine.length == 1 ? 'story' : 'stories'} · Seen by $views'
-                          : 'Share a ${StoryService.maxLength.inSeconds}-second video. Gone after 24 hours.',
+                          : AppScope.of(context).myVerified
+                              ? 'Share a video or photo, up to '
+                                  '${storyLengthWords(StoryService.verifiedMaxLength)}. '
+                                  'Gone after 24 hours.'
+                              : 'Share a ${StoryService.maxLength.inSeconds}-second video. Gone after 24 hours.',
                       style: const TextStyle(color: HuntrColors.muted),
                     ),
                   ]),

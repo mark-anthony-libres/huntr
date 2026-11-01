@@ -243,7 +243,9 @@ class _HomeShellState extends State<HomeShell> {
           ChatsScreen(onExplore: () => _showTab(_exploreTab)),
           const MeScreen(),
         ].indexed)
-          PageVisits(visits: _visits[i], child: tab),
+          TabShown(
+              shown: i == _tab,
+              child: PageVisits(visits: _visits[i], child: tab)),
       ],
     );
     final items = [

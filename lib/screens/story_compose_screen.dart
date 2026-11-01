@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:video_player/video_player.dart';
@@ -13,17 +15,25 @@ import '../widgets/stories/trim_window.dart';
 import '../widgets/stories/video_filmstrip.dart';
 import 'story_camera_screen.dart';
 
-/// Adds a story: records it now with the camera ([StoryCameraScreen]; never
-/// from the gallery), then [StoryComposeScreen]. True once one was posted.
+/// Adds a story: records it now with the camera ([StoryCameraScreen]; from
+/// the gallery only for verified people, who get longer stories and photos
+/// too: [StoryService.limitsFor]), then [StoryComposeScreen]. True once one
+/// was posted.
 Future<bool> addToStory(BuildContext context, StoryService service) async {
   if (!await _roomForAnother(context, service)) return false;
+  if (!context.mounted) return false;
+  final limits =
+      StoryService.limitsFor(verified: AppScope.read(context).myVerified);
   while (true) {
     if (!context.mounted) return false;
     final video = await Navigator.of(context).push<XFile>(MaterialPageRoute(
-        fullscreenDialog: true, builder: (_) => const StoryCameraScreen()));
+        fullscreenDialog: true,
+        builder: (_) => StoryCameraScreen(
+            maxLength: limits.maxLength, album: limits.fromAlbum)));
     if (video == null || !context.mounted) return false;
     final posted = await Navigator.of(context).push<bool>(MaterialPageRoute(
-        builder: (_) => StoryComposeScreen(service: service, video: video)));
+        builder: (_) => StoryComposeScreen(
+            service: service, video: video, limits: limits)));
     // "Retake" (false): record again; back or posted: done
     if (posted != false) return posted == true;
   }
@@ -66,52 +76,97 @@ Future<bool> _roomForAnother(BuildContext context, StoryService service) async {
   return false;
 }
 
-/// A story just recorded, before it's posted: plays it, says that stories
-/// are public, and shares it (or pops false to record again).
+/// A story just recorded (or chosen), before it's posted: plays it (or
+/// shows the photo), says that stories are public, and shares it (or pops
+/// false to record again).
 class StoryComposeScreen extends StatefulWidget {
   const StoryComposeScreen(
-      {super.key, required this.service, required this.video});
+      {super.key,
+      required this.service,
+      required this.video,
+      this.limits = const StoryLimits(
+          maxLength: StoryService.maxLength,
+          maxSourceLength: StoryService.maxSourceLength,
+          maxUploadBytes: StoryService.maxUploadBytes,
+          fromAlbum: false)});
 
   final StoryService service;
+
+  /// The recording, or the file chosen (a photo from a verified person's
+  /// album).
   final XFile video;
+  final StoryLimits limits;
 
   @override
   State<StoryComposeScreen> createState() => _StoryComposeScreenState();
 }
 
+/// A photo, by its name (the album's photos come as JPEG).
+bool _isPhoto(XFile file) {
+  final type = file.mimeType;
+  if (type != null) return type.startsWith('image/');
+  final name = (file.name.isEmpty ? file.path : file.name).toLowerCase();
+  return const ['.jpg', '.jpeg', '.png', '.webp', '.heic', '.heif']
+      .any(name.endsWith);
+}
+
 class _StoryComposeScreenState extends State<StoryComposeScreen> {
-  late final VideoPlayerController _player =
-      pickedVideoController(widget.video.path);
+  late final bool _photo = _isPhoto(widget.video);
+
+  /// The photo's bytes, once read (a photo story).
+  List<int>? _photoBytes;
+
+  late final VideoPlayerController? _player =
+      _photo ? null : pickedVideoController(widget.video.path);
   bool _ready = false;
 
-  /// A longer file (the website on a computer): the [StoryService.maxLength]
-  /// kept starts here; the user slides it.
+  Duration get _maxLength => widget.limits.maxLength;
+
+  /// A longer file (the website on a computer, a verified person's album):
+  /// the [_maxLength] kept starts here; the user slides it.
   Duration _start = Duration.zero;
 
   bool get _trimming =>
       _ready &&
-      _length > StoryService.maxLength + const Duration(milliseconds: 500);
+      !_photo &&
+      _length > _maxLength + const Duration(milliseconds: 500);
   double? _sent; // upload progress while posting
   String? _error;
 
-  Duration get _length => _player.value.duration;
+  Duration get _length => _player?.value.duration ?? Duration.zero;
 
   @override
   void initState() {
     super.initState();
-    _player.initialize().then((_) {
+    final player = _player;
+    if (player == null) {
+      widget.video.readAsBytes().then((bytes) {
+        if (mounted) {
+          setState(() {
+            _photoBytes = bytes;
+            _ready = true;
+          });
+        }
+      }).catchError((Object error) {
+        if (mounted) {
+          setState(
+              () => _error = "This photo can't be opened. Choose another.");
+        }
+      });
+      return;
+    }
+    player.initialize().then((_) {
       if (!mounted) return;
-      // a file (the website on a computer) may be longer than a recording:
-      // then the user picks which 5 seconds (up to a few minutes long)
-      final long =
-          _length > StoryService.maxLength + const Duration(milliseconds: 500);
-      if (long && _length > StoryService.maxSourceLength) {
+      // a file may be longer than a recording: then the user picks which
+      // part to keep (from a video up to a few minutes long)
+      final long = _length > _maxLength + const Duration(milliseconds: 500);
+      final source = widget.limits.maxSourceLength;
+      if (long && _length > source) {
         setState(() => _error = 'This video is too long to trim. Choose one '
-            'up to ${StoryService.maxSourceLength.inMinutes} minutes, or '
-            'record one.');
+            'up to ${storyLengthWords(source)}, or record one.');
         return;
       }
-      _player
+      player
         ..setLooping(true)
         ..addListener(_keepInWindow)
         ..play();
@@ -126,16 +181,17 @@ class _StoryComposeScreenState extends State<StoryComposeScreen> {
 
   @override
   void dispose() {
-    _player.dispose();
+    _player?.dispose();
     super.dispose();
   }
 
   /// While trimming, the preview loops over the part kept only.
   void _keepInWindow() {
-    if (!_trimming) return;
-    final at = _player.value.position;
-    if (at < _start || at >= _start + StoryService.maxLength) {
-      _player.seekTo(_start);
+    final player = _player;
+    if (!_trimming || player == null) return;
+    final at = player.value.position;
+    if (at < _start || at >= _start + _maxLength) {
+      player.seekTo(_start);
     }
   }
 
@@ -150,21 +206,25 @@ class _StoryComposeScreenState extends State<StoryComposeScreen> {
       _error = null;
     });
     try {
-      final bytes = await widget.video.readAsBytes();
-      if (bytes.length > StoryService.maxUploadBytes) {
-        throw const BackendException(
-            'This video is too large. The maximum is 50 MB.');
+      final bytes = _photoBytes ?? await widget.video.readAsBytes();
+      final limit = widget.limits.maxUploadBytes;
+      if (bytes.length > limit) {
+        throw BackendException('This ${_photo ? 'photo' : 'video'} is too '
+            'large. The maximum is ${limit ~/ (1024 * 1024)} MB.');
       }
-      _player.pause();
-      // a recording: all of it (the camera stops at StoryService.maxLength);
-      // a longer file: the part picked (the backend cuts it)
+      _player?.pause();
+      // a recording: all of it (the camera stops at the limit); a longer
+      // file: the part picked (the backend cuts it); a photo: the backend
+      // shows it for StoryService.photoLength
       await widget.service.post(token,
           bytes: bytes,
           filename: widget.video.name.isEmpty ? 'story' : widget.video.name,
           start: _trimming ? _start : Duration.zero,
-          length: _length < StoryService.maxLength
-              ? _length
-              : StoryService.maxLength, onProgress: (sent) {
+          length: _photo
+              ? StoryService.photoLength
+              : _length < _maxLength
+                  ? _length
+                  : _maxLength, onProgress: (sent) {
         if (mounted) setState(() => _sent = sent);
       });
       messenger.showSnackBar(const SnackBar(
@@ -180,7 +240,7 @@ class _StoryComposeScreenState extends State<StoryComposeScreen> {
             ? error.message
             : "Your story wasn't posted. Check your connection and try again.";
       });
-      _player.play();
+      _player?.play();
     }
   }
 
@@ -218,41 +278,46 @@ class _StoryComposeScreenState extends State<StoryComposeScreen> {
                         borderRadius: BorderRadius.circular(20),
                         child: ColoredBox(
                           color: Colors.black,
-                          child: AspectRatio(
-                            aspectRatio:
-                                _ready ? _player.value.aspectRatio : 9 / 16,
-                            child: _ready
-                                ? GestureDetector(
+                          child: switch ((_ready, _player, _photoBytes)) {
+                            // a photo: whole, as the story will show it
+                            (true, _, final photo?) => Image.memory(
+                                Uint8List.fromList(photo),
+                                key: const Key('storyPhotoPreview'),
+                                fit: BoxFit.contain),
+                            (true, final player?, _) => AspectRatio(
+                                aspectRatio: player.value.aspectRatio,
+                                child: GestureDetector(
                                     onTap: () => setState(() =>
-                                        _player.value.isPlaying
-                                            ? _player.pause()
-                                            : _player.play()),
-                                    child: VideoPlayer(_player))
-                                : Center(
+                                        player.value.isPlaying
+                                            ? player.pause()
+                                            : player.play()),
+                                    child: VideoPlayer(player))),
+                            _ => AspectRatio(
+                                aspectRatio: 9 / 16,
+                                child: Center(
                                     child: CircularProgressIndicator(
-                                        color: HuntrColors.orange)),
-                          ),
+                                        color: HuntrColors.orange))),
+                          },
                         ),
                       ),
                     ),
                   ),
 
-                  // ---- a longer file: which 5 seconds ----
-                  if (_trimming) ...[
+                  // ---- a longer file: which part ----
+                  if (_trimming && _player != null) ...[
                     const SizedBox(height: 14),
                     Row(children: [
                       Icon(Icons.content_cut_rounded,
                           size: 18, color: HuntrColors.orange),
                       const SizedBox(width: 8),
                       Expanded(
-                        child: Text(
-                            'Pick ${StoryService.maxLength.inSeconds} seconds',
+                        child: Text('Pick ${storyLengthWords(_maxLength)}',
                             style:
                                 const TextStyle(fontWeight: FontWeight.w700)),
                       ),
                       Text(
                           '${_clock(_start)} → '
-                          '${_clock(_start + StoryService.maxLength)}',
+                          '${_clock(_start + _maxLength)}',
                           key: const Key('storyTrimRange'),
                           style: TextStyle(
                               color: HuntrColors.orange,
@@ -263,7 +328,7 @@ class _StoryComposeScreenState extends State<StoryComposeScreen> {
                       valueListenable: _player,
                       builder: (_, value, __) => TrimWindow(
                         total: _length,
-                        window: StoryService.maxLength,
+                        window: _maxLength,
                         start: _start,
                         position: value.position,
                         // frames from across the video, so the part
