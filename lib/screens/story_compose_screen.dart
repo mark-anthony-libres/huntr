@@ -150,7 +150,12 @@ class _StoryComposeScreenState extends State<StoryComposeScreen> {
   double? _sent; // upload progress while posting
   String? _error;
 
-  Duration get _length => _player?.value.duration ?? Duration.zero;
+  /// How long the video is; zero when the browser can't tell (an iPhone's
+  /// Safari may call a chosen video endless).
+  Duration get _length {
+    final duration = _player?.value.duration ?? Duration.zero;
+    return duration.isNegative ? Duration.zero : duration;
+  }
 
   @override
   void initState() {
@@ -232,16 +237,19 @@ class _StoryComposeScreenState extends State<StoryComposeScreen> {
       _player?.pause();
       // a recording: all of it (the camera stops at the limit); a longer
       // file: the part picked (the backend cuts it); a photo: the backend
-      // shows it for StoryService.photoLength
+      // shows it for StoryService.photoLength; a length the browser can't
+      // tell: none, the backend keeps up to my limit
       await widget.service.post(token,
           bytes: bytes,
           filename: widget.video.name.isEmpty ? 'story' : widget.video.name,
           start: _trimming ? _start : Duration.zero,
           length: _photo
               ? StoryService.photoLength
-              : _length < _maxLength
-                  ? _length
-                  : _maxLength, onProgress: (sent) {
+              : _length == Duration.zero
+                  ? null
+                  : _length < _maxLength
+                      ? _length
+                      : _maxLength, onProgress: (sent) {
         if (mounted) setState(() => _sent = sent);
       });
       messenger.showSnackBar(const SnackBar(

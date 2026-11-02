@@ -2942,7 +2942,7 @@ Future<List<Story>> fetchMyStories(
     );
 
 /// POST .../stories: a video (or a verified person's photo); the backend
-/// keeps [length] (at most my limit) from [start], the user's trim. [onProgress] gets
+/// keeps [length] (at most my limit; no length: my limit) from [start], the user's trim. [onProgress] gets
 /// the share of the file sent so far (0-1).
 Future<Story> postStory({
   required String backendUrl,
@@ -2950,7 +2950,7 @@ Future<Story> postStory({
   required List<int> bytes,
   required String filename,
   required Duration start,
-  required Duration length,
+  Duration? length,
   void Function(double sent)? onProgress,
   http.Client? client,
 }) =>
@@ -2961,7 +2961,8 @@ Future<Story> postStory({
           http.MultipartRequest('POST', _stories(backendUrl))
             ..headers.addAll(_authorization(token))
             ..fields['start_ms'] = '${start.inMilliseconds}'
-            ..fields['length_ms'] = '${length.inMilliseconds}'
+            ..fields.addAll(
+                {if (length != null) 'length_ms': '${length.inMilliseconds}'})
             ..files.add(http.MultipartFile.fromBytes('file', bytes,
                 filename: filename)),
           onProgress),

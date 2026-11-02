@@ -56,7 +56,7 @@ class StoryService {
           {required List<int> bytes,
           required String filename,
           required Duration start,
-          required Duration length,
+          Duration? length,
           void Function(double sent)? onProgress}) async =>
       backend.postStory(
           backendUrl: await _url(),
