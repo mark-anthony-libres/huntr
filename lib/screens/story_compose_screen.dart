@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:video_player/video_player.dart';
 
 import '../services/huntr_backend.dart';
+import '../services/services_scope.dart';
 import '../services/story_service.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
@@ -23,7 +24,7 @@ Future<bool> addToStory(BuildContext context, StoryService service) async {
   if (!await _roomForAnother(context, service)) return false;
   if (!context.mounted) return false;
   final limits =
-      StoryService.limitsFor(verified: AppScope.read(context).myVerified);
+      StoryService.limitsFor(verified: await _verifiedNow(context));
   while (true) {
     if (!context.mounted) return false;
     final video = await Navigator.of(context).push<XFile>(MaterialPageRoute(
@@ -37,6 +38,22 @@ Future<bool> addToStory(BuildContext context, StoryService service) async {
     // "Retake" (false): record again; back or posted: done
     if (posted != false) return posted == true;
   }
+}
+
+/// Whether I have the blue check now, from my profile: an admin may have
+/// verified me since the app opened. When it can't be checked, what the
+/// app knew is used (the backend still decides what's allowed).
+Future<bool> _verifiedNow(BuildContext context) async {
+  final app = AppScope.read(context);
+  final profiles = ServicesScope.profilesOf(context);
+  final token = app.sessionToken;
+  if (profiles == null || token == null) return app.myVerified;
+  try {
+    app.myVerified = (await profiles.fetchMine(token)).verified;
+  } catch (error) {
+    debugPrint('Blue check not checked: $error');
+  }
+  return app.myVerified;
 }
 
 /// Whether I can add a story ([StoryService.maxActive] at most): says so
