@@ -1567,7 +1567,8 @@ class ReplyPreview {
       fromMe: message.fromMe,
       type: message.type,
       body: switch (message.type) {
-        ChatMessageType.text => message.body,
+        // a story reply's body is what was said
+        ChatMessageType.text || ChatMessageType.storyReply => message.body,
         ChatMessageType.albumTrade => message.trade?.offeredAlbum?.name ?? '',
         ChatMessageType.sticker => message.sticker?.name ?? '',
         _ => '',
@@ -2942,7 +2943,8 @@ Future<List<Story>> fetchMyStories(
     );
 
 /// POST .../stories: a video (or a verified person's photo); the backend
-/// keeps [length] (at most my limit; no length: my limit) from [start], the user's trim. [onProgress] gets
+/// keeps [length] (at most my limit; no length: my limit) from [start], the user's trim,
+/// framed as chosen: [crop] fills the 9:16 story, or [fit] shows it whole. [onProgress] gets
 /// the share of the file sent so far (0-1).
 Future<Story> postStory({
   required String backendUrl,
@@ -2951,6 +2953,8 @@ Future<Story> postStory({
   required String filename,
   required Duration start,
   Duration? length,
+  PhotoCrop? crop,
+  bool fit = false,
   void Function(double sent)? onProgress,
   http.Client? client,
 }) =>
@@ -2961,8 +2965,17 @@ Future<Story> postStory({
           http.MultipartRequest('POST', _stories(backendUrl))
             ..headers.addAll(_authorization(token))
             ..fields['start_ms'] = '${start.inMilliseconds}'
-            ..fields.addAll(
-                {if (length != null) 'length_ms': '${length.inMilliseconds}'})
+            ..fields.addAll({
+              if (length != null) 'length_ms': '${length.inMilliseconds}',
+              // how it's framed in the 9:16 story (the backend makes it so)
+              if (crop != null) ...{
+                'crop_x': '${crop.x}',
+                'crop_y': '${crop.y}',
+                'crop_width': '${crop.width}',
+                'crop_height': '${crop.height}',
+              },
+              if (fit) 'fit': 'true',
+            })
             ..files.add(http.MultipartFile.fromBytes('file', bytes,
                 filename: filename)),
           onProgress),

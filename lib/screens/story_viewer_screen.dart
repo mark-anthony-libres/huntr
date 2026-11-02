@@ -15,6 +15,7 @@ import '../theme.dart';
 import '../widgets/avatar.dart';
 import '../widgets/stories/reaction_burst.dart';
 import '../widgets/stories/story_round_button.dart';
+import '../widgets/verified_badge.dart';
 
 /// Stories, full screen: each person's in turn, then the next person's. Tap
 /// the right side for the next story, the left for the one before, hold to
@@ -603,17 +604,37 @@ class _StoryViewerScreenState extends State<StoryViewerScreen> {
                                           crossAxisAlignment:
                                               CrossAxisAlignment.start,
                                           children: [
-                                            Text(
-                                                _isMine
-                                                    ? 'Your Story'
-                                                    : _who.shortName,
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
-                                                style: const TextStyle(
-                                                    color: Colors.white,
-                                                    fontSize: 16,
-                                                    fontWeight: FontWeight.w700,
-                                                    shadows: _readable)),
+                                            Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Flexible(
+                                                    child: Text(
+                                                        _isMine
+                                                            ? 'Your Story'
+                                                            : _who.shortName,
+                                                        maxLines: 1,
+                                                        overflow: TextOverflow
+                                                            .ellipsis,
+                                                        style: const TextStyle(
+                                                            color: Colors.white,
+                                                            fontSize: 16,
+                                                            fontWeight:
+                                                                FontWeight.w700,
+                                                            shadows:
+                                                                _readable)),
+                                                  ),
+                                                  // the blue check, as by
+                                                  // their name everywhere
+                                                  if (_who.verified) ...[
+                                                    const SizedBox(width: 5),
+                                                    VerifiedBadge(
+                                                        key: const Key(
+                                                            'storyVerified'),
+                                                        size: 16,
+                                                        name: _who.shortName,
+                                                        interactive: false),
+                                                  ],
+                                                ]),
                                             if (story != null)
                                               Text(_ago(story.postedAt),
                                                   style: const TextStyle(

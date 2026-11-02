@@ -648,6 +648,9 @@ enum ExploreLayout {
   /// Narrower than this is a phone.
   static const phoneMaxWidth = 600.0;
 
+  /// 3 or 4 across: one wall of pictures (no gaps, square corners, tall).
+  bool get wall => this == three || this == four;
+
   static ExploreLayout? fromName(String? name) =>
       values.where((layout) => layout.name == name).firstOrNull;
 }

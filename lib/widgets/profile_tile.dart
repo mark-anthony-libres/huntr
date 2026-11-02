@@ -51,10 +51,13 @@ class ProfileTile extends StatelessWidget {
       child: Material(
         color: HuntrColors.surface,
         clipBehavior: Clip.antiAlias,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(18),
-          side: BorderSide(color: Colors.white.withValues(alpha: 0.10)),
-        ),
+        // the wall (3 or 4 across): square corners
+        shape: layout.wall
+            ? Border.all(color: Colors.white.withValues(alpha: 0.10))
+            : RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+                side: BorderSide(color: Colors.white.withValues(alpha: 0.10)),
+              ),
         child: InkWell(
           onTap: onTap,
           child: Stack(
@@ -119,41 +122,14 @@ class ProfileTile extends StatelessWidget {
                     children: [
                       // "Name, 24" as on profiles: the age stays with the
                       // name's last word (never alone on a line) and the
-                      // verified mark follows
-                      Text.rich(
+                      // verified mark stays with whatever comes last
+                      _TileName(
                         key: const Key('tileName'),
-                        TextSpan(children: [
-                          if (!noName)
-                            TextSpan(
-                                text: profile.name,
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.w800,
-                                    color: Colors.white)),
-                          if (showAge && !profile.ageHidden)
-                            TextSpan(
-                                text: noName
-                                    ? '${profile.age}'
-                                    : ',\u00A0${profile.age}',
-                                style: TextStyle(
-                                    fontSize: noName ? nameSize + 2 : nameSize,
-                                    fontWeight: noName
-                                        ? FontWeight.w800
-                                        : FontWeight.w600,
-                                    color: Colors.white)),
-                          if (profile.verified)
-                            WidgetSpan(
-                              alignment: PlaceholderAlignment.middle,
-                              child: Padding(
-                                padding: const EdgeInsets.only(left: 4),
-                                child: VerifiedBadge(
-                                    size: compact ? 13 : 15,
-                                    interactive: false),
-                              ),
-                            ),
-                        ]),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: nameSize, height: 1.15),
+                        profile: profile,
+                        noName: noName,
+                        showAge: showAge,
+                        nameSize: nameSize,
+                        badgeSize: compact ? 13 : 15,
                       ),
                       if (showDistance) ...[
                         const SizedBox(height: 3),
@@ -416,6 +392,80 @@ class NewBadge extends StatelessWidget {
               fontSize: small ? 9.5 : 10.5,
               fontWeight: FontWeight.w800,
               letterSpacing: 0.6)),
+    );
+  }
+}
+
+/// A tile's "Name, 24 ✓". The name's last word, the age and the blue check
+/// stay together, so on a narrow tile they wrap as one: the age and the
+/// check are never alone on a line.
+class _TileName extends StatelessWidget {
+  const _TileName(
+      {super.key,
+      required this.profile,
+      required this.noName,
+      required this.showAge,
+      required this.nameSize,
+      required this.badgeSize});
+
+  final Profile profile;
+  final bool noName;
+  final bool showAge;
+  final double nameSize;
+  final double badgeSize;
+
+  @override
+  Widget build(BuildContext context) {
+    final base =
+        TextStyle(fontSize: nameSize, height: 1.15, color: Colors.white);
+    final nameStyle = base.copyWith(fontWeight: FontWeight.w800);
+    final name = noName ? '' : profile.name;
+    final cut = name.lastIndexOf(' ') + 1;
+    final age = showAge && !profile.ageHidden
+        ? (noName ? '${profile.age}' : ', ${profile.age}')
+        : '';
+    // the last word and the age, kept together
+    final tail = [
+      if (cut < name.length)
+        TextSpan(text: name.substring(cut), style: nameStyle),
+      if (age.isNotEmpty)
+        TextSpan(
+            text: age,
+            style: base.copyWith(
+                fontSize: noName ? nameSize + 2 : nameSize,
+                fontWeight: noName ? FontWeight.w800 : FontWeight.w600)),
+    ];
+    return Text.rich(
+      TextSpan(children: [
+        if (cut > 0) TextSpan(text: name.substring(0, cut), style: nameStyle),
+        if (!profile.verified)
+          ...tail
+        else
+          WidgetSpan(
+            alignment: PlaceholderAlignment.baseline,
+            baseline: TextBaseline.alphabetic,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Flexible(
+                  child: Text.rich(TextSpan(children: tail),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: base),
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(left: 4),
+                  child: VerifiedBadge(size: badgeSize, interactive: false),
+                ),
+              ],
+            ),
+          ),
+      ]),
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
+      style: base,
     );
   }
 }

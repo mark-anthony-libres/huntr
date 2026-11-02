@@ -153,18 +153,20 @@ class _ExploreScreenState extends State<ExploreScreen> {
     final columns = (layout.columns * width / 430)
         .floor()
         .clamp(layout.columns, layout.columns * 3);
-    final gap = switch (layout) {
-      ExploreLayout.one || ExploreLayout.two => 12.0,
-      ExploreLayout.three => 8.0,
-      ExploreLayout.four => 4.0,
-    };
+    // the small cards (3 or 4 across): one wall of pictures, edge to edge,
+    // with no space between them and square corners
+    final wall = layout.wall;
+    final gap = wall ? 0.0 : 12.0;
+    final side = wall ? 0.0 : 16.0;
     final grid = SliverGridDelegateWithFixedCrossAxisCount(
       crossAxisCount: columns,
       mainAxisSpacing: gap,
       crossAxisSpacing: gap,
       // rows have a fixed height; cards keep their shape
       mainAxisExtent: layout == ExploreLayout.one ? 136 : null,
-      childAspectRatio: layout == ExploreLayout.four ? 0.86 : 0.8,
+      // the small cards taller than wide, like portraits
+      // the wall's cards tall, like portraits
+      childAspectRatio: wall ? 0.62 : 0.8,
     );
 
     final Widget header = Padding(
@@ -420,11 +422,11 @@ class _ExploreScreenState extends State<ExploreScreen> {
                   )
                 else if (waiting)
                   SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
+                    padding: EdgeInsets.fromLTRB(side, 10, side, 24),
                     sliver: SliverGrid.builder(
                       gridDelegate: grid,
                       itemCount: columns * 3,
-                      itemBuilder: (_, __) => const _TilePlaceholder(),
+                      itemBuilder: (_, __) => _TilePlaceholder(square: wall),
                     ),
                   )
                 else if (people.isEmpty)
@@ -441,7 +443,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
                   )
                 else
                   SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
+                    padding: EdgeInsets.fromLTRB(side, 10, side, 24),
                     sliver: SliverGrid.builder(
                       gridDelegate: grid,
                       itemCount: people.length,
@@ -509,14 +511,17 @@ final _roundButton = IconButton.styleFrom(
 
 /// A grey tile while people nearby load.
 class _TilePlaceholder extends StatelessWidget {
-  const _TilePlaceholder();
+  const _TilePlaceholder({required this.square});
+
+  /// Square corners, like the wall's cards.
+  final bool square;
 
   @override
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: HuntrColors.surface,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: square ? null : BorderRadius.circular(18),
       ),
     );
   }

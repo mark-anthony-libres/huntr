@@ -8,11 +8,13 @@ import '../../screens/story_viewer_screen.dart';
 import '../../services/explore_service.dart';
 import '../../services/huntr_backend.dart';
 import '../../services/story_service.dart';
+import '../../services/story_upload.dart';
 import '../../state/app_state.dart';
 import '../../theme.dart';
 import '../avatar.dart';
 import '../load_more_row.dart';
 import 'story_ring.dart';
+import 'story_upload_avatar.dart';
 
 /// The stories row at the top of Explore: Add Story, Your Story, then the
 /// people nearby with a story (new ones first, then nearest), loaded a page
@@ -37,11 +39,31 @@ class _StoryTrayState extends State<StoryTray> {
   int? _next = 0;
   bool _loadingPeople = false;
 
+  /// Stories posted in the background so far ([storyUpload]): one more,
+  /// and mine load again.
+  int _posted = storyUpload.posted;
+
   @override
   void initState() {
     super.initState();
+    storyUpload.addListener(_uploadChanged);
     _loadMine();
     _loadPeople();
+  }
+
+  @override
+  void dispose() {
+    storyUpload.removeListener(_uploadChanged);
+    super.dispose();
+  }
+
+  void _uploadChanged() {
+    if (!mounted) return;
+    if (storyUpload.posted != _posted) {
+      _posted = storyUpload.posted;
+      _loadMine();
+    }
+    setState(() {});
   }
 
   /// The first page again, or ([more]) the next one.
@@ -89,8 +111,15 @@ class _StoryTrayState extends State<StoryTray> {
     }
   }
 
-  Future<void> _add() async {
-    if (await addToStory(context, widget.service)) await _loadMine();
+  /// It goes up in the background: "Your Story" shows how far it is, and
+  /// mine load again once it's up.
+  Future<void> _add() => addToStory(context, widget.service);
+
+  /// Tapped while posting: nothing to watch yet; after it failed: again.
+  void _uploadTapped() {
+    if (storyUpload.error == null) return;
+    final messenger = ScaffoldMessenger.of(context);
+    storyUpload.retry().then((posted) => announceStoryUpload(messenger, posted));
   }
 
   /// The tray in order (mine first, when I have some), from [index]: ‹ and ›
@@ -114,6 +143,7 @@ class _StoryTrayState extends State<StoryTray> {
     // in the server's order: new stories first, then nearest
     final withStories = _people;
     final mine = _mine ?? const <Story>[];
+    final posting = storyUpload.active || storyUpload.error != null;
     return SizedBox(
       height: 104,
       child: ListView(
@@ -139,7 +169,17 @@ class _StoryTrayState extends State<StoryTray> {
               ),
             ),
           ),
-          if (mine.isNotEmpty)
+          if (posting)
+            // one going up in the background (or it failed: tap, again)
+            _TrayItem(
+              key: const Key('trayPostingStory'),
+              label: storyUpload.active ? 'Posting…' : 'Not posted',
+              onTap: _uploadTapped,
+              avatar: StoryUploadAvatar(
+                child: ProfileArt(profile: app.myPublicProfile, fontSize: 20),
+              ),
+            )
+          else if (mine.isNotEmpty)
             _TrayItem(
               key: const Key('trayYourStory'),
               label: 'Your Story',

@@ -401,14 +401,6 @@ class _StoryCameraScreenState extends State<StoryCameraScreen>
                   icon: Icons.close_rounded,
                   onPressed: () => Navigator.of(context).pop(),
                 ),
-                const Spacer(),
-                if (_cameras.length > 1)
-                  StoryRoundButton(
-                    key: const Key('storyCameraSwitch'),
-                    tooltip: 'Switch camera',
-                    icon: Icons.cameraswitch_rounded,
-                    onPressed: _isRecording ? null : _switch,
-                  ),
               ]),
               // what stories are for (not over a problem: that says enough)
               if (_problem == null && widget.story) ...[
@@ -542,10 +534,28 @@ class _StoryCameraScreenState extends State<StoryCameraScreen>
                           ]),
                     ),
                     const SizedBox(height: 12),
-                    // the record button in the middle; a file beside it on
-                    // a computer's browser
+                    // the album (or a file, on a computer's browser) on the
+                    // left, record in the middle, the other camera on the
+                    // right
                     Row(children: [
-                      const Expanded(child: SizedBox()),
+                      Expanded(
+                        child: _canChoose && !_isRecording
+                            ? Center(
+                                child: _AlbumButton(
+                                  key: const Key('storyChooseFile'),
+                                  tooltip: widget.album
+                                      ? 'Choose from your album'
+                                      : widget.photo
+                                          ? 'Choose a photo'
+                                          : 'Choose a video file',
+                                  icon: widget.album
+                                      ? Icons.photo_library_rounded
+                                      : Icons.upload_file_rounded,
+                                  onPressed: _chooseFile,
+                                ),
+                              )
+                            : const SizedBox(),
+                      ),
                       _RecordButton(
                         recording: _isRecording,
                         progress: _recording.value,
@@ -557,20 +567,14 @@ class _StoryCameraScreenState extends State<StoryCameraScreen>
                                 : _start,
                       ),
                       Expanded(
-                        child: _canChoose && !_isRecording
+                        child: _cameras.length > 1
                             ? Center(
                                 child: StoryRoundButton(
-                                  key: const Key('storyChooseFile'),
-                                  tooltip: widget.album
-                                      ? 'Choose from your album'
-                                      : widget.photo
-                                          ? 'Choose a photo'
-                                          : 'Choose a video file',
-                                  icon: widget.album
-                                      ? Icons.photo_library_rounded
-                                      : Icons.upload_file_rounded,
+                                  key: const Key('storyCameraSwitch'),
+                                  tooltip: 'Switch camera',
+                                  icon: Icons.cameraswitch_rounded,
                                   size: 52,
-                                  onPressed: _chooseFile,
+                                  onPressed: _isRecording ? null : _switch,
                                 ),
                               )
                             : const SizedBox(),
@@ -584,6 +588,39 @@ class _StoryCameraScreenState extends State<StoryCameraScreen>
       ),
     );
   }
+}
+
+/// The album (or a file): a rounded square with a light frame, like a
+/// photo's corner, so it reads as "from your pictures".
+class _AlbumButton extends StatelessWidget {
+  const _AlbumButton(
+      {super.key,
+      required this.tooltip,
+      required this.icon,
+      required this.onPressed});
+
+  final String tooltip;
+  final IconData icon;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) => Tooltip(
+        message: tooltip,
+        child: Material(
+          color: Colors.black.withValues(alpha: 0.55),
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+              side: const BorderSide(color: Colors.white, width: 2)),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onPressed,
+            child: SizedBox(
+                width: 52,
+                height: 52,
+                child: Icon(icon, color: Colors.white, size: 26)),
+          ),
+        ),
+      );
 }
 
 /// A friendly note on what stories are: a moment from right now. With

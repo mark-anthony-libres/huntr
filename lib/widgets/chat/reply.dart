@@ -24,7 +24,9 @@ class ReplyQuote extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final who = quote.fromMe ? 'You' : otherName;
+    // someone without a name: "them" (as on the tap card)
+    final them = otherName.isEmpty ? 'them' : otherName;
+    final who = quote.fromMe ? 'You' : them;
     final accent = quote.fromMe ? HuntrColors.orange : HuntrColors.active;
     // Who replied to whom, on its own quiet line; then the quoted message
     // in a soft card of its own, apart from the reply's bubble.
@@ -45,7 +47,7 @@ class ReplyQuote extends StatelessWidget {
                 child: Text(
                     mine
                         ? 'You replied to ${quote.fromMe ? 'yourself' : who}'
-                        : '$otherName replied to ${quote.fromMe ? 'you' : 'themselves'}',
+                        : '${otherName.isEmpty ? 'They' : otherName} replied to ${quote.fromMe ? 'you' : 'themselves'}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
@@ -140,7 +142,8 @@ class ReplyBanner extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text('Replying to ${message.fromMe ? 'yourself' : otherName}',
+                Text(
+                    'Replying to ${message.fromMe ? 'yourself' : otherName.isEmpty ? 'them' : otherName}',
                     style: const TextStyle(
                         fontWeight: FontWeight.w700, fontSize: 13)),
                 const SizedBox(height: 2),

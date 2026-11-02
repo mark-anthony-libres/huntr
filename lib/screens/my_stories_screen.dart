@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../services/huntr_backend.dart';
 import '../services/story_service.dart';
+import '../services/story_upload.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
 import 'story_compose_screen.dart';
@@ -22,9 +23,26 @@ class _MyStoriesScreenState extends State<MyStoriesScreen> {
   List<Story>? _mine;
   String? _error;
 
+  /// Stories posted in the background so far ([storyUpload]): one more,
+  /// and mine load again.
+  int _posted = storyUpload.posted;
+
   @override
   void initState() {
     super.initState();
+    storyUpload.addListener(_uploadChanged);
+    _load();
+  }
+
+  @override
+  void dispose() {
+    storyUpload.removeListener(_uploadChanged);
+    super.dispose();
+  }
+
+  void _uploadChanged() {
+    if (storyUpload.posted == _posted) return;
+    _posted = storyUpload.posted;
     _load();
   }
 
@@ -58,9 +76,8 @@ class _MyStoriesScreenState extends State<MyStoriesScreen> {
     await _load();
   }
 
-  Future<void> _add() async {
-    if (await addToStory(context, widget.service)) await _load();
-  }
+  /// It goes up in the background; mine load again once it's up.
+  Future<void> _add() => addToStory(context, widget.service);
 
   Future<void> _actions(Story story) async {
     final choice = await showModalBottomSheet<String>(

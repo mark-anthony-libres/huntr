@@ -5,18 +5,20 @@ import 'package:flutter/material.dart';
 import '../../services/huntr_backend.dart';
 import '../../theme.dart';
 
-/// The square area of the photo shown in the viewport, as fractions 0-1 of
-/// the photo. [displaySize] is the photo's size inside the viewer before any
-/// zoom; [transform] is the viewer's current zoom and position.
+/// The area of the photo shown in the viewport (square, or [viewportHeight]
+/// tall), as fractions 0-1 of the photo. [displaySize] is the photo's size
+/// inside the viewer before any zoom; [transform] is the viewer's current
+/// zoom and position.
 PhotoCrop cropForViewport({
   required Size displaySize,
   required double viewport,
+  double? viewportHeight,
   required Matrix4 transform,
 }) {
   final inverse = Matrix4.inverted(transform);
   final topLeft = MatrixUtils.transformPoint(inverse, Offset.zero);
-  final bottomRight =
-      MatrixUtils.transformPoint(inverse, Offset(viewport, viewport));
+  final bottomRight = MatrixUtils.transformPoint(
+      inverse, Offset(viewport, viewportHeight ?? viewport));
   double fraction(double value, double size) => (value / size).clamp(0.0, 1.0);
   final x = fraction(topLeft.dx, displaySize.width);
   final y = fraction(topLeft.dy, displaySize.height);

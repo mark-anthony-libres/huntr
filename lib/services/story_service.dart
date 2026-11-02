@@ -1,6 +1,6 @@
 import '../config/google_oauth_config.dart';
 import 'huntr_backend.dart' as backend;
-import 'huntr_backend.dart' show ChatMessage, Story, StoryViewer;
+import 'huntr_backend.dart' show ChatMessage, PhotoCrop, Story, StoryViewer;
 
 /// Stories (My Day): short public videos that disappear after 24 hours.
 class StoryService {
@@ -57,6 +57,8 @@ class StoryService {
           required String filename,
           required Duration start,
           Duration? length,
+          PhotoCrop? crop,
+          bool fit = false,
           void Function(double sent)? onProgress}) async =>
       backend.postStory(
           backendUrl: await _url(),
@@ -65,6 +67,8 @@ class StoryService {
           filename: filename,
           start: start,
           length: length,
+          crop: crop,
+          fit: fit,
           onProgress: onProgress);
 
   Future<void> markViewed(String token, int storyId) async =>

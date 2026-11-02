@@ -262,15 +262,15 @@ class _NearbyScreenState extends State<NearbyScreen> {
             key: const Key('nearbyList'),
             padding: EdgeInsets.fromLTRB(side, 12, side, 24),
             children: [
-              // ---- nearest or newest, and how far (a second line when
-              // the screen is narrow) ----
-              Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              // ---- nearest or newest, and how far: one line, a little
+              // smaller when the screen is narrow ----
+              Row(children: [
                 Expanded(
-                  child: Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [
+                  child: FittedBox(
+                    key: const Key('nearbyFilters'),
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Row(children: [
                         for (final (latest, label, key) in const [
                           (false, 'Nearby', 'nearbySortNearby'),
                           (true, 'Latest', 'nearbySortLatest'),
@@ -293,6 +293,7 @@ class _NearbyScreenState extends State<NearbyScreen> {
                                     : HuntrColors.border),
                             onSelected: (_) => _sort(latest),
                           ),
+                          const SizedBox(width: 8),
                         ],
                         ActionChip(
                           key: const Key('nearbyWithin'),
@@ -312,6 +313,7 @@ class _NearbyScreenState extends State<NearbyScreen> {
                           onPressed: _pickWithin,
                         ),
                       ]),
+                  ),
                 ),
                 const SizedBox(width: 8),
                 // + to write one
