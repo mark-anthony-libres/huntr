@@ -356,7 +356,7 @@ void main() {
       await tester.tap(find.byKey(const Key('acceptLive-50')));
       await tester.pump();
       await tester.pump();
-      expect(find.text('You’re sharing a live connection'), findsOneWidget);
+      expect(find.text('You’re sharing your live location'), findsOneWidget);
       expect(find.text('Live'), findsOneWidget);
 
       await tester.tap(find.byKey(const Key('stopLiveBanner')));

@@ -141,7 +141,7 @@ class _NearbyScreenState extends State<NearbyScreen> {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
-          SnackBar(content: Text('Posted as ${posted.author.name} 🎭')));
+          SnackBar(content: Text('Posted as ${posted.author.name}')));
   }
 
   Future<void> _open(NearbyPost post) async {
@@ -359,9 +359,8 @@ class _NearbyScreenState extends State<NearbyScreen> {
                 EmptyStateCard(
                   key: const Key('nearbyEmpty'),
                   icon: Icons.theater_comedy_outlined,
-                  title: 'Quiet around here',
-                  message: 'No threads near you yet. Be the first: say '
-                      'something to the people around you.',
+                  title: 'No threads nearby',
+                  message: 'Start one and people near you will see it.',
                   actionLabel: 'Start a thread',
                   onAction: _compose,
                 )

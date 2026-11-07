@@ -502,18 +502,18 @@ void main() {
       // the animal they were shown as
       expect(find.byKey(const Key('anonymousAnimal-pig')), findsOneWidget);
       if (fromMe) {
-        expect(find.text('Mask off! 🎉'), findsOneWidget);
+        expect(find.text('Profile shown'), findsOneWidget);
         expect(find.textContaining('now knows'), findsOneWidget);
       } else {
-        expect(find.text('Surprise! TurboPig revealed themselves 🎉'),
+        expect(find.text('TurboPig showed their profile'),
             findsOneWidget);
         expect(find.byKey(const Key('revealedViewProfile')), findsOneWidget);
       }
       expect(
           fake.history.single.preview,
           fromMe
-              ? '🎉 You revealed yourself'
-              : '🎉 TurboPig revealed themselves');
+              ? 'You showed your profile'
+              : 'TurboPig showed their profile');
     });
   }
 
@@ -525,7 +525,7 @@ void main() {
     expect(find.text('Uma'), findsOneWidget);
     expect(find.text('QuietWolf'), findsOneWidget);
     expect(find.byKey(const Key('anonymousAnimal-wolf')), findsOneWidget);
-    // their profile: Remove from Unmatch List instead of Message
+    // their profile: Remove from Unmatched list instead of Message
     await tester.tap(find.text('Uma'));
     await tester.pumpAndSettle();
     expect(find.byType(ProfileScreen), findsOneWidget);
@@ -618,7 +618,7 @@ void main() {
     expect(messaging.anonymousUnread, 2);
     expect(messaging.unreadTotal, 2);
     expect(
-        messaging.summary(6)!.lastMessage!.preview, '👀 Curious who you are');
+        messaging.summary(6)!.lastMessage!.preview, 'Asked to see your profile');
   });
 
   for (final fromMe in [false, true]) {
@@ -645,8 +645,8 @@ void main() {
       expect(find.byKey(const Key('revealRequestCard')), findsOneWidget);
       expect(
           find.text(fromMe
-              ? 'You asked to see who they are 👀'
-              : 'They’re curious who you are 👀'),
+              ? 'You asked to see their profile'
+              : 'They asked to see your profile'),
           findsOneWidget);
     });
   }

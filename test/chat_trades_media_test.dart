@@ -530,7 +530,7 @@ void main() {
       await _attach(tester, 'trade');
 
       expect(find.byKey(const Key('noAlbumsForTrade')), findsOneWidget);
-      expect(find.text('Create an Album First'), findsOneWidget);
+      expect(find.text('Create an album first'), findsOneWidget);
       expect(service.calls.where((c) => c.startsWith('offer')), isEmpty);
 
       await tester.tap(find.byKey(const Key('createAlbumForTrade')));
@@ -562,7 +562,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Cancel'));
       await tester.pumpAndSettle();
-      expect(find.text('Create an Album First'), findsOneWidget);
+      expect(find.text('Create an album first'), findsOneWidget);
     });
 
     testWidgets('one album is listed too, and offered once chosen',
@@ -652,7 +652,7 @@ void main() {
       await _openChat(tester, _state(service), albums: _FakeAlbums([]));
       await tester.tap(find.byKey(const Key('respondTrade-30')));
       await tester.pumpAndSettle();
-      expect(find.text('Create an Album First'), findsOneWidget);
+      expect(find.text('Create an album first'), findsOneWidget);
       await tester.tap(find.byKey(const Key('createAlbumForTrade')));
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextField).last, 'Back at you');

@@ -17,7 +17,7 @@ Future<void> confirmAndDeactivateAccount(BuildContext context) async {
   final navigator = Navigator.of(context);
   if (profiles == null || token == null) {
     messenger.showSnackBar(const SnackBar(
-        content: Text('Deactivating your account needs the Huntr server.')));
+        content: Text('Deleting your account needs the HUNTR server.')));
     return;
   }
 
@@ -35,7 +35,7 @@ Future<void> confirmAndDeactivateAccount(BuildContext context) async {
     messenger.showSnackBar(SnackBar(
       content: Text(error is BackendException
           ? error.message
-          : 'Your account could not be deactivated. Please try again.'),
+          : 'Your account couldn’t be deleted. Please try again.'),
     ));
     return;
   }
@@ -56,7 +56,7 @@ class _ConfirmDeactivation extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Deactivate your account?'),
+      title: const Text('Delete your account?'),
       content: const Text(
         'This permanently deletes your account, profile, photos, location '
         'and settings. It can\'t be undone.\n\n'

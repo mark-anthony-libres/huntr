@@ -64,7 +64,7 @@ class _SendFeedbackScreenState extends State<SendFeedbackScreen> {
           screenshot: _screenshot,
           screenshotName: _screenshotName);
       messenger.showSnackBar(
-          const SnackBar(content: Text('Thanks! We read every message 🧡')));
+          const SnackBar(content: Text('Thanks, we got your feedback.')));
       navigator.pop(true);
     } on SessionRejectedException {
       app.endSession();
@@ -196,10 +196,10 @@ class _Header extends StatelessWidget {
         const Expanded(
           child:
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Help shape HUNTR',
+            Text('Send us feedback',
                 style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
             SizedBox(height: 2),
-            Text('Share an idea or report a problem. We read every message.',
+            Text('Share an idea or report a problem.',
                 style: TextStyle(color: HuntrColors.muted)),
           ]),
         ),
@@ -236,7 +236,10 @@ class _TypeCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final (icon, about) = switch (type) {
       FeedbackType.suggestion => (Icons.lightbulb_outline_rounded, 'An idea'),
-      FeedbackType.bug => (Icons.bug_report_outlined, 'Something broke'),
+      FeedbackType.bug => (
+          Icons.bug_report_outlined,
+          'Something isn’t working'
+        ),
       FeedbackType.other => (
           Icons.chat_bubble_outline_rounded,
           'Anything else'
@@ -701,9 +704,9 @@ class _StatusPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = switch (status) {
-      'Under Review' => HuntrColors.active,
-      'More Info Required' => HuntrColors.orange,
-      'Added to Roadmap' => HuntrColors.online,
+      'Under review' => HuntrColors.active,
+      'More info needed' => HuntrColors.orange,
+      'Planned' => HuntrColors.online,
       'Declined' => HuntrColors.coral,
       _ => HuntrColors.muted,
     };

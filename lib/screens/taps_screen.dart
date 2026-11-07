@@ -207,8 +207,8 @@ class _TapRow extends StatelessWidget {
                   children: [
                     Text(
                       tap.count > 1
-                          ? '${tap.sender.name} tapped you ${tap.count} times 👋'
-                          : '${tap.sender.name} tapped you 👋',
+                          ? '${tap.sender.name} tapped you ${tap.count} times'
+                          : '${tap.sender.name} tapped you',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
@@ -218,7 +218,7 @@ class _TapRow extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      first?.answer ?? 'Say hi back 👋',
+                      first?.answer ?? 'Say hi back',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
@@ -375,7 +375,7 @@ class _TapDetailScreenState extends State<TapDetailScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('${sender.name} tapped you 👋',
+                            Text('${sender.name} tapped you',
                                 style: const TextStyle(
                                     fontSize: 18, fontWeight: FontWeight.w800)),
                             const SizedBox(height: 2),
@@ -403,8 +403,7 @@ class _TapDetailScreenState extends State<TapDetailScreen> {
                 ],
                 const SizedBox(height: 16),
                 const Text(
-                  'They want to get to know you 💛 Say hi back to start '
-                  'chatting.',
+                  'Say hi back to start a chat.',
                   style: TextStyle(color: HuntrColors.muted, height: 1.4),
                 ),
               ],

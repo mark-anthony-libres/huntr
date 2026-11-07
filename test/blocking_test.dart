@@ -114,7 +114,7 @@ Future<(AppState, BlockState, MessagingState)> _open(
 
 void main() {
   group('Blocking someone', () {
-    testWidgets('Cancel changes nothing; Block User blocks after confirming',
+    testWidgets('Cancel changes nothing; Block blocks after confirming',
         (tester) async {
       final service = _FakeBlocks();
       final sam = _person(7);

@@ -77,7 +77,7 @@ Future<AppState> _openMe(
 void main() {
   testWidgets('deactivating asks for confirmation first', (tester) async {
     await _openMe(tester, _FakeProfiles(), _FakeSessions());
-    expect(find.text('Deactivate your account?'), findsOneWidget);
+    expect(find.text('Delete your account?'), findsOneWidget);
     expect(find.textContaining("can't be undone"), findsOneWidget);
   });
 

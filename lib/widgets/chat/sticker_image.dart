@@ -30,7 +30,7 @@ class StickerImage extends StatelessWidget {
       width: size,
       height: size,
       child: Center(
-        child: Text('✨ $name',
+        child: Text(name,
             textAlign: TextAlign.center,
             style: const TextStyle(color: HuntrColors.muted, fontSize: 12)),
       ),

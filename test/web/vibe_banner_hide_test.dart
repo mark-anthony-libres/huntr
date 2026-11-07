@@ -8,7 +8,7 @@ import 'package:huntr/data/sample_data.dart';
 import 'package:huntr/widgets/explore/vibe_banner.dart';
 
 void main() {
-  testWidgets('on web "Find your vibe" has a Hide button and no swipe',
+  testWidgets('on web "Looking for the same" has a Hide button and no swipe',
       (tester) async {
     var hidden = false;
     await tester.pumpWidget(MaterialApp(

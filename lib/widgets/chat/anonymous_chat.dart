@@ -51,24 +51,23 @@ class RevealBanner extends StatelessWidget {
       // a mutual chat: either asks, the other answers; nothing stops the chat
       RevealStatus.pending when mutual && !asked => (
           Icons.visibility_outlined,
-          '$them wants to swap profiles 👀',
-          'If you agree, you’ll both see each other’s profiles. Nothing is '
-              'shown unless you do, and you can keep chatting either way 💛'
+          '$them wants to swap profiles',
+          'If you agree, you’ll both see each other’s profiles. Nothing is shown unless you do, and you can keep chatting either way.'
         ),
       RevealStatus.pending when mutual => (
           Icons.hourglass_top_rounded,
-          'Fingers crossed 🤞',
-          'We’ll let you know when $them answers. Keep chatting meanwhile.'
+          'Request sent',
+          'We’ll let you know when $them answers. You can keep chatting.'
         ),
       RevealStatus.declined when mutual && asked => (
           Icons.lock_outline_rounded,
           '$them would rather stay anonymous',
-          'That’s okay 💛 You can keep chatting anonymously.'
+          'You can keep chatting anonymously.'
         ),
       RevealStatus.declined when mutual => (
           Icons.lock_outline_rounded,
-          'You both stay anonymous 🤫',
-          'Keep chatting. Changed your mind? You can ask them anytime.'
+          'You both stay anonymous',
+          'You can keep chatting, and ask again anytime.'
         ),
       RevealStatus.expired when mutual => (
           Icons.timer_off_outlined,
@@ -77,43 +76,37 @@ class RevealBanner extends StatelessWidget {
         ),
       RevealStatus.pending when mine => (
           Icons.visibility_outlined,
-          'Someone’s curious about you 👀',
-          'They’d love to know who’s behind ${anonymous.name}. Show your '
-              'profile to keep the chat going, or unmatch and stay a mystery. '
-              'No pressure, it’s totally your call 💛'
+          'They want to see your profile',
+          'Show your profile to keep chatting, or unmatch and stay anonymous.'
         ),
       RevealStatus.pending => (
           Icons.hourglass_top_rounded,
-          'Fingers crossed 🤞',
-          'Your request is on its way. We’ll let you know as soon as '
-              '${anonymous.name} answers.'
+          'Request sent',
+          'We’ll let you know when ${anonymous.name} answers.'
         ),
       RevealStatus.declined when mine => (
           Icons.lock_outline_rounded,
-          'Your secret’s safe 🤫',
-          'You stayed anonymous. This chat has ended, and your identity stays '
-              'private.'
+          'You stayed anonymous',
+          'This chat has ended, and your profile stays private.'
         ),
       RevealStatus.declined => (
           Icons.lock_outline_rounded,
-          '${anonymous.name} wants to stay a mystery',
-          'That’s okay, it happens 💛 This chat has ended. You’ll find them in '
-              'Unmatched users if you change your mind.'
+          '${anonymous.name} chose to stay anonymous',
+          'This chat has ended. You’ll find them in Unmatched users.'
         ),
       RevealStatus.expired when mine => (
           Icons.timer_off_outlined,
-          'Time ran out ⏳',
-          'No worries, you stayed anonymous. This chat has ended.'
+          'Time ran out',
+          'You stayed anonymous, and this chat has ended.'
         ),
       RevealStatus.expired => (
           Icons.timer_off_outlined,
           'No answer this time',
-          '${anonymous.name} didn’t get back to you in time, so this chat has '
-              'ended. Plenty more people to meet 🌟'
+          '${anonymous.name} didn’t answer in time, so this chat has ended.'
         ),
       RevealStatus.accepted => (
           Icons.check_circle_outline_rounded,
-          'Mask off 🎉',
+          'Profiles shown',
           'You can keep chatting in Direct.'
         ),
     };
@@ -382,21 +375,20 @@ class AnonymousIntro extends StatelessWidget {
                   size: 96),
             ),
             const SizedBox(height: 14),
-            Text('Hi, ${anonymous.shownAs}! 👋',
+            Text('Hi, ${anonymous.shownAs}',
                 key: const Key('anonymousIntro'),
                 style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 6),
             Text(
               anonymous.mutual
-                  ? 'You’re both in disguise 🎭 ${to.isEmpty ? 'They' : to} '
-                      'will only see ${anonymous.shownAs}, and you only see '
-                      'them by theirs. Break the ice with a message. Either '
-                      'of you can ask to show both profiles.'
-                  : 'You’re in disguise 🎭 ${to.isEmpty ? 'They' : to} will '
-                      'only see ${anonymous.shownAs}, never your name, photos '
-                      'or profile. Break the ice with a message. Photos, '
-                      'albums and locations can wait until you’re ready to '
-                      'meet for real.',
+                  ? 'You’re both anonymous. ${to.isEmpty ? 'They' : to} '
+                      'only see ${anonymous.shownAs}, and you only see their '
+                      'anonymous name. Either of you can ask to show both '
+                      'profiles.'
+                  : 'You’re anonymous. ${to.isEmpty ? 'They' : to} only see '
+                      '${anonymous.shownAs}, not your name, photos or '
+                      'profile. Photos, albums and locations aren’t shared '
+                      'in anonymous chats.',
               textAlign: TextAlign.center,
               style: const TextStyle(color: HuntrColors.muted),
             ),
@@ -484,19 +476,17 @@ class RevealedCard extends StatelessWidget {
           const SizedBox(height: 10),
           Text(
             mutual
-                ? 'Masks off! 🎉'
+                ? 'Profiles shown'
                 : fromMe
-                    ? 'Mask off! 🎉'
-                    : 'Surprise! $name revealed themselves 🎉',
+                    ? 'Profile shown'
+                    : '$name showed their profile',
             textAlign: TextAlign.center,
             style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
           ),
           const SizedBox(height: 4),
           Text.rich(
             mutual
-                ? TextSpan(
-                    text: 'You both showed your profiles. Say hi to $who '
-                        'properly 👋')
+                ? TextSpan(text: 'You both showed your profiles.')
                 : fromMe
                     ? TextSpan(children: [
                         TextSpan(text: '$who now knows '),
@@ -505,7 +495,7 @@ class RevealedCard extends StatelessWidget {
                             style: TextStyle(
                                 color: HuntrColors.orange,
                                 fontWeight: FontWeight.w700)),
-                        const TextSpan(text: ' was you. Have fun chatting!'),
+                        const TextSpan(text: ' was you.'),
                       ])
                     : TextSpan(children: [
                         TextSpan(
@@ -513,7 +503,7 @@ class RevealedCard extends StatelessWidget {
                             style: TextStyle(
                                 color: HuntrColors.orange,
                                 fontWeight: FontWeight.w700)),
-                        TextSpan(text: ' is $who! Say hi properly 👋'),
+                        TextSpan(text: ' is $who.'),
                       ]),
             textAlign: TextAlign.center,
             style: const TextStyle(color: HuntrColors.muted, fontSize: 13),
@@ -547,14 +537,12 @@ Future<AnonymousProfile?> askToSeeProfile(BuildContext context,
   final yes = await showDialog<bool>(
     context: context,
     builder: (context) => AlertDialog(
-      title: const Text('Curious who it is? 👀'),
+      title: const Text('See who it is?'),
       content: Text(mutual
           ? 'We’ll ask $name if you’d both like to show your profiles. '
               'Nothing is shown unless they agree, and you can keep chatting '
               'meanwhile.'
-          : 'We’ll ask $name if they’d like to show you who they '
-              'are. The chat pauses while they decide. If they don’t answer '
-              'within 3 days, the chat ends and they stay a mystery.'),
+          : 'We’ll ask $name if they’d like to show you who they are. The chat pauses while they decide. If they don’t answer within 3 days, the chat ends and they stay anonymous.'),
       actions: [
         TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -574,8 +562,7 @@ Future<AnonymousProfile?> askToSeeProfile(BuildContext context,
       ..hideCurrentSnackBar()
       ..showSnackBar(const SnackBar(
           key: Key('revealRequested'),
-          content:
-              Text('Request sent! 🤞 We’ll let you know when they answer.')));
+          content: Text('Request sent. We’ll let you know when they answer.')));
     return updated;
   } on BackendException catch (e) {
     messenger.showSnackBar(SnackBar(content: Text(e.message)));
@@ -591,9 +578,8 @@ Future<bool> confirmUnmatch(BuildContext context, String name) async =>
       context: context,
       builder: (context) => AlertDialog(
         title: Text('Unmatch ${name.isEmpty ? 'them' : name}?'),
-        content: const Text('This chat will end for both of you, and you '
-            'won’t see each other in Explore. Changed your mind? No problem, you '
-            'can undo it anytime in Settings → Unmatched users.'),
+        content: const Text(
+            'This chat will end for both of you, and you won’t see each other in Explore. You can undo it anytime in Settings → Unmatched users.'),
         actions: [
           TextButton(
               onPressed: () => Navigator.of(context).pop(false),
@@ -639,11 +625,11 @@ class RevealRequestCard extends StatelessWidget {
             child: Text(
               mutual
                   ? fromMe
-                      ? 'You asked to swap profiles 👀'
-                      : 'They’d like to swap profiles 👀'
+                      ? 'You asked to swap profiles'
+                      : 'They want to swap profiles'
                   : fromMe
-                      ? 'You asked to see who they are 👀'
-                      : 'They’re curious who you are 👀',
+                      ? 'You asked to see their profile'
+                      : 'They asked to see your profile',
               style: const TextStyle(fontWeight: FontWeight.w700),
             ),
           ),

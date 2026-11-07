@@ -36,8 +36,8 @@ class _AnonymousMessagingSettingState extends State<AnonymousMessagingSetting> {
         ..hideCurrentSnackBar()
         ..showSnackBar(SnackBar(
             content: Text(saved == true
-                ? 'Saved! Your first messages are anonymous now 🎭'
-                : 'Saved! Your first messages will show who you are.')));
+                ? 'Saved. Your first messages are anonymous now.'
+                : 'Saved. Your first messages will show your profile.')));
       // the chat list shows where I can still write
       await messaging.refresh();
     } catch (error) {

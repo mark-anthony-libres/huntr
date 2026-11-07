@@ -41,9 +41,9 @@ class SettingsScreen extends StatelessWidget {
               SettingsGroup(children: [
                 SettingsRow(
                   icon: Icons.auto_awesome_rounded,
-                  title: 'Show "Find your vibe"',
+                  title: 'Show "Looking for the same"',
                   subtitle:
-                      'Suggests people near you who want the same. Remembered on this device',
+                      'Suggests people near you who are looking for the same things. Saved on this device',
                   trailing: Switch(
                     key: const Key('settingsShowVibeBanner'),
                     value: AppScope.of(context).showVibeBanner,
@@ -127,7 +127,7 @@ class SettingsScreen extends StatelessWidget {
                     key: const Key('openCommunityGuidelines'),
                     icon: Icons.handshake_outlined,
                     title: 'Community Guidelines',
-                    subtitle: 'How we keep HUNTR kind, respectful and safe',
+                    subtitle: 'The rules for using HUNTR',
                     onTap: () => Navigator.of(context).push(MaterialPageRoute(
                         builder: (_) => AgreementScreen.communityGuidelines(
                             agreements: agreements))),
@@ -188,13 +188,13 @@ class SettingsScreen extends StatelessWidget {
                   key: const Key('logOut'),
                   icon: Icons.logout_rounded,
                   title: 'Log out',
-                  subtitle: 'Sign out of Huntr on this device',
+                  subtitle: 'Sign out of HUNTR on this device',
                   onTap: () => confirmAndLogOut(context),
                 ),
                 SettingsRow(
                   key: const Key('deactivateAccount'),
                   icon: Icons.delete_outline,
-                  title: 'Deactivate account',
+                  title: 'Delete account',
                   subtitle: 'Permanently deletes your account and data',
                   danger: true,
                   onTap: () => confirmAndDeactivateAccount(context),

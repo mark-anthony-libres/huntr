@@ -158,7 +158,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(service.calls, contains('send 7'));
       expect(find.byType(BottomSheet), findsNothing);
-      expect(find.text('Tap sent 👋 Sam will see it in their Taps.'),
+      expect(find.text('Tap sent. Sam will see it in their Taps.'),
           findsOneWidget);
     });
 
@@ -190,8 +190,8 @@ void main() {
         ..inbox = [_tap(1), _tap(2, read: true, name: 'Jo')];
       final taps = await _open(tester, service, const TapsScreen());
       expect(taps.unreadCount, 1);
-      expect(find.text('Alex tapped you 👋'), findsOneWidget);
-      expect(find.text('Jo tapped you 👋'), findsOneWidget);
+      expect(find.text('Alex tapped you'), findsOneWidget);
+      expect(find.text('Jo tapped you'), findsOneWidget);
       expect(find.byKey(const Key('tapUnread-1')), findsOneWidget);
       expect(find.byKey(const Key('tapUnread-2')), findsNothing);
 
@@ -249,7 +249,7 @@ void main() {
             conversationId: 5, other: _person(9, name: 'Alex')),
         history: [card, reply]);
     expect(find.byKey(const Key('tapCard')), findsOneWidget);
-    expect(find.text('Alex tapped you 👋'), findsOneWidget);
+    expect(find.text('Alex tapped you'), findsOneWidget);
     expect(find.text('Hey Alex!'), findsOneWidget);
   });
 }

@@ -32,14 +32,14 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Sign in with Google'), findsOneWidget);
     expect(find.text('Explore'), findsNothing);
-    expect(find.text('Meet people\nright around you.'), findsNothing);
+    expect(find.byKey(const Key('onboardWelcome')), findsNothing);
   });
 
   testWidgets('a session opens onboarding', (tester) async {
     final state = AppState()..startSession('test-session-token');
     await tester.pumpWidget(HuntrApp(state: state));
     await tester.pumpAndSettle();
-    expect(find.text('Meet people\nright around you.'), findsOneWidget);
+    expect(find.byKey(const Key('onboardWelcome')), findsOneWidget);
     expect(find.text('Sign in with Google'), findsNothing);
   });
 
@@ -90,11 +90,8 @@ void main() {
     expect(find.bySemanticsLabel('Google logo'), findsOneWidget);
     expect(find.byKey(const Key('googleLogo')), findsOneWidget);
     expect(find.byKey(const Key('facebookLogo')), findsOneWidget);
-    expect(find.text('Find your\nkind of connection.'), findsOneWidget);
-    expect(
-        find.text(
-            'Meet people nearby, make a connection,\nand see where it goes.'),
-        findsOneWidget);
+    expect(find.text('Meet people\nnear you.'), findsOneWidget);
+    expect(find.text('See who’s nearby, say hi,\nand chat.'), findsOneWidget);
     expect(
         find.text('We never post anything to social media.'), findsOneWidget);
     expect(find.byKey(const Key('signInPrivacy')), findsOneWidget);
@@ -109,7 +106,7 @@ void main() {
         find.text('Facebook sign-in is not available yet. '
             'Please sign in with Google.'),
         findsOneWidget);
-    expect(find.text('Meet people\nright around you.'), findsNothing);
+    expect(find.byKey(const Key('onboardWelcome')), findsNothing);
     final app = AppScope.read(tester.element(find.byType(Scaffold).first));
     expect(app.signedIn, isFalse);
     expect(app.onboarded, isFalse);

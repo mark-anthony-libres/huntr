@@ -103,7 +103,7 @@ class UpdateRequiredScreen extends StatelessWidget {
                           color: HuntrColors.orange)),
                 ),
                 const SizedBox(height: 24),
-                const Text('Time to update HUNTR',
+                const Text('Update HUNTR',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                         color: Colors.white,
@@ -112,10 +112,8 @@ class UpdateRequiredScreen extends StatelessWidget {
                 const SizedBox(height: 10),
                 Text(
                     kIsWeb
-                        ? 'A new version is ready, with fixes and new '
-                            'features. Reload to keep using HUNTR.'
-                        : 'A new version is ready, with fixes and new '
-                            'features. Update to keep using HUNTR.',
+                        ? 'A new version is available. Reload to keep using HUNTR.'
+                        : 'A new version is available. Update to keep using HUNTR.',
                     textAlign: TextAlign.center,
                     style: const TextStyle(
                         color: Colors.white70, fontSize: 15, height: 1.45)),
@@ -145,7 +143,8 @@ class UpdateRequiredScreen extends StatelessWidget {
                         'When it finishes, open huntr.apk and tap Update. '
                         'Your account and chats stay as they are.',
                         textAlign: TextAlign.center,
-                        style: TextStyle(color: HuntrColors.muted, height: 1.4)),
+                        style:
+                            TextStyle(color: HuntrColors.muted, height: 1.4)),
                   ),
                 if (target == null)
                   const Text(

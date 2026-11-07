@@ -65,8 +65,8 @@ class _AnonymousProfileScreenState extends State<AnonymousProfileScreen> {
     try {
       await messaging.removeUnmatch(
           anonymousConversationId: widget.conversationId);
-      messenger.showSnackBar(const SnackBar(
-          content: Text('Welcome back! 💛 They’re off your Unmatched list.')));
+      messenger.showSnackBar(
+          const SnackBar(content: Text('Removed from your Unmatched list.')));
       navigator.pop(true);
     } on BackendException catch (e) {
       messenger.showSnackBar(SnackBar(content: Text(e.message)));
@@ -99,8 +99,8 @@ class _AnonymousProfileScreenState extends State<AnonymousProfileScreen> {
         ..hideCurrentSnackBar()
         ..showSnackBar(const SnackBar(
             key: Key('reportSent'),
-            content: Text('Thank you for looking out 💛 We’ll take a look, '
-                'and they won’t know it was you.')));
+            content: Text(
+                'Thanks for reporting. We’ll look into it, and they won’t know it was you.')));
     }
   }
 
@@ -141,7 +141,7 @@ class _AnonymousProfileScreenState extends State<AnonymousProfileScreen> {
                           minimumSize: const Size.fromHeight(54)),
                       onPressed: _requesting ? null : _removeUnmatch,
                       icon: const Icon(Icons.person_add_alt_1_rounded),
-                      label: const Text('Remove from Unmatch List'),
+                      label: const Text('Remove from Unmatched list'),
                     )
                   else
                     _RevealAction(
@@ -430,34 +430,34 @@ class _RevealAction extends StatelessWidget {
     final (IconData icon, String title, String text) = switch (status) {
       RevealStatus.pending when profile.mutual && !asked => (
           Icons.visibility_outlined,
-          'They’d like to swap profiles 👀',
+          'They want to swap profiles',
           'Answer their request in the chat. Nothing is shown unless you '
               'agree.'
         ),
       RevealStatus.pending when profile.mutual => (
           Icons.hourglass_top_rounded,
-          'Fingers crossed 🤞',
-          'We’ll let you know as soon as they answer. Keep chatting meanwhile.'
+          'Request sent',
+          'We’ll let you know when they answer. You can keep chatting.'
         ),
       RevealStatus.declined when profile.mutual => (
           Icons.lock_outline_rounded,
           'They’d rather stay anonymous for now',
-          'That’s okay 💛 You can keep chatting anonymously.'
+          'You can keep chatting anonymously.'
         ),
       RevealStatus.pending => (
           Icons.hourglass_top_rounded,
-          'Fingers crossed 🤞',
-          'We’ll let you know as soon as they answer. The chat pauses until then.'
+          'Request sent',
+          'We’ll let you know when they answer. The chat is paused until then.'
         ),
       RevealStatus.accepted => (
           Icons.check_circle_outline_rounded,
-          'Mask off 🎉',
-          'They revealed who they are!'
+          'Profile shown',
+          'They showed you their profile.'
         ),
       RevealStatus.declined => (
           Icons.lock_outline_rounded,
-          'They want to stay a mystery',
-          'That’s okay, it happens 💛 You’ll find them in Unmatched users.'
+          'They chose to stay anonymous',
+          'This chat has ended. You’ll find them in Unmatched users.'
         ),
       RevealStatus.expired => (
           Icons.timer_off_outlined,
@@ -557,8 +557,7 @@ class _ReportSheetState extends State<_ReportSheet> {
               Text('Report ${widget.name}',
                   style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 4),
-              const Text(
-                  'You’re safe here 💛 Your report is private, and they won’t know it was you.',
+              const Text('Your report is private. They won’t know it was you.',
                   style: TextStyle(color: HuntrColors.muted)),
               const SizedBox(height: 10),
               RadioGroup<String>(

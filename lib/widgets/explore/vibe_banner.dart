@@ -5,7 +5,7 @@ import '../../models/models.dart';
 import '../../theme.dart';
 import '../avatar.dart';
 
-/// "Find your vibe": people nearby looking for what I'm looking for. Tapping
+/// 'Looking for the same': people nearby looking for what I'm looking for. Tapping
 /// filters Explore to them. Not shown when there's no one. Swiped away left or
 /// right on a phone or tablet (the app, or the web version in its browser);
 /// on desktop it has a Hide button instead.
@@ -74,12 +74,12 @@ class VibeBanner extends StatelessWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Text('Find your vibe',
+                              Text('Looking for the same',
                                   style: TextStyle(
                                       fontSize: 17,
                                       fontWeight: FontWeight.w800)),
                               SizedBox(height: 2),
-                              Text('People near you who want the same',
+                              Text('People near you who want the same things',
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(color: HuntrColors.muted)),

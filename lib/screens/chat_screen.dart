@@ -779,7 +779,7 @@ class _ChatScreenState extends State<ChatScreen> {
       await messaging.unmatchAnonymous(conversationId);
       messenger.showSnackBar(const SnackBar(
           content: Text(
-              'Unmatched. Changed your mind? Undo it anytime in Settings → Unmatched users.')));
+              'Unmatched. You can undo this in Settings → Unmatched users.')));
       if (widget.onClose case final close?) {
         close();
       } else {
@@ -801,10 +801,10 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  /// "Say hi 👋" on their spark: a hello in the message box, ready to send.
+  /// "Say hi" on their interest: a hello in the message box, ready to send.
   void _sayHi() {
     if (_input.text.trim().isEmpty) {
-      _input.text = 'Hey! 👋';
+      _input.text = 'Hi';
       _input.selection = TextSelection.collapsed(offset: _input.text.length);
     }
     _inputFocus.requestFocus();
@@ -864,19 +864,15 @@ class _ChatScreenState extends State<ChatScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text(accept
-            ? (mutual ? 'Swap profiles? 🎭' : 'Ready to reveal yourself? 🎭')
-            : (mutual ? 'Stay anonymous?' : 'Stay a mystery?')),
+            ? (mutual ? 'Swap profiles?' : 'Show your profile?')
+            : (mutual ? 'Stay anonymous?' : 'Stay anonymous?')),
         content: Text(accept
             ? (mutual
-                ? 'You’ll both see each other’s profiles, and you can keep '
-                    'chatting in Direct. Exciting! ✨'
-                : 'They’ll finally see who you are, and you can keep chatting in '
-                    'Direct. Exciting! ✨')
+                ? 'You’ll both see each other’s profiles, and the chat moves to Direct.'
+                : 'They’ll see your profile, and the chat moves to Direct.')
             : (mutual
-                ? 'You both stay anonymous and the chat goes on. That’s '
-                    'completely okay.'
-                : 'This chat will end for both of you, and your identity stays '
-                    'private. That’s completely okay.')),
+                ? 'You both stay anonymous, and the chat continues.'
+                : 'The chat ends for both of you, and your profile stays private.')),
         actions: [
           TextButton(
               onPressed: () => Navigator.of(context).pop(false),
@@ -898,9 +894,9 @@ class _ChatScreenState extends State<ChatScreen> {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(answer?.accepted == true
               ? (mutual
-                  ? 'Masks off! 🎉 You can see each other’s profiles now.'
-                  : 'Mask off! 🎉 They can see your profile now.')
-              : 'Done. Your secret’s safe 🤫')));
+                  ? 'You can now see each other’s profiles.'
+                  : 'They can now see your profile.')
+              : 'Done. You’re still anonymous.')));
     } on BackendException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context)
@@ -921,7 +917,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final reveal = summary.reveal?.status;
     if (summary.anonymous?.onlyMeMasked == true) {
       if (reveal == RevealStatus.pending) {
-        return 'Pick an option above to keep the chat going 👆';
+        return 'Choose an option above to continue the chat.';
       }
       if (reveal != null) return 'This chat has ended.';
       if (!_app.anonymousMessaging) {
@@ -1703,7 +1699,7 @@ class _LiveBanner extends StatelessWidget {
                 color: HuntrColors.orange, size: 20),
             const SizedBox(width: 10),
             const Expanded(
-              child: Text('You’re sharing a live connection',
+              child: Text('You’re sharing your live location',
                   style: TextStyle(fontWeight: FontWeight.w600)),
             ),
             TextButton(

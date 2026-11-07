@@ -15,7 +15,7 @@ class ChatIntro extends StatelessWidget {
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           Avatar(profile: profile, size: 88),
           const SizedBox(height: 14),
-          Text('Say hi to ${profile.name} 👋',
+          Text('Say hi to ${profile.name}',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 6),
@@ -40,8 +40,6 @@ String _nudge(Profile profile) {
       if (profile.lookingFor.contains(l)) l.label.toLowerCase()
   ].take(2).toList();
   return open.isEmpty
-      ? 'No pressure. A simple hello is a great way to start, or tap one '
-          'of the quick replies below.'
-      : "They're open to ${open.join(' and ')}. A simple hello is a great "
-          'way to start.';
+      ? 'Send a message, or tap one of the quick replies below.'
+      : "They're open to ${open.join(' and ')}.";
 }

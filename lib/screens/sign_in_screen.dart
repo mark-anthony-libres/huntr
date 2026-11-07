@@ -98,7 +98,7 @@ class SignInScreen extends StatelessWidget {
                           ),
                           SizedBox(height: gap * 1.3),
                           Text(
-                            'Find your\nkind of connection.',
+                            'Meet people\nnear you.',
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               fontSize: titleSize,
@@ -109,7 +109,7 @@ class SignInScreen extends StatelessWidget {
                           ),
                           SizedBox(height: gap * 0.8),
                           Text(
-                            'Meet people nearby, make a connection,\nand see where it goes.',
+                            'See who’s nearby, say hi,\nand chat.',
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               color: HuntrColors.muted,

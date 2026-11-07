@@ -183,7 +183,7 @@ class _HomeShellState extends State<HomeShell> {
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             const Icon(Icons.notifications_active_outlined, size: 40),
             const SizedBox(height: 12),
-            const Text("Don't miss a tap or a message",
+            const Text('Turn on notifications?',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
             const SizedBox(height: 6),

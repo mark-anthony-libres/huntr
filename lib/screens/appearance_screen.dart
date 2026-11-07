@@ -117,10 +117,7 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
                 const SectionLabel('APP ICON'),
                 const SizedBox(height: 4),
                 const Text(
-                    'How HUNTR looks on your home screen. Notes, Weather and '
-                    'Clock look like plain apps, with those names, for '
-                    'privacy. Your phone may take a moment to show it, and '
-                    'may close HUNTR once when it changes.',
+                    'The icon and name on your home screen. Notes, Weather and Clock look like ordinary apps. It may take a moment to change, and HUNTR may close once.',
                     style: TextStyle(color: HuntrColors.muted, height: 1.4)),
                 const SizedBox(height: 14),
                 Wrap(spacing: 14, runSpacing: 14, children: [

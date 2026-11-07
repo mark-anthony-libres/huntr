@@ -109,9 +109,9 @@ class _UnmatchedUsersScreenState extends State<UnmatchedUsersScreen> {
         child: EmptyStateCard(
             key: Key('noUnmatchedUsers'),
             icon: Icons.person_remove_outlined,
-            title: 'All clear ✨',
-            message: 'You haven’t unmatched anyone. If you do, they’ll show '
-                'up here, and you can bring them back anytime.'),
+            title: 'No unmatched users',
+            message:
+                'People you unmatch show up here. You can undo it anytime.'),
       );
     } else {
       body = ListView.separated(

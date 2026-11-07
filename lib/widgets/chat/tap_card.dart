@@ -44,8 +44,8 @@ class TapCard extends StatelessWidget {
               Flexible(
                 child: Text(
                   fromMe
-                      ? 'You tapped $who 👋'
-                      : '${otherName.isEmpty ? 'They' : otherName} tapped you 👋',
+                      ? 'You tapped $who'
+                      : '${otherName.isEmpty ? 'They' : otherName} tapped you',
                   style: const TextStyle(
                       fontWeight: FontWeight.w800, fontSize: 15),
                 ),

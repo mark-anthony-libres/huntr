@@ -233,7 +233,7 @@ class _StoryCameraScreenState extends State<StoryCameraScreen>
         code.contains('permission');
     if (refused && code.contains('audio')) {
       return (
-        title: "Let's turn your microphone on",
+        title: 'Allow the microphone',
         body: widget.story
             ? 'Stories have sound, so HUNTR needs your microphone too.'
             : 'Videos have sound, so HUNTR needs your microphone too.',
@@ -242,7 +242,7 @@ class _StoryCameraScreenState extends State<StoryCameraScreen>
     }
     if (refused) {
       return (
-        title: "Let's turn your camera on",
+        title: 'Allow the camera',
         body: widget.photo
             ? 'HUNTR needs your camera to $what.'
             : 'HUNTR needs your camera and microphone to $what.',
@@ -254,9 +254,8 @@ class _StoryCameraScreenState extends State<StoryCameraScreen>
           ? (
               title: 'No camera here',
               body: !widget.story
-                  ? 'No problem, you can choose a file instead.'
-                  : 'No problem, you can upload a short clip instead '
-                      '(up to $seconds seconds).',
+                  ? 'You can choose a file instead.'
+                  : 'You can upload a short clip instead (up to $seconds seconds).',
               blocked: null,
             )
           : (
@@ -654,7 +653,7 @@ class _LiveOnlyLabel extends StatelessWidget {
                   color: HuntrColors.orange, size: 18),
               SizedBox(width: 6),
               Flexible(
-                child: Text('Share a moment from right now',
+                child: Text('Add to your story',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                         color: Colors.white,
@@ -669,7 +668,7 @@ class _LiveOnlyLabel extends StatelessWidget {
                         'album. Up to $upTo.'
                     : fileToo
                         ? 'Record a quick clip, or upload one up to $upTo.'
-                        : 'Quick and real, up to $upTo.',
+                        : 'Record a clip, up to $upTo.',
                 textAlign: TextAlign.center,
                 style: const TextStyle(color: Colors.white70, fontSize: 12.5)),
           ]),

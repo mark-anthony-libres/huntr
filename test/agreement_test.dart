@@ -58,7 +58,7 @@ void main() {
       (tester) async {
     await _open(tester, AppState()..startSession('token'));
     expect(find.text('Huntr Terms'), findsOneWidget); // rendered Markdown
-    expect(find.text('Meet people\nright around you.'), findsNothing);
+    expect(find.byKey(const Key('onboardWelcome')), findsNothing);
   });
 
   testWidgets('agreeing continues to onboarding', (tester) async {
@@ -67,7 +67,7 @@ void main() {
     await tester.tap(find.byKey(const Key('agreementAccept')));
     await tester.pumpAndSettle();
     expect(state.agreementAccepted, isTrue);
-    expect(find.text('Meet people\nright around you.'), findsOneWidget);
+    expect(find.byKey(const Key('onboardWelcome')), findsOneWidget);
   });
 
   testWidgets('declining deletes the account and signs out',
@@ -83,7 +83,7 @@ void main() {
     expect(agreements.declinedWith, ['token']);
     expect(state.signedIn, isFalse);
     expect(find.text('Sign in with Google'), findsOneWidget);
-    expect(find.text('Meet people\nright around you.'), findsNothing);
+    expect(find.byKey(const Key('onboardWelcome')), findsNothing);
   });
 
   testWidgets('cancelling the decline keeps the user on the agreement',

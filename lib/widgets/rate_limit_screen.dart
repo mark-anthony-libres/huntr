@@ -92,9 +92,7 @@ class _RateLimitScreenState extends State<RateLimitScreen> {
                         TextStyle(fontSize: 26, fontWeight: FontWeight.w800)),
                 const SizedBox(height: 12),
                 const Text(
-                  'You made a lot of requests in a short time, so Huntr has '
-                  'paused your account for a few minutes. This keeps Huntr '
-                  'fast and safe for everyone.',
+                  'You made a lot of requests in a short time, so HUNTR paused your account for a few minutes.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                       color: HuntrColors.muted, fontSize: 15, height: 1.45),

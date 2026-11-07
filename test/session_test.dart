@@ -52,7 +52,7 @@ void main() {
         state: state, sessions: _FakeSessions(() async => 'saved-token')));
     await tester.pumpAndSettle();
     expect(state.sessionToken, 'saved-token');
-    expect(find.text('Meet people\nright around you.'), findsOneWidget);
+    expect(find.byKey(const Key('onboardWelcome')), findsOneWidget);
   });
 
   testWidgets('a rejected saved session goes back to sign-in', (tester) async {

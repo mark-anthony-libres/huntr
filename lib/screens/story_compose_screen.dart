@@ -56,8 +56,7 @@ void announceStoryUpload(ScaffoldMessengerState messenger, bool posted) {
   messenger
     ..hideCurrentSnackBar()
     ..showSnackBar(posted
-        ? const SnackBar(
-            content: Text('Your story is up for the next 24 hours ✨'))
+        ? const SnackBar(content: Text('Your story is up for 24 hours.'))
         : SnackBar(
             duration: const Duration(seconds: 8),
             content: Text(storyUpload.error ?? "Your story wasn't posted."),

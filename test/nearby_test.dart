@@ -259,7 +259,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(service.calls.last, 'post 1000 null Any good coffee here?');
     // back on the feed, mine first
-    expect(find.text('Posted as HappyMango 🎭'), findsOneWidget);
+    expect(find.text('Posted as HappyMango'), findsOneWidget);
     final mine = tester.getTopLeft(find.byKey(const Key('nearbyPost-50'))).dy;
     expect(mine,
         lessThan(tester.getTopLeft(find.byKey(const Key('nearbyPost-1'))).dy));

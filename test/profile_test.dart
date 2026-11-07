@@ -100,7 +100,7 @@ void main() {
   testWidgets('a profile without location shows onboarding', (tester) async {
     final profiles = _FakeProfiles(() async => _profile(age: 27));
     await _open(tester, profiles);
-    expect(find.text('Meet people\nright around you.'), findsOneWidget);
+    expect(find.byKey(const Key('onboardWelcome')), findsOneWidget);
     expect(find.text('Explore'), findsNothing);
     expect(profiles.locationUpdates, isEmpty);
   });
@@ -108,7 +108,7 @@ void main() {
   testWidgets('a profile without age shows onboarding', (tester) async {
     await _open(tester,
         _FakeProfiles(() async => _profile(latitude: 14.6, longitude: 121)));
-    expect(find.text('Meet people\nright around you.'), findsOneWidget);
+    expect(find.byKey(const Key('onboardWelcome')), findsOneWidget);
   });
 
   testWidgets('a rejected session goes back to sign-in', (tester) async {

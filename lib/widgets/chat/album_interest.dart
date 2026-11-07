@@ -58,7 +58,7 @@ class _AlbumInterestPromptState extends State<AlbumInterestPrompt> {
         Icon(Icons.favorite_border_rounded,
             color: HuntrColors.orange, size: 34),
         const SizedBox(height: 8),
-        const Text('A little spark? ✨',
+        const Text('Interested?',
             style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
         const SizedBox(height: 6),
         const Text(
@@ -91,7 +91,7 @@ class _AlbumInterestPromptState extends State<AlbumInterestPrompt> {
                     dimension: 18,
                     child: CircularProgressIndicator(
                         strokeWidth: 2, color: Colors.black))
-                : const Text('Yes, I’m interested ❤️'),
+                : const Text('Yes, I’m interested'),
           ),
         ),
         const SizedBox(height: 8),
@@ -122,9 +122,7 @@ class _AlbumInterestPromptState extends State<AlbumInterestPrompt> {
           Icon(Icons.lock_outline_rounded, size: 14, color: HuntrColors.muted),
           SizedBox(width: 6),
           Flexible(
-            child: Text(
-                'Your choice stays private. They’ll only know if you choose '
-                'to let them know.',
+            child: Text('They only find out if you say yes.',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: HuntrColors.muted, fontSize: 12)),
           ),
@@ -134,7 +132,7 @@ class _AlbumInterestPromptState extends State<AlbumInterestPrompt> {
   }
 }
 
-/// Right after a yes: "You let them know!" for a few seconds (or until ×).
+/// Right after a yes: 'Sent' for a few seconds (or until ×).
 class AlbumInterestSent extends StatefulWidget {
   const AlbumInterestSent({super.key, required this.onDone});
 
@@ -173,10 +171,10 @@ class _AlbumInterestSentState extends State<AlbumInterestSent> {
           _sparks(left: false),
         ]),
         const SizedBox(height: 10),
-        const Text('You let them know!',
+        const Text('Sent',
             style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
         const SizedBox(height: 6),
-        const Text('If they’re interested too, you’ll get a message. 😊',
+        const Text('If they’re interested too, you’ll get a message.',
             textAlign: TextAlign.center,
             style: TextStyle(color: HuntrColors.muted, height: 1.4)),
       ],
@@ -261,7 +259,7 @@ class _Card extends StatelessWidget {
 }
 
 /// In the chat, centred like a note (not a bubble): a beating heart and
-/// "Sam loves your album ✨" (to the album's owner, with a quiet "Say hi 👋"),
+/// "Sam loves your album ✨" (to the album's owner, with a quiet 'Say hi'),
 /// or, to me, "You sent a little spark ✨".
 class AlbumInterestCard extends StatefulWidget {
   const AlbumInterestCard(
@@ -321,8 +319,8 @@ class _AlbumInterestCardState extends State<AlbumInterestCard>
           Flexible(
             child: Text(
                 mine
-                    ? 'You sent $who a little spark ✨'
-                    : '$who loves your album ✨',
+                    ? 'You told $who you’re interested'
+                    : '$who is interested in your album',
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                     fontSize: 13.5, fontWeight: FontWeight.w600)),
@@ -339,7 +337,7 @@ class _AlbumInterestCardState extends State<AlbumInterestCard>
                     fontSize: 13,
                     fontWeight: FontWeight.w700)),
             onPressed: widget.onSayHi,
-            child: const Text('Say hi 👋'),
+            child: const Text('Say hi'),
           ),
       ]),
     );

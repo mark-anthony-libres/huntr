@@ -220,7 +220,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
                               // the count not until real
                               // people are loaded
                               waiting
-                                  ? 'Discover people near you'
+                                  ? 'People near you'
                                   : app.onlineCount == 1
                                       ? '1 online near you'
                                       : '${app.onlineCount} online near you',

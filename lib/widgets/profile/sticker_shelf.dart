@@ -497,8 +497,7 @@ class _StickerCollectionState extends State<_StickerCollection> {
         Expanded(
           child: _stickers.isEmpty
               ? Center(
-                  child: Text(
-                      _error ?? 'No stickers yet — be the first to send one.',
+                  child: Text(_error ?? 'No stickers yet.',
                       style: const TextStyle(color: HuntrColors.muted)))
               // even rows: cards of one width, each row as tall as its
               // tallest name, so the counts line up at the bottom (room

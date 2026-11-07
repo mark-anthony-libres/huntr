@@ -168,7 +168,7 @@ class _MyStoriesScreenState extends State<MyStoriesScreen> {
                   : Text(_error!))
           : mine.isEmpty
               ? const Center(
-                  child: Text('No stories right now. Add one!',
+                  child: Text('No stories right now.',
                       style: TextStyle(color: HuntrColors.muted)))
               : GridView.builder(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),

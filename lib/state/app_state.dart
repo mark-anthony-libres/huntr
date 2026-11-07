@@ -580,7 +580,7 @@ class AppState extends ChangeNotifier {
           p.albums.isEmpty ? null : p.albums[_rnd.nextInt(p.albums.length)];
       _connect(p,
           iAccepted: false, myAlbum: myAlbumById(albumId), theirAlbum: theirs);
-      _events.add('${p.name} accepted your request. Albums shared 📸');
+      _events.add('${p.name} accepted your request. Albums shared.');
     });
   }
 

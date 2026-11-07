@@ -1433,16 +1433,17 @@ class ChatMessage {
         ChatMessageType.location => '📍 Location',
         ChatMessageType.liveLocation => '📍 Live location',
         ChatMessageType.reveal =>
-          fromMe ? '🎉 You revealed yourself' : '🎉 $body revealed themselves',
-        ChatMessageType.revealRequest =>
-          fromMe ? '👀 You asked who they are' : '👀 Curious who you are',
+          fromMe ? 'You showed your profile' : '$body showed their profile',
+        ChatMessageType.revealRequest => fromMe
+            ? 'You asked to see their profile'
+            : 'Asked to see your profile',
         ChatMessageType.tap =>
           fromMe ? '👋 You tapped them' : '👋 They tapped you',
-        ChatMessageType.gif => gif?.isSticker == true ? '✨ Sticker' : '🎞️ GIF',
+        ChatMessageType.gif => gif?.isSticker == true ? 'Sticker' : '🎞️ GIF',
         ChatMessageType.storyReply => '↩ Story reply: $body',
         ChatMessageType.albumInterest =>
-          fromMe ? '✨ You sent a little spark' : '✨ Loves your album',
-        ChatMessageType.sticker => '✨ ${sticker?.name ?? 'Sticker'} sticker',
+          fromMe ? 'You said you’re interested' : 'Interested in your album',
+        ChatMessageType.sticker => '${sticker?.name ?? 'Sticker'} sticker',
       };
 }
 
@@ -1590,14 +1591,13 @@ class ReplyPreview {
         ChatMessageType.albumTradeReturn => '🔁 Traded an album',
         ChatMessageType.location => '📍 Location',
         ChatMessageType.liveLocation => '📍 Live location',
-        ChatMessageType.reveal => '🎭 Profile shown',
-        ChatMessageType.revealRequest => '👀 Asked who you are',
+        ChatMessageType.reveal => 'Profile shown',
+        ChatMessageType.revealRequest => 'Asked to see your profile',
         ChatMessageType.tap => '👋 Tap',
         ChatMessageType.gif => '🎞️ GIF',
         ChatMessageType.storyReply => '↩ $body',
-        ChatMessageType.albumInterest => '✨ Loves an album',
-        ChatMessageType.sticker =>
-          body.isEmpty ? '✨ Sticker' : '✨ $body sticker',
+        ChatMessageType.albumInterest => 'Interested in an album',
+        ChatMessageType.sticker => body.isEmpty ? 'Sticker' : '$body sticker',
       };
 }
 

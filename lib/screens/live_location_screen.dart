@@ -285,7 +285,7 @@ class _Banner extends StatelessWidget {
         Icon(Icons.share_location_rounded, color: HuntrColors.orange),
         const SizedBox(width: 10),
         const Expanded(
-          child: Text('You’re sharing a live connection',
+          child: Text('You’re sharing your live location',
               style: TextStyle(fontWeight: FontWeight.w700)),
         ),
         FilledButton.icon(

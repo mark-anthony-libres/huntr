@@ -172,9 +172,9 @@ const requestNotes = [
 ];
 
 const quickReplies = [
-  'Hey! 👋',
+  'Hi',
   'How\'s your day?',
-  'Coffee sometime? ☕',
+  'Coffee sometime?',
   'What are you up to?',
-  'Love your bio 😄',
+  'Nice bio',
 ];

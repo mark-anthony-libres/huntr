@@ -22,7 +22,7 @@ void main() {
     return state;
   }
 
-  testWidgets('swiping "Find your vibe" left hides it', (tester) async {
+  testWidgets('swiping "Looking for the same" left hides it', (tester) async {
     final state = await openExplore(tester);
     expect(find.byKey(const Key('findYourVibe')), findsOneWidget);
 
@@ -34,7 +34,7 @@ void main() {
     expect(state.showVibeBanner, isFalse);
   });
 
-  testWidgets('swiping "Find your vibe" right hides it', (tester) async {
+  testWidgets('swiping "Looking for the same" right hides it', (tester) async {
     final state = await openExplore(tester);
 
     await tester.drag(
@@ -45,7 +45,7 @@ void main() {
     expect(state.showVibeBanner, isFalse);
   });
 
-  testWidgets('the Settings switch turns "Find your vibe" off and back on',
+  testWidgets('the Settings switch turns "Looking for the same" off and back on',
       (tester) async {
     final state = await openExplore(tester);
 
@@ -72,7 +72,7 @@ void main() {
     expect(find.byKey(const Key('findYourVibe')), findsOneWidget);
   });
 
-  testWidgets('hiding "Find your vibe" shows it off in Settings',
+  testWidgets('hiding "Looking for the same" shows it off in Settings',
       (tester) async {
     final state = await openExplore(tester);
     state.showVibeBanner = false;

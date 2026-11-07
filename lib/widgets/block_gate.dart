@@ -123,7 +123,7 @@ Future<bool> confirmBlock(BuildContext context) async =>
                 backgroundColor: HuntrColors.coral,
                 foregroundColor: Colors.white),
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Block User'),
+            child: const Text('Block'),
           ),
         ],
       ),

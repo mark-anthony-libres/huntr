@@ -287,8 +287,7 @@ class _NearbyPostScreenState extends State<NearbyPostScreen> {
                       else if (comments.isEmpty)
                         const Padding(
                           padding: EdgeInsets.symmetric(vertical: 24),
-                          child: Text(
-                              'No comments yet. Start the conversation.',
+                          child: Text('No comments yet.',
                               key: Key('nearbyNoComments'),
                               textAlign: TextAlign.center,
                               style: TextStyle(color: HuntrColors.muted)),

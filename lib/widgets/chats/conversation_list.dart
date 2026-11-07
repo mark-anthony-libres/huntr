@@ -489,7 +489,7 @@ class _ConversationRow extends StatelessWidget {
                           typing
                               ? 'typing…'
                               : last == null
-                                  ? 'Say hi 👋'
+                                  ? 'Say hi'
                                   : '${last.fromMe ? 'You: ' : ''}${last.preview}',
                           key: typing ? Key('typingRow-${c.id}') : null,
                           maxLines: 1,

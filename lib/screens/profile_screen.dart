@@ -578,8 +578,8 @@ class _RemoveUnmatchButtonState extends State<_RemoveUnmatchButton> {
     setState(() => _removing = true);
     try {
       await messaging.removeUnmatch(userId: widget.profile.backendId);
-      messenger.showSnackBar(const SnackBar(
-          content: Text('Welcome back! 💛 They’re off your Unmatched list.')));
+      messenger.showSnackBar(
+          const SnackBar(content: Text('Removed from your Unmatched list.')));
       navigator.pop(true);
     } on BackendException catch (e) {
       messenger.showSnackBar(SnackBar(content: Text(e.message)));
@@ -592,7 +592,7 @@ class _RemoveUnmatchButtonState extends State<_RemoveUnmatchButton> {
     return GradientButton(
       key: const Key('removeUnmatchButton'),
       icon: Icons.person_add_alt_1_rounded,
-      label: _removing ? 'Removing…' : 'Remove from Unmatch List',
+      label: _removing ? 'Removing…' : 'Remove from Unmatched list',
       onPressed: _remove,
     );
   }
@@ -650,7 +650,7 @@ class _TapButtonState extends State<_TapButton> {
       await taps.send(userId);
       // a big wave: it went
       if (mounted) ReactionBurst.show(context, '👋', wave: true);
-      message = 'Tap sent 👋 ${widget.profile.name} will see it in their Taps.';
+      message = 'Tap sent. ${widget.profile.name} will see it in their Taps.';
     } on SessionRejectedException {
       return app.endSession();
     } on BackendException catch (e) {

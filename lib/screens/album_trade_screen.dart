@@ -13,10 +13,10 @@ import 'my_album_screen.dart';
 /// Choosing one of my albums for a trade, full screen: to offer it, or to
 /// answer an offer. My albums come from the backend each time.
 ///
-/// - No albums: "Create an Album First". Creating one opens the usual album
+/// - No albums: 'Create an album first'. Creating one opens the usual album
 ///   screen (to add photos and videos); coming back lands here again, with
 ///   the list refreshed, in the same trade (nothing is sent yet).
-/// - Only empty albums: "Add Photos First", which opens one of them (an
+/// - Only empty albums: 'Add photos first', which opens one of them (an
 ///   empty album can't be traded; the backend refuses it too).
 /// - Otherwise a list of the albums with something in them, even of one:
 ///   nothing is sent until it's chosen.
@@ -279,7 +279,7 @@ class _NoAlbums extends StatelessWidget {
               size: 44, color: HuntrColors.orange),
         ),
         const SizedBox(height: 24),
-        Text(emptyAlbum == null ? 'Create an Album First' : 'Add Photos First',
+        Text(emptyAlbum == null ? 'Create an album first' : 'Add photos first',
             textAlign: TextAlign.center,
             style: Theme.of(context)
                 .textTheme
@@ -314,7 +314,7 @@ class _NoAlbums extends StatelessWidget {
               icon: Icon(emptyAlbum == null
                   ? Icons.add_rounded
                   : Icons.add_photo_alternate_outlined),
-              label: Text(emptyAlbum == null ? 'Create Album' : 'Add Photos'),
+              label: Text(emptyAlbum == null ? 'Create album' : 'Add photos'),
               onPressed: emptyAlbum == null ? onCreate : onFill,
             ),
           ),

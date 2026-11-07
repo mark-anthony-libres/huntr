@@ -20,7 +20,11 @@ import 'settings_group.dart';
 /// (pick, check, crop), and a viewer to set the default, re-crop or remove.
 /// The backend is the source of truth; every change reloads the list.
 class ProfilePhotosSection extends StatefulWidget {
-  const ProfilePhotosSection({super.key});
+  const ProfilePhotosSection({super.key, this.showHeading = true});
+
+  /// "PROFILE PHOTOS" and how they work (off in onboarding, which says it
+  /// its own way).
+  final bool showHeading;
 
   @override
   State<ProfilePhotosSection> createState() => _ProfilePhotosSectionState();
@@ -238,21 +242,23 @@ class _ProfilePhotosSectionState extends State<ProfilePhotosSection> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        SectionLabel(
-          max == null
-              ? 'PROFILE PHOTOS'
-              : 'PROFILE PHOTOS · ${photos.length}/$max',
-          trailing: max == null
-              ? null
-              : PhotoCountDots(used: photos.length, max: max),
-        ),
-        const SizedBox(height: 6),
-        const Text(
-            'Everyone can see these on your profile. Tap one to view, crop, '
-            'remove or make it your main photo. Hold and drag to rearrange; '
-            'the first one is your main photo.',
-            style: _captionStyle),
-        const SizedBox(height: 14),
+        if (widget.showHeading) ...[
+          SectionLabel(
+            max == null
+                ? 'PROFILE PHOTOS'
+                : 'PROFILE PHOTOS · ${photos.length}/$max',
+            trailing: max == null
+                ? null
+                : PhotoCountDots(used: photos.length, max: max),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+              'Everyone can see these on your profile. Tap one to view, crop, '
+              'remove or make it your main photo. Hold and drag to rearrange; '
+              'the first one is your main photo.',
+              style: _captionStyle),
+          const SizedBox(height: 14),
+        ],
         if (_photos == null)
           const Text('Managing photos needs the Huntr server.',
               style: _captionStyle)
