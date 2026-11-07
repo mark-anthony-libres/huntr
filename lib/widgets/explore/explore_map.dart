@@ -89,7 +89,10 @@ class ExploreMap extends StatefulWidget {
   /// Close enough to tell people apart. It reveals nothing: every position
   /// is already blurred by the backend (a fixed spot in a ~500 m square).
   static const minZoom = 10.0;
-  static const maxZoom = 18.0;
+  static const maxZoom = 21.0;
+
+  /// The closest the map images go; closer in, those are enlarged.
+  static const tileMaxZoom = 19;
 
   /// Photos instead of pins from here in.
   static const photoZoom = 14.0;
@@ -115,6 +118,16 @@ class _ExploreMapState extends State<ExploreMap> {
   /// then the map isn't held in; the backend keeps to them anyway).
   double? _reachKm;
   double? _photosWithinMeters;
+
+  /// What the last answer covers (more than the screen showed), whether it
+  /// came with photos, and when: while the map stays inside it, nothing is
+  /// asked again.
+  LatLngBounds? _fetched;
+  bool _fetchedClose = false;
+  DateTime? _fetchedAt;
+
+  /// After this, moving the map asks again (who's online changes).
+  static const _fresh = Duration(seconds: 60);
 
   /// Manila, until my own position is known.
   static const _fallback = LatLng(14.5995, 120.9842);
@@ -142,18 +155,62 @@ class _ExploreMapState extends State<ExploreMap> {
   /// Once the map stops moving: the people in what's on screen. Meanwhile,
   /// how wide it is.
   void _moved(MapCamera camera) {
+    _showAcross(camera);
+    _settle?.cancel();
+    if (_covered(camera)) return; // the last answer already has it
+    _settle = Timer(const Duration(milliseconds: 400), _load);
+  }
+
+  /// How wide the map shown is, between the zoom buttons.
+  void _showAcross(MapCamera camera) {
     final across = acrossLabel(
         camera.center.latitude, camera.zoom, camera.nonRotatedSize.width);
     if (across != _across) setState(() => _across = across);
-    _settle?.cancel();
-    _settle = Timer(const Duration(milliseconds: 400), _load);
+  }
+
+  /// Close enough in for photos (under the backend's width for them).
+  bool _close(MapCamera camera) {
+    final within = _photosWithinMeters;
+    return within != null &&
+        acrossMetres(camera.center.latitude, camera.zoom,
+                camera.nonRotatedSize.width) <
+            within;
+  }
+
+  /// The last answer still holds for this view: it's inside what was
+  /// fetched, recent, not cut short (more people than it could send), and
+  /// as close in (photos or not).
+  bool _covered(MapCamera camera) {
+    final fetched = _fetched, at = _fetchedAt;
+    return fetched != null &&
+        at != null &&
+        !_more &&
+        _error == null &&
+        DateTime.now().difference(at) < _fresh &&
+        _close(camera) == _fetchedClose &&
+        fetched.containsBounds(camera.visibleBounds);
+  }
+
+  /// The view and as much again around it (half on each side), so small
+  /// moves and zooming in need nothing new.
+  static LatLngBounds _padded(LatLngBounds view) {
+    final lat = (view.north - view.south) / 2;
+    final lng = (view.east - view.west) / 2;
+    return LatLngBounds(
+      LatLng(math.max(-90, view.south - lat), math.max(-180, view.west - lng)),
+      LatLng(math.min(90, view.north + lat), math.min(180, view.east + lng)),
+    );
   }
 
   Future<void> _load() async {
     final app = AppScope.read(context);
     final token = app.sessionToken;
     if (token == null || !mounted) return;
-    final area = _map.camera.visibleBounds;
+    final camera = _map.camera;
+    // close in (photos), exactly the view: the backend sends photos by how
+    // wide the area asked for is; otherwise more than it, to reuse
+    final close = _close(camera);
+    final area = close ? camera.visibleBounds : _padded(camera.visibleBounds);
     final asked = ++_asked;
     setState(() => _loading = true);
     try {
@@ -169,6 +226,9 @@ class _ExploreMapState extends State<ExploreMap> {
         _reachKm = found.reachKm ?? _reachKm;
         _photosWithinMeters = found.photosWithinMeters ?? _photosWithinMeters;
         _error = null;
+        _fetched = area;
+        _fetchedClose = close;
+        _fetchedAt = DateTime.now();
       });
     } on SessionRejectedException {
       app.endSession();
@@ -183,22 +243,18 @@ class _ExploreMapState extends State<ExploreMap> {
     }
   }
 
-  /// A group: zoom in on it just as far as they spread out (each on their
-  /// own), or as close as the map goes; already there, list them.
+  /// A group: zoom in as close as all of them still fit on screen (with
+  /// room for their markers and the controls), so they spread out as far
+  /// as they can; already there, list them.
   void _openGroup(List<MapPerson> group, LatLng center) {
     final camera = _map.camera;
-    if (camera.zoom < ExploreMap.maxZoom - 0.01) {
-      var zoom = ExploreMap.maxZoom;
-      // half a level at a time, from the next one in
-      for (var z = (camera.zoom * 2).floorToDouble() / 2 + 0.5;
-          z < ExploreMap.maxZoom;
-          z += 0.5) {
-        if (_groupsAt(camera, group, z).length == group.length) {
-          zoom = z;
-          break;
-        }
-      }
-      _map.move(center, zoom);
+    final fit = CameraFit.coordinates(
+      coordinates: [for (final p in group) LatLng(p.latitude, p.longitude)],
+      padding: const EdgeInsets.fromLTRB(56, 72, 88, 96),
+      maxZoom: ExploreMap.maxZoom,
+    ).fit(camera);
+    if (fit.zoom > camera.zoom + 0.01) {
+      _map.move(fit.center, fit.zoom);
       return;
     }
     showModalBottomSheet<void>(
@@ -276,7 +332,7 @@ class _ExploreMapState extends State<ExploreMap> {
           interactionOptions: const InteractionOptions(
               flags: InteractiveFlag.all & ~InteractiveFlag.rotate),
           onMapReady: () {
-            _moved(_map.camera);
+            _showAcross(_map.camera);
             _load();
           },
           onPositionChanged: (camera, _) => _moved(camera),
@@ -296,6 +352,7 @@ class _ExploreMapState extends State<ExploreMap> {
                   retinaMode: tiles.url.contains('{r}') &&
                       RetinaMode.isHighDensity(context),
                   userAgentPackageName: 'com.marklibres.huntr',
+                  maxNativeZoom: ExploreMap.tileMaxZoom,
                 ),
               ),
             ),
@@ -741,7 +798,7 @@ double acrossMetres(double latitude, double zoom, double width) =>
 /// [zoom] and [latitude]: "800 m", "3 km", "25 km".
 String acrossLabel(double latitude, double zoom, double width) {
   final metres = acrossMetres(latitude, zoom, width);
-  if (metres < 1000) return '${(metres / 50).round() * 50} m';
+  if (metres < 1000) return '${(metres / 10).round() * 10} m';
   final km = metres / 1000;
   return km < 10
       ? '${km.toStringAsFixed(1).replaceAll('.0', '')} km'
