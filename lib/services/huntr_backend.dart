@@ -677,6 +677,18 @@ Future<void> sendTap(
       (_) {},
     );
 
+/// POST .../taps/read: I opened Taps; all of mine are read.
+Future<void> markAllTapsRead(
+        {required String backendUrl,
+        required String token,
+        http.Client? client}) =>
+    _sendAuthorized(
+      client,
+      (httpClient) => httpClient.post(_taps(backendUrl, '/read'),
+          headers: _authorization(token)),
+      (_) {},
+    );
+
 /// POST .../taps/{id}/read: I opened it.
 Future<void> markTapRead(
         {required String backendUrl,
@@ -1257,6 +1269,9 @@ class ChatMessage {
     this.storyId,
     this.storyAvailable = false,
     this.storyThumbnailUrl,
+    this.edited = false,
+    this.unsent = false,
+    this.editableUntil,
   });
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) => ChatMessage(
@@ -1311,7 +1326,56 @@ class ChatMessage {
             false,
         storyThumbnailUrl: (json['story_reply']
             as Map<String, dynamic>?)?['thumbnail_url'] as String?,
+        edited: json['edited'] as bool? ?? false,
+        unsent: json['unsent'] as bool? ?? false,
+        editableUntil: json['editable_until'] == null
+            ? null
+            : DateTime.parse(json['editable_until'] as String).toLocal(),
       );
+
+  /// My text can be edited until then (the backend's edit window, an hour
+  /// by default); null: it can't be.
+  final DateTime? editableUntil;
+
+  /// Its sender changed the text after sending it (both see "Edited").
+  final bool edited;
+
+  /// Its sender unsent it: it keeps its place, and nothing of what it was
+  /// comes with it.
+  final bool unsent;
+
+  /// My sent text can be edited, within the edit window (and until it's
+  /// unsent).
+  bool get canEdit =>
+      fromMe &&
+      id != null &&
+      !unsent &&
+      type == ChatMessageType.text &&
+      editableUntil != null &&
+      !DateTime.now().isAfter(editableUntil!);
+
+  /// My sent text, story reply, GIF, photo or video can be unsent, once
+  /// (stickers have their own undo; trades and locations their own cancel
+  /// or stop).
+  bool get canUnsend =>
+      fromMe &&
+      id != null &&
+      !unsent &&
+      (type == ChatMessageType.text ||
+          type == ChatMessageType.storyReply ||
+          type == ChatMessageType.gif ||
+          type == ChatMessageType.image ||
+          type == ChatMessageType.video);
+
+  /// What Copy copies: the text of a text or story reply (nothing else).
+  String? get copyableText => unsent
+      ? null
+      : switch (type) {
+          ChatMessageType.text ||
+          ChatMessageType.storyReply =>
+            body.isEmpty ? null : body,
+          _ => null,
+        };
 
   /// A story reply: the story it answered.
   final int? storyId;
@@ -1357,6 +1421,7 @@ class ChatMessage {
   bool get canReact =>
       id != null &&
       !fromMe &&
+      !unsent &&
       (type == ChatMessageType.text ||
           type == ChatMessageType.image ||
           type == ChatMessageType.video ||
@@ -1395,7 +1460,8 @@ class ChatMessage {
           LocalUpload? upload,
           String? error,
           bool clearError = false,
-          List<MessageReaction>? reactions}) =>
+          List<MessageReaction>? reactions,
+          ReplyPreview? replyTo}) =>
       ChatMessage(
           id: id,
           conversationId: conversationId,
@@ -1419,16 +1485,23 @@ class ChatMessage {
           storyAvailable: storyAvailable,
           storyThumbnailUrl: storyThumbnailUrl,
           reactions: reactions ?? this.reactions,
-          replyTo: replyTo,
+          replyTo: replyTo ?? this.replyTo,
+          edited: edited,
+          unsent: unsent,
+          editableUntil: editableUntil,
           upload: upload ?? this.upload,
           error: clearError ? null : error ?? this.error);
 
   /// A short line for the chat list.
-  String get preview => switch (type) {
+  String get preview =>
+      unsent ? (fromMe ? 'You unsent a message' : 'Message unsent') : _preview;
+
+  String get _preview => switch (type) {
         ChatMessageType.text => body,
         ChatMessageType.image => '📷 Photo',
         ChatMessageType.video => '🎥 Video',
-        ChatMessageType.albumTrade => '🔁 Album trade',
+        ChatMessageType.albumTrade =>
+          trade?.isShare == true ? '🖼️ Album' : '🔁 Album trade',
         ChatMessageType.albumTradeReturn => '🔁 Traded an album',
         ChatMessageType.location => '📍 Location',
         ChatMessageType.liveLocation => '📍 Live location',
@@ -1553,13 +1626,15 @@ class ReplyPreview {
       {required this.id,
       required this.fromMe,
       required this.type,
-      this.body = ''});
+      this.body = '',
+      this.unsent = false});
 
   factory ReplyPreview.fromJson(Map<String, dynamic> json) => ReplyPreview(
         id: json['id'] as int,
         fromMe: json['from_me'] as bool? ?? false,
         type: ChatMessageType.parse(json['type'] as String?),
         body: json['body'] as String? ?? '',
+        unsent: json['unsent'] as bool? ?? false,
       );
 
   /// The quote of [message] (one I'm replying to now).
@@ -1567,21 +1642,32 @@ class ReplyPreview {
       id: message.id!,
       fromMe: message.fromMe,
       type: message.type,
-      body: switch (message.type) {
-        // a story reply's body is what was said
-        ChatMessageType.text || ChatMessageType.storyReply => message.body,
-        ChatMessageType.albumTrade => message.trade?.offeredAlbum?.name ?? '',
-        ChatMessageType.sticker => message.sticker?.name ?? '',
-        _ => '',
-      });
+      unsent: message.unsent,
+      body: message.unsent
+          ? ''
+          : switch (message.type) {
+              // a story reply's body is what was said
+              ChatMessageType.text ||
+              ChatMessageType.storyReply =>
+                message.body,
+              ChatMessageType.albumTrade =>
+                message.trade?.offeredAlbum?.name ?? '',
+              ChatMessageType.sticker => message.sticker?.name ?? '',
+              _ => '',
+            });
 
   final int id;
   final bool fromMe;
   final ChatMessageType type;
   final String body;
 
+  /// The quoted message was unsent (nothing of it is shown).
+  final bool unsent;
+
   /// One line for the quote.
-  String get text => switch (type) {
+  String get text => unsent ? 'Message unsent' : _text;
+
+  String get _text => switch (type) {
         ChatMessageType.text => body,
         ChatMessageType.image => '📷 Photo',
         ChatMessageType.video => '🎥 Video',
@@ -1932,10 +2018,12 @@ class AlbumTrade {
     this.completedAt,
     this.returnMessageId,
     this.myInterest,
+    this.isShare = false,
   });
 
   factory AlbumTrade.fromJson(Map<String, dynamic> json) => AlbumTrade(
         id: json['id'] as int,
+        isShare: json['kind'] == 'share',
         status: switch (json['status']) {
           'completed' => TradeStatus.completed,
           'cancelled' => TradeStatus.cancelled,
@@ -1963,6 +2051,10 @@ class AlbumTrade {
   /// or a trade from before those messages - its album shows under the
   /// offer).
   final int? returnMessageId;
+
+  /// An album sent as it is, not a trade: nothing comes back (completed
+  /// when sent; it can be opened until its countdown runs out).
+  final bool isShare;
 
   final int id;
   final TradeStatus status;
@@ -3081,11 +3173,14 @@ Future<ChatMessage> offerAlbum(
         required int albumId,
         required String clientId,
         int? replyToId,
+        bool share = false,
         http.Client? client}) =>
     _sendAuthorized(
       client,
+      // a trade, or (share) the album sent as it is, nothing in return
       (httpClient) => httpClient.post(
-          _endpoint(backendUrl, '/messages/album-trade'),
+          _endpoint(backendUrl,
+              share ? '/messages/album-share' : '/messages/album-trade'),
           headers: {
             ..._authorization(token),
             'Content-Type': 'application/json'
@@ -3188,6 +3283,41 @@ Future<ChatMessage> reactToMessage(
                 },
                 body: jsonEncode({'emoji': emoji}));
       },
+      ChatMessage.fromJson,
+    );
+
+/// PATCH {backendUrl}/messages/{id}: the new text of my text message (the
+/// same message, marked edited).
+Future<ChatMessage> editMessage(
+        {required String backendUrl,
+        required String token,
+        required int messageId,
+        required String body,
+        http.Client? client}) =>
+    _sendAuthorized(
+      client,
+      (httpClient) => httpClient.patch(
+          _endpoint(backendUrl, '/messages/$messageId'),
+          headers: {
+            ..._authorization(token),
+            'Content-Type': 'application/json'
+          },
+          body: jsonEncode({'body': body})),
+      ChatMessage.fromJson,
+    );
+
+/// POST {backendUrl}/messages/{id}/unsend: takes my message back for both
+/// of us (it stays, shown as unsent).
+Future<ChatMessage> unsendMessage(
+        {required String backendUrl,
+        required String token,
+        required int messageId,
+        http.Client? client}) =>
+    _sendAuthorized(
+      client,
+      (httpClient) => httpClient.post(
+          _endpoint(backendUrl, '/messages/$messageId/unsend'),
+          headers: _authorization(token)),
       ChatMessage.fromJson,
     );
 

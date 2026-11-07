@@ -327,6 +327,7 @@ class Profile {
     this.hasStory = false,
     this.storySeen = false,
     this.stickers,
+    this.activeUntil,
   });
 
   /// Someone anonymous to me (the sender of an anonymous conversation): only
@@ -351,8 +352,13 @@ class Profile {
       anonymousAvatar: json['anonymous_avatar'] as String? ?? 'fox',
       blockedByMe: blocked?['by_me'] == true,
       blockedMe: blocked?['me'] == true,
+      activeUntil: _time(json['active_until']),
     );
   }
+
+  /// A server timestamp (ISO 8601), on this device's clock; null when absent.
+  static DateTime? _time(Object? value) =>
+      value is String ? DateTime.tryParse(value)?.toLocal() : null;
 
   /// A real person from the backend (Explore nearby), by user id. Sample
   /// profiles have none.
@@ -402,7 +408,30 @@ class Profile {
       stickers: json.containsKey('stickers')
           ? StickerCount.listFromJson(json['stickers'])
           : null,
+      activeUntil: _time(json['active_until']),
     );
+  }
+
+  /// Until when they count as recently active (the blue dot in chats): the
+  /// server's last activity plus its window. Null when they hide it, or it
+  /// isn't known (only chats send it).
+  final DateTime? activeUntil;
+
+  /// Active within the window at [now] (still at its very end).
+  bool recentlyActiveAt(DateTime now) {
+    final until = activeUntil;
+    return until != null && !now.isAfter(until);
+  }
+
+  /// Their distance, roughly, for chats ("2.5 km away", "10 km away");
+  /// null when they hide it or it isn't known.
+  String? get approximateDistanceLabel {
+    if (distanceHidden) return null;
+    final km = distanceKm;
+    final shown = km >= 10
+        ? km.round().toString()
+        : km.toStringAsFixed(1).replaceFirst(RegExp(r'\.0$'), '');
+    return '$shown km away';
   }
 
   final int? backendId;
@@ -458,6 +487,7 @@ class Profile {
         ageHidden: ageHidden,
         stats: stats,
         anonymousAvatar: anonymousAvatar,
+        activeUntil: activeUntil,
         unmatched: unmatched,
         hasStory: hasStory ?? this.hasStory,
         storySeen: storySeen ?? this.storySeen,

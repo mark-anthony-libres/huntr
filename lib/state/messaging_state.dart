@@ -223,6 +223,26 @@ class MessagingState extends ChangeNotifier {
     }
   }
 
+  // ---- edit and unsend ----
+
+  /// Changes the text of my sent text message (the same message, marked
+  /// edited for both of us). Throws when the backend says no (e.g. it was
+  /// unsent meanwhile).
+  Future<void> editMessage(ChatMessage message, String body) async {
+    final text = body.trim();
+    if (!message.canEdit || text.isEmpty || text == message.body) return;
+    final saved = await _call((t) => service.editMessage(t, message.id!, text));
+    if (saved != null) _upsert(message.conversationId, saved);
+  }
+
+  /// Takes my message back for both of us: it stays in its place, shown as
+  /// unsent. Throws when the backend says no.
+  Future<void> unsendMessage(ChatMessage message) async {
+    if (!message.canUnsend) return;
+    final saved = await _call((t) => service.unsendMessage(t, message.id!));
+    if (saved != null) _upsert(message.conversationId, saved);
+  }
+
   /// I stop sharing a location: they can't see it any more.
   Future<void> stopSharingLocation(ChatMessage message) async {
     _positions.remove(message.id);
@@ -1278,14 +1298,17 @@ class MessagingState extends ChangeNotifier {
 
   /// Offers one of my albums; the trade card appears in the chat. Throws
   /// what the backend says (e.g. not my album) for the trade flow to show.
+  /// Offers my album in a trade, or ([share]) sends it as it is, with
+  /// nothing in return.
   Future<void> offerAlbum(int conversationId, Profile recipient, int albumId,
-      {required String clientId}) async {
+      {required String clientId, bool share = false}) async {
     final reply = replyingTo(conversationId);
     final saved = await _call((t) => service.offerAlbum(t,
         recipientId: recipient.backendId!,
         albumId: albumId,
         clientId: clientId,
-        replyToId: reply?.id));
+        replyToId: reply?.id,
+        share: share));
     if (saved == null) return;
     _doneReplying(conversationId, reply);
     _threads
@@ -1393,7 +1416,10 @@ class MessagingState extends ChangeNotifier {
     _reconcileLive([message]);
     if (message.location?.stopped ?? false) _positions.remove(message.id);
     final thread = _threads[conversationId];
-    if (thread != null && thread.loaded) thread.upsert(message);
+    if (thread != null && thread.loaded) {
+      thread.upsert(message);
+      thread.updateQuotesOf(message);
+    }
     final current = summary(conversationId);
     if (current?.lastMessage?.id == message.id) {
       _replaceSummary(current!.copyWith(lastMessage: message));
@@ -1738,6 +1764,19 @@ class _Thread {
 
   /// The message, replacing the shown copy (same id), or added.
   void upsert(ChatMessage message) => merge([message]);
+
+  /// Replies quoting [message] show it as it is now (edited, or unsent).
+  void updateQuotesOf(ChatMessage message) {
+    if (message.id == null || !(message.edited || message.unsent)) return;
+    final quote = ReplyPreview.of(message);
+    for (var i = 0; i < messages.length; i++) {
+      final reply = messages[i].replyTo;
+      if (reply?.id == message.id &&
+          (reply!.body != quote.body || reply.unsent != quote.unsent)) {
+        messages[i] = messages[i].copyWith(replyTo: quote);
+      }
+    }
+  }
 
   void markMineRead(int upTo) {
     for (var i = 0; i < messages.length; i++) {

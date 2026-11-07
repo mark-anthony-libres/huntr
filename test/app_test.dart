@@ -189,6 +189,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const Key('messageInput')), 'Hello!');
     await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
     await tester.tap(find.byKey(const Key('sendButton')));
     await tester.pump();
     expect(msgs.last.text, 'Hello!');

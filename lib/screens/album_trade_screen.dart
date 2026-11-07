@@ -32,7 +32,12 @@ class AlbumTradeScreen extends StatefulWidget {
     required this.onChosen,
     this.waiting = const {},
     this.onStopWaiting,
+    this.note =
+        'Only the album’s name and cover show in the chat. Nothing is shared.',
   });
+
+  /// Under the intro: what the other person gets.
+  final String note;
 
   /// Albums that can't be chosen now, by id (already offered here and still
   /// waiting for an answer).
@@ -234,6 +239,7 @@ class _AlbumTradeScreenState extends State<AlbumTradeScreen> {
                                     : () => _fillAlbum(firstEmpty))
                             : _AlbumList(
                                 intro: widget.intro,
+                                note: widget.note,
                                 albums: albums,
                                 waiting: _waiting,
                                 error: _sendError,
@@ -336,6 +342,7 @@ class _NoAlbums extends StatelessWidget {
 class _AlbumList extends StatelessWidget {
   const _AlbumList({
     required this.intro,
+    required this.note,
     required this.albums,
     required this.error,
     required this.onChoose,
@@ -344,6 +351,7 @@ class _AlbumList extends StatelessWidget {
   });
 
   final String intro;
+  final String note;
   final List<Album> albums;
   final Set<String> waiting;
   final String? error;
@@ -362,10 +370,8 @@ class _AlbumList extends StatelessWidget {
             style: const TextStyle(
                 color: HuntrColors.muted, fontSize: 15, height: 1.4)),
         const SizedBox(height: 6),
-        const Text(
-          'Only the album’s name and cover show in the chat. Nothing is shared.',
-          style: TextStyle(color: HuntrColors.muted, fontSize: 13),
-        ),
+        Text(note,
+            style: const TextStyle(color: HuntrColors.muted, fontSize: 13)),
         const SizedBox(height: 16),
         if (error != null)
           Padding(

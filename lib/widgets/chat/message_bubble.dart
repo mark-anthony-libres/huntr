@@ -9,10 +9,14 @@ class MessageBubble extends StatelessWidget {
       {super.key,
       required this.message,
       required this.tail,
-      required this.showStatus});
+      required this.showStatus,
+      this.edited = false});
   final Message message;
   final bool tail;
   final bool showStatus;
+
+  /// Its sender changed it after sending: "Edited" under it.
+  final bool edited;
 
   @override
   Widget build(BuildContext context) {
@@ -61,11 +65,47 @@ class MessageBubble extends StatelessWidget {
               ),
             ),
           ),
+          if (edited)
+            Padding(
+              key: const Key('editedLabel'),
+              padding: const EdgeInsets.only(bottom: 4, left: 6, right: 6),
+              child: const Text('Edited',
+                  style: TextStyle(fontSize: 11, color: HuntrColors.muted)),
+            ),
           if (showStatus) MessageStatusLine(status: message.status),
         ],
       ),
     );
   }
+}
+
+/// Where an unsent message was: it keeps its place, with nothing of what
+/// it said.
+class UnsentBubble extends StatelessWidget {
+  const UnsentBubble({super.key, required this.fromMe});
+
+  final bool fromMe;
+
+  @override
+  Widget build(BuildContext context) => Align(
+        widthFactor: 1,
+        alignment: fromMe ? Alignment.centerRight : Alignment.centerLeft,
+        child: Container(
+          margin: const EdgeInsets.symmetric(vertical: 2),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: HuntrColors.border),
+          ),
+          child: Text(
+            fromMe ? 'You unsent a message' : 'Message unsent',
+            style: const TextStyle(
+                fontSize: 14,
+                fontStyle: FontStyle.italic,
+                color: HuntrColors.muted),
+          ),
+        ),
+      );
 }
 
 /// Under my message: Sending… / Sent / Read / Not sent · Tap to retry.

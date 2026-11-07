@@ -114,7 +114,7 @@ class _PrivacySettingsGroupState extends State<PrivacySettingsGroup> {
       SettingsRow(
         icon: Icons.location_on_outlined,
         title: 'Show my distance',
-        subtitle: 'Others see roughly how far away you are',
+        subtitle: 'Allow other users to see your approximate distance.',
         trailing: Switch(
           key: const Key('privacyShowDistance'),
           value: app.showDistance,
@@ -141,7 +141,7 @@ class _PrivacySettingsGroupState extends State<PrivacySettingsGroup> {
       SettingsRow(
         icon: Icons.visibility_outlined,
         title: 'Show when I\'m online',
-        subtitle: 'Turn off to browse without the green dot',
+        subtitle: "Turn off to hide when you're online or recently active",
         trailing: Switch(
           key: const Key('privacyShowOnline'),
           value: app.showOnline,

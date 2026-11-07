@@ -2,7 +2,7 @@ import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 
-import 'avatar.dart' show OnlineDot;
+import 'avatar.dart' show OnlineDot, RecentlyActiveDot;
 
 import '../theme.dart';
 
@@ -80,13 +80,17 @@ class MaskOverlay extends StatelessWidget {
       {super.key,
       required this.size,
       required this.child,
-      this.online = false});
+      this.online = false,
+      this.activeUntil});
 
   final double size;
 
   /// The picture, without its own online dot.
   final Widget child;
   final bool online;
+
+  /// The blue dot of someone recently active, until then (chats).
+  final DateTime? activeUntil;
 
   @override
   Widget build(BuildContext context) {
@@ -119,6 +123,11 @@ class MaskOverlay extends StatelessWidget {
         ),
         if (online)
           Positioned(right: 0, bottom: 0, child: OnlineDot(size: size * 0.28)),
+        if (activeUntil != null)
+          Positioned(
+              left: 0,
+              bottom: 0,
+              child: RecentlyActiveDot(until: activeUntil!, size: size * 0.26)),
       ]),
     );
   }

@@ -34,6 +34,9 @@ class TapService {
       backend.fetchProfileViewers(
           backendUrl: await _url(), token: token, offset: offset);
 
+  Future<void> markAllRead(String token) async =>
+      backend.markAllTapsRead(backendUrl: await _url(), token: token);
+
   Future<void> markRead(String token, int tapId) async =>
       backend.markTapRead(backendUrl: await _url(), token: token, tapId: tapId);
 

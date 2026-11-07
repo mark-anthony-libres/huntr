@@ -426,10 +426,15 @@ class _ConversationRow extends StatelessWidget {
               c.anonymous?.onlyMeMasked == true
                   ? MaskOverlay(
                       size: 56,
-                      online: c.other.online,
+                      activeUntil: c.other.activeUntil,
                       child:
                           Avatar(profile: c.other, size: 56, showOnline: false))
-                  : Avatar(profile: c.other, size: 56),
+                  // the blue dot: active in the last 20 minutes
+                  : Avatar(
+                      profile: c.other,
+                      size: 56,
+                      showOnline: false,
+                      showActive: true),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
@@ -449,6 +454,14 @@ class _ConversationRow extends StatelessWidget {
                                         ? FontWeight.w800
                                         : FontWeight.w700)),
                           ),
+                          // roughly how far, when they show it
+                          if (c.other.approximateDistanceLabel
+                              case final distance?)
+                            Text(' · $distance',
+                                key: Key('distance-${c.id}'),
+                                maxLines: 1,
+                                style: const TextStyle(
+                                    fontSize: 13, color: HuntrColors.muted)),
                           if (c.other.isNew && c.anonymous == null) ...[
                             const SizedBox(width: 8),
                             const NewBadge(),

@@ -217,11 +217,13 @@ class MessagingService {
           {required int recipientId,
           required int albumId,
           required String clientId,
-          int? replyToId}) async =>
+          int? replyToId,
+          bool share = false}) async =>
       backend.offerAlbum(
           backendUrl: await _url(),
           token: token,
           recipientId: recipientId,
+          share: share,
           albumId: albumId,
           clientId: clientId,
           replyToId: replyToId);
@@ -290,6 +292,20 @@ class MessagingService {
           token: token,
           messageId: messageId,
           emoji: emoji);
+
+  /// The new text of my text message.
+  Future<ChatMessage> editMessage(
+          String token, int messageId, String body) async =>
+      backend.editMessage(
+          backendUrl: await _url(),
+          token: token,
+          messageId: messageId,
+          body: body);
+
+  /// Takes my message back for both of us.
+  Future<ChatMessage> unsendMessage(String token, int messageId) async =>
+      backend.unsendMessage(
+          backendUrl: await _url(), token: token, messageId: messageId);
 
   Future<ChatMessage> requestLiveLocation(String token,
           {required int recipientId,

@@ -303,6 +303,38 @@ class _ChatScreenState extends State<ChatScreen> {
   void _react(ChatMessage m, String emoji) =>
       _liveAction(() => MessagingScope.read(context)!.react(m, emoji));
 
+  /// Edit my text: its text in a box, saved in place (shown as Edited).
+  Future<void> _editMessage(ChatMessage m) async {
+    final text = await showDialog<String>(
+        context: context, builder: (_) => _EditMessageDialog(text: m.body));
+    if (text == null || !mounted) return;
+    await _liveAction(() => MessagingScope.read(context)!.editMessage(m, text));
+  }
+
+  /// Unsend my message, once I've confirmed it.
+  Future<void> _unsendMessage(ChatMessage m) async {
+    final sure = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Unsend this message?'),
+        content: const Text(
+            'It will be removed for both of you. They may have seen it already.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel')),
+          TextButton(
+              key: const Key('confirmUnsend'),
+              style: TextButton.styleFrom(foregroundColor: HuntrColors.coral),
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Unsend')),
+        ],
+      ),
+    );
+    if (sure != true || !mounted) return;
+    await _liveAction(() => MessagingScope.read(context)!.unsendMessage(m));
+  }
+
   void _openLive(ChatMessage m, Profile other) =>
       Navigator.of(context).push(MaterialPageRoute(
           builder: (_) => LiveLocationScreen(
@@ -705,23 +737,27 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
               ),
             ),
-            const SizedBox(width: 6),
-            AnimatedScale(
-              scale: _input.text.trim().isEmpty ? 0.85 : 1,
+            // Send only once there's something to send (the box takes the
+            // room until then)
+            AnimatedSize(
               duration: const Duration(milliseconds: 150),
-              child: IconButton.filled(
-                key: const Key('sendButton'),
-                tooltip: 'Send',
-                style: IconButton.styleFrom(
-                  backgroundColor: HuntrColors.orange,
-                  foregroundColor: Colors.black,
-                  minimumSize: const Size(48, 48),
-                ),
-                icon: const Icon(Icons.send_rounded),
-                onPressed: _input.text.trim().isEmpty
-                    ? null
-                    : () => _send(p, _input.text),
-              ),
+              curve: Curves.easeOut,
+              child: _input.text.trim().isEmpty
+                  ? const SizedBox(height: 48)
+                  : Padding(
+                      padding: const EdgeInsets.only(left: 6),
+                      child: IconButton.filled(
+                        key: const Key('sendButton'),
+                        tooltip: 'Send',
+                        style: IconButton.styleFrom(
+                          backgroundColor: HuntrColors.orange,
+                          foregroundColor: Colors.black,
+                          minimumSize: const Size(48, 48),
+                        ),
+                        icon: const Icon(Icons.send_rounded),
+                        onPressed: () => _send(p, _input.text),
+                      ),
+                    ),
             ),
           ]),
         ),
@@ -1035,10 +1071,15 @@ class _ChatScreenState extends State<ChatScreen> {
                       anonymous != null && anonymous.onlyMeMasked
                           ? MaskOverlay(
                               size: 40,
-                              online: p.online && !blocked,
+                              activeUntil: blocked ? null : p.activeUntil,
                               child: Avatar(
                                   profile: p, size: 40, showOnline: false))
-                          : Avatar(profile: p, size: 40, showOnline: !blocked),
+                          // the blue dot: active in the last 20 minutes
+                          : Avatar(
+                              profile: p,
+                              size: 40,
+                              showOnline: false,
+                              showActive: !blocked),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Column(
@@ -1077,7 +1118,15 @@ class _ChatScreenState extends State<ChatScreen> {
                                 ])
                               // no presence while a block is between us
                               else if (!blocked)
-                                Text(typing ? 'typing…' : p.activeLabel(now),
+                                Text(
+                                    typing
+                                        ? 'typing…'
+                                        : [
+                                            p.activeLabel(now),
+                                            if (p.approximateDistanceLabel
+                                                case final distance?)
+                                              distance,
+                                          ].join(' · '),
                                     key: typing
                                         ? const Key('typingHeader')
                                         : null,
@@ -1253,203 +1302,244 @@ class _ChatScreenState extends State<ChatScreen> {
                                         30;
                                 final showStatus = m.fromMe &&
                                     (m.pending || identical(m, newestMine));
-                                final Widget card = switch (m.type) {
-                                  // a story reply is a text with "Replied to your story" over it
-                                  ChatMessageType.text ||
-                                  ChatMessageType.storyReply =>
-                                    Reactable(
-                                      message: m,
-                                      enabled: interactive,
-                                      onReact: (e) => _react(m, e),
-                                      onReply: () => _startReply(m),
-                                      otherName: p.name,
-                                      onQuoteTap: _jumpTo,
-                                      highlighted: _highlight == m.id,
-                                      // under my newest message: Sent / Read
-                                      below: showStatus
-                                          ? MessageStatusLine(
-                                              status: asMessage(m).status)
-                                          : null,
-                                      child: StoryReplyLabel.over(
-                                        m,
-                                        onOpenStory: () => _openStory(m, p),
-                                        MessageBubble(
-                                          key: Key(
-                                              'message-${m.id ?? m.clientId}'),
-                                          message: asMessage(m),
-                                          tail: newer == null ||
-                                              newer.fromMe != m.fromMe,
-                                          showStatus: false,
-                                        ),
-                                        otherName: p.name,
-                                      ),
-                                    ),
-                                  ChatMessageType.albumTrade
-                                      when m.trade != null =>
-                                    TradeCard(
-                                      message: m,
-                                      other: p,
-                                      now: now,
-                                      onOpenMine: _openMyAlbum,
-                                      onOpenTheirs: () => _openTheirAlbum(m),
-                                      busy:
-                                          _changingTrades.contains(m.trade!.id),
-                                      onRespond: () => answerAlbumTrade(context,
-                                          conversationId: id,
-                                          sender: p,
-                                          trade: m.trade!),
-                                      onCancel: () => _cancelTrade(m),
-                                      onJumpTo: _jumpTo,
-                                      wrapOffer: (offer) =>
-                                          _actions(m, p, offer),
-                                    ),
-                                  ChatMessageType.albumTrade =>
-                                    const SizedBox.shrink(),
-                                  // the album chosen in return, at the
-                                  // bottom when it was chosen
-                                  ChatMessageType.albumTradeReturn
-                                      when m.trade != null =>
-                                    TradeCard(
-                                      message: m,
-                                      other: p,
-                                      now: now,
-                                      returnOnly: true,
-                                      onOpenMine: _openMyAlbum,
-                                      onOpenTheirs: () => _openTheirAlbum(m),
-                                      onRespond: () {},
-                                      onCancel: () {},
-                                      wrapOffer: (card) => _actions(m, p, card),
-                                    ),
-                                  ChatMessageType.albumTradeReturn =>
-                                    const SizedBox.shrink(),
-                                  ChatMessageType.location
-                                      when m.location != null =>
-                                    _actions(
-                                        m,
-                                        p,
-                                        LocationBubble(
-                                          message: m,
-                                          position: messaging.positionOf(m),
-                                          now: now,
-                                          // whose it is: their photo is the pin
-                                          person: m.fromMe
-                                              ? _app.myPublicProfile
-                                              : p,
-                                          onOpen: () => Navigator.of(context)
-                                              .push(MaterialPageRoute(
-                                                  builder: (_) => LocationMapScreen(
-                                                      message: m,
-                                                      person: m.fromMe
-                                                          ? _app.myPublicProfile
-                                                          : p,
-                                                      name: m.fromMe
-                                                          ? 'You'
-                                                          : p.name))),
-                                          onStop: () =>
-                                              messaging.stopSharingLocation(m),
-                                        )),
-                                  ChatMessageType.location =>
-                                    const SizedBox.shrink(),
-                                  ChatMessageType.liveLocation
-                                      when m.liveLocation != null =>
-                                    _actions(
-                                        m,
-                                        p,
-                                        LiveLocationCard(
-                                          message: m,
-                                          me: _app.myPublicProfile,
-                                          other: p,
-                                          positions:
-                                              messaging.livePositionsOf(m.id!),
-                                          onAccept: () => _liveAction(() =>
-                                              messaging.acceptLiveLocation(m)),
-                                          onDecline: () => _liveAction(() =>
-                                              messaging.declineLiveLocation(m)),
-                                          onCancel: () => _liveAction(() =>
-                                              messaging.cancelLiveLocation(m)),
-                                          onStop: () => _liveAction(() =>
-                                              messaging.stopLiveLocation(m)),
-                                          onOpen: () => _openLive(m, p),
-                                        )),
-                                  ChatMessageType.liveLocation =>
-                                    const SizedBox.shrink(),
-                                  ChatMessageType.albumInterest =>
-                                    AlbumInterestCard(
+                                final Widget card = m.unsent
+                                    // its place only (a quote can still jump to it)
+                                    ? Reactable(
                                         message: m,
-                                        otherName: p.name,
-                                        onSayHi: blocked || closed != null
-                                            ? null
-                                            : _sayHi),
-                                  ChatMessageType.revealRequest =>
-                                    RevealRequestCard(
-                                        fromMe: m.fromMe,
-                                        mutual: anonymous?.mutual ?? false),
-                                  ChatMessageType.tap => TapCard(
-                                      answers: m.tapAnswers,
-                                      fromMe: m.fromMe,
-                                      otherName: p.name),
-                                  ChatMessageType.reveal => RevealedCard(
-                                      name: m.body,
-                                      avatar: m.revealedAvatar,
-                                      mutual: m.revealedMutual,
-                                      fromMe: m.fromMe,
-                                      person: p,
-                                      onViewProfile: p.isAnonymous
-                                          ? null
-                                          : () => _openProfile(p),
-                                    ),
-                                  ChatMessageType.gif when m.gif == null =>
-                                    const SizedBox.shrink(),
-                                  // HUNTR's stickers: no bubble; mine can be undone
-                                  ChatMessageType.sticker => Reactable(
-                                      message: m,
-                                      enabled: !blocked,
-                                      onReact: (e) => _react(m, e),
-                                      onReply: () => _startReply(m),
-                                      otherName: p.name,
-                                      onQuoteTap: _jumpTo,
-                                      highlighted: _highlight == m.id,
-                                      below: showStatus
-                                          ? MessageStatusLine(
-                                              status: asMessage(m).status,
-                                              detail: m.failed ? m.error : null)
-                                          : null,
-                                      child: StickerBubble(
-                                          message: m,
-                                          onUndo: blocked
-                                              ? null
-                                              : () => _undoSticker(m)),
-                                    ),
-                                  // photos, videos and GIFs
-                                  _ => Reactable(
-                                      message: m,
-                                      enabled: !blocked,
-                                      onReact: (e) => _react(m, e),
-                                      onReply: () => _startReply(m),
-                                      otherName: p.name,
-                                      onQuoteTap: _jumpTo,
-                                      highlighted: _highlight == m.id,
-                                      below: showStatus
-                                          ? MessageStatusLine(
-                                              status: asMessage(m).status,
-                                              detail: m.failed ? m.error : null)
-                                          : null,
-                                      child: m.type == ChatMessageType.gif
-                                          ? GifBubble(message: m)
-                                          : MediaBubble(
-                                              message: m,
-                                              now: now,
-                                              onOpen: () => Navigator.of(
-                                                      context)
-                                                  .push(MaterialPageRoute(
-                                                      builder: (_) =>
-                                                          ChatMediaViewerScreen(
-                                                              message: m))),
-                                              onPreviewFailed: () =>
-                                                  _refreshPreview(m),
+                                        enabled: false,
+                                        onReact: (_) {},
+                                        highlighted: _highlight == m.id,
+                                        child: UnsentBubble(
+                                            key: Key('unsent-${m.id}'),
+                                            fromMe: m.fromMe),
+                                      )
+                                    : switch (m.type) {
+                                        // a story reply is a text with "Replied to your story" over it
+                                        ChatMessageType.text ||
+                                        ChatMessageType.storyReply =>
+                                          Reactable(
+                                            message: m,
+                                            enabled: interactive,
+                                            onEdit: interactive && m.canEdit
+                                                ? () => _editMessage(m)
+                                                : null,
+                                            onUnsend: m.canUnsend
+                                                ? () => _unsendMessage(m)
+                                                : null,
+                                            onReact: (e) => _react(m, e),
+                                            onReply: () => _startReply(m),
+                                            otherName: p.name,
+                                            onQuoteTap: _jumpTo,
+                                            highlighted: _highlight == m.id,
+                                            // under my newest message: Sent / Read
+                                            below: showStatus
+                                                ? MessageStatusLine(
+                                                    status: asMessage(m).status)
+                                                : null,
+                                            child: StoryReplyLabel.over(
+                                              m,
+                                              onOpenStory: () =>
+                                                  _openStory(m, p),
+                                              MessageBubble(
+                                                key: Key(
+                                                    'message-${m.id ?? m.clientId}'),
+                                                message: asMessage(m),
+                                                tail: newer == null ||
+                                                    newer.fromMe != m.fromMe,
+                                                showStatus: false,
+                                                edited: m.edited,
+                                              ),
+                                              otherName: p.name,
                                             ),
-                                    ),
-                                };
+                                          ),
+                                        ChatMessageType.albumTrade
+                                            when m.trade != null =>
+                                          TradeCard(
+                                            message: m,
+                                            other: p,
+                                            now: now,
+                                            onOpenMine: _openMyAlbum,
+                                            onOpenTheirs: () =>
+                                                _openTheirAlbum(m),
+                                            busy: _changingTrades
+                                                .contains(m.trade!.id),
+                                            onRespond: () => answerAlbumTrade(
+                                                context,
+                                                conversationId: id,
+                                                sender: p,
+                                                trade: m.trade!),
+                                            onCancel: () => _cancelTrade(m),
+                                            onJumpTo: _jumpTo,
+                                            wrapOffer: (offer) =>
+                                                _actions(m, p, offer),
+                                          ),
+                                        ChatMessageType.albumTrade =>
+                                          const SizedBox.shrink(),
+                                        // the album chosen in return, at the
+                                        // bottom when it was chosen
+                                        ChatMessageType.albumTradeReturn
+                                            when m.trade != null =>
+                                          TradeCard(
+                                            message: m,
+                                            other: p,
+                                            now: now,
+                                            returnOnly: true,
+                                            onOpenMine: _openMyAlbum,
+                                            onOpenTheirs: () =>
+                                                _openTheirAlbum(m),
+                                            onRespond: () {},
+                                            onCancel: () {},
+                                            wrapOffer: (card) =>
+                                                _actions(m, p, card),
+                                          ),
+                                        ChatMessageType.albumTradeReturn =>
+                                          const SizedBox.shrink(),
+                                        ChatMessageType.location
+                                            when m.location != null =>
+                                          _actions(
+                                              m,
+                                              p,
+                                              LocationBubble(
+                                                message: m,
+                                                position:
+                                                    messaging.positionOf(m),
+                                                now: now,
+                                                // whose it is: their photo is the pin
+                                                person: m.fromMe
+                                                    ? _app.myPublicProfile
+                                                    : p,
+                                                onOpen: () => Navigator.of(context)
+                                                    .push(MaterialPageRoute(
+                                                        builder: (_) =>
+                                                            LocationMapScreen(
+                                                                message: m,
+                                                                person: m.fromMe
+                                                                    ? _app
+                                                                        .myPublicProfile
+                                                                    : p,
+                                                                name: m.fromMe
+                                                                    ? 'You'
+                                                                    : p.name))),
+                                                onStop: () => messaging
+                                                    .stopSharingLocation(m),
+                                              )),
+                                        ChatMessageType.location =>
+                                          const SizedBox.shrink(),
+                                        ChatMessageType.liveLocation
+                                            when m.liveLocation != null =>
+                                          _actions(
+                                              m,
+                                              p,
+                                              LiveLocationCard(
+                                                message: m,
+                                                me: _app.myPublicProfile,
+                                                other: p,
+                                                positions: messaging
+                                                    .livePositionsOf(m.id!),
+                                                onAccept: () => _liveAction(
+                                                    () => messaging
+                                                        .acceptLiveLocation(m)),
+                                                onDecline: () => _liveAction(
+                                                    () => messaging
+                                                        .declineLiveLocation(
+                                                            m)),
+                                                onCancel: () => _liveAction(
+                                                    () => messaging
+                                                        .cancelLiveLocation(m)),
+                                                onStop: () => _liveAction(() =>
+                                                    messaging
+                                                        .stopLiveLocation(m)),
+                                                onOpen: () => _openLive(m, p),
+                                              )),
+                                        ChatMessageType.liveLocation =>
+                                          const SizedBox.shrink(),
+                                        ChatMessageType.albumInterest =>
+                                          AlbumInterestCard(
+                                              message: m,
+                                              otherName: p.name,
+                                              onSayHi: blocked || closed != null
+                                                  ? null
+                                                  : _sayHi),
+                                        ChatMessageType.revealRequest =>
+                                          RevealRequestCard(
+                                              fromMe: m.fromMe,
+                                              mutual:
+                                                  anonymous?.mutual ?? false),
+                                        ChatMessageType.tap => TapCard(
+                                            answers: m.tapAnswers,
+                                            fromMe: m.fromMe,
+                                            otherName: p.name),
+                                        ChatMessageType.reveal => RevealedCard(
+                                            name: m.body,
+                                            avatar: m.revealedAvatar,
+                                            mutual: m.revealedMutual,
+                                            fromMe: m.fromMe,
+                                            person: p,
+                                            onViewProfile: p.isAnonymous
+                                                ? null
+                                                : () => _openProfile(p),
+                                          ),
+                                        ChatMessageType.gif
+                                            when m.gif == null =>
+                                          const SizedBox.shrink(),
+                                        // HUNTR's stickers: no bubble; mine can be undone
+                                        ChatMessageType.sticker => Reactable(
+                                            message: m,
+                                            enabled: !blocked,
+                                            onReact: (e) => _react(m, e),
+                                            onReply: () => _startReply(m),
+                                            otherName: p.name,
+                                            onQuoteTap: _jumpTo,
+                                            highlighted: _highlight == m.id,
+                                            below: showStatus
+                                                ? MessageStatusLine(
+                                                    status: asMessage(m).status,
+                                                    detail: m.failed
+                                                        ? m.error
+                                                        : null)
+                                                : null,
+                                            child: StickerBubble(
+                                                message: m,
+                                                onUndo: blocked
+                                                    ? null
+                                                    : () => _undoSticker(m)),
+                                          ),
+                                        // photos, videos and GIFs
+                                        _ => Reactable(
+                                            message: m,
+                                            enabled: !blocked,
+                                            onUnsend: m.canUnsend
+                                                ? () => _unsendMessage(m)
+                                                : null,
+                                            onReact: (e) => _react(m, e),
+                                            onReply: () => _startReply(m),
+                                            otherName: p.name,
+                                            onQuoteTap: _jumpTo,
+                                            highlighted: _highlight == m.id,
+                                            below: showStatus
+                                                ? MessageStatusLine(
+                                                    status: asMessage(m).status,
+                                                    detail: m.failed
+                                                        ? m.error
+                                                        : null)
+                                                : null,
+                                            child: m.type == ChatMessageType.gif
+                                                ? GifBubble(message: m)
+                                                : MediaBubble(
+                                                    message: m,
+                                                    now: now,
+                                                    onOpen: () => Navigator.of(
+                                                            context)
+                                                        .push(MaterialPageRoute(
+                                                            builder: (_) =>
+                                                                ChatMediaViewerScreen(
+                                                                    message:
+                                                                        m))),
+                                                    onPreviewFailed: () =>
+                                                        _refreshPreview(m),
+                                                  ),
+                                          ),
+                                      };
                                 // cards are messages too: Sent / Read under my newest
                                 final Widget bubble = showStatus &&
                                         (m.type == ChatMessageType.albumTrade ||
@@ -1711,6 +1801,63 @@ class _LiveBanner extends StatelessWidget {
           ]),
         ),
       ),
+    );
+  }
+}
+
+/// Editing my text: the text in a box; Save gives the new text (unchanged
+/// or empty can't be saved).
+class _EditMessageDialog extends StatefulWidget {
+  const _EditMessageDialog({required this.text});
+
+  final String text;
+
+  @override
+  State<_EditMessageDialog> createState() => _EditMessageDialogState();
+}
+
+class _EditMessageDialogState extends State<_EditMessageDialog> {
+  late final _controller = TextEditingController(text: widget.text);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final text = _controller.text.trim();
+    final canSave = text.isNotEmpty && text != widget.text.trim();
+    void save() {
+      if (canSave) Navigator.of(context).pop(text);
+    }
+
+    return AlertDialog(
+      title: const Text('Edit message'),
+      content: SizedBox(
+        width: 420,
+        child: TextField(
+          key: const Key('editMessageInput'),
+          controller: _controller,
+          autofocus: true,
+          minLines: 1,
+          maxLines: 6,
+          maxLength: 1000,
+          textCapitalization: TextCapitalization.sentences,
+          onChanged: (_) => setState(() {}),
+          onSubmitted: (_) => save(),
+        ),
+      ),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel')),
+        TextButton(
+            key: const Key('saveEdit'),
+            onPressed: canSave ? save : null,
+            child: const Text('Save')),
+      ],
     );
   }
 }

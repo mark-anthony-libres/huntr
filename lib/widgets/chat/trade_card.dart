@@ -58,6 +58,8 @@ class TradeCard extends StatelessWidget {
     final me = trade.fromMe;
     final name = other.name.isEmpty ? 'They' : other.name;
     final completed = trade.status == TradeStatus.completed;
+    // an album sent as it is: one card, nothing came back
+    final share = trade.isShare;
     final returned = _AlbumCard(
       key: Key('tradeBack-${trade.id}'),
       mine: !me,
@@ -80,7 +82,7 @@ class TradeCard extends StatelessWidget {
     if (returnOnly) return wrapOffer?.call(returned) ?? returned;
     // the album chosen came as its own message further down (older trades
     // show it here, under the offer)
-    final returnedBelow = completed && trade.returnMessageId != null;
+    final returnedBelow = !share && completed && trade.returnMessageId != null;
     // the offer: theirs to open once completed, mine to open any time
     final offerTheirs = !me && completed;
     final offerAction =
@@ -89,7 +91,8 @@ class TradeCard extends StatelessWidget {
       key: Key('trade-${trade.id}'),
       mine: me,
       who: me ? 'You' : name,
-      verb: 'sent an album trade',
+      verb: share ? 'sent an album' : 'sent an album trade',
+      icon: share ? Icons.photo_album_outlined : Icons.swap_horiz_rounded,
       time: message.sentAt,
       album: trade.offeredAlbum,
       status: trade.status,
@@ -134,7 +137,7 @@ class TradeCard extends StatelessWidget {
     );
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       wrapOffer?.call(offer) ?? offer,
-      if (completed && !returnedBelow) returned,
+      if (completed && !share && !returnedBelow) returned,
     ]);
   }
 
@@ -279,7 +282,11 @@ class _AlbumCard extends StatelessWidget {
     required this.status,
     required this.coverAction,
     required this.footer,
+    this.icon = Icons.swap_horiz_rounded,
   });
+
+  /// Beside who sent it: a trade's arrows, or a sent album's.
+  final IconData icon;
 
   /// On my side (right).
   final bool mine;
@@ -315,7 +322,7 @@ class _AlbumCard extends StatelessWidget {
         child:
             Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           Row(children: [
-            Icon(Icons.swap_horiz_rounded, size: 22, color: HuntrColors.orange),
+            Icon(icon, size: 22, color: HuntrColors.orange),
             const SizedBox(width: 8),
             Expanded(
               child: Text.rich(

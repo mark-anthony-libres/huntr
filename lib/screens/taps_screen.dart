@@ -10,6 +10,7 @@ import '../flows/open_person_profile.dart';
 import '../theme.dart';
 import '../widgets/avatar.dart';
 import '../widgets/load_more_row.dart';
+import '../widgets/page_title.dart' show TabShown;
 import '../widgets/pill_tabs.dart';
 import '../widgets/me/section_states.dart';
 import '../widgets/taps/tap_answers.dart';
@@ -30,8 +31,31 @@ class TapsScreen extends StatefulWidget {
 class _TapsScreenState extends State<TapsScreen> {
   bool _viewersTab = false;
 
+  /// The taps that were new when Taps was opened: they're read at once
+  /// (the badge clears), and stay marked as new until I leave the tab.
+  final Set<int> _new = {};
+
+  /// Taps is on screen: unread taps (also ones arriving while it's open)
+  /// are marked read; leaving it forgets which were new.
+  void _seeTaps(TapState? taps, bool shown) {
+    if (!shown) {
+      _new.clear();
+      return;
+    }
+    if (_viewersTab || taps == null || taps.unreadCount == 0) return;
+    _new.addAll([
+      for (final t in taps.taps ?? const <ReceivedTap>[])
+        if (!t.isRead) t.id
+    ]);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) unawaited(taps.markAllRead());
+    });
+  }
+
   void _show({required bool viewers}) {
     setState(() => _viewersTab = viewers);
+    // back on Taps: what came in meanwhile is read too
+    if (!viewers) _seeTaps(TapScope.read(context), true);
     // fresh each time it's opened; its badge clears
     if (viewers) {
       final taps = TapScope.read(context);
@@ -43,6 +67,7 @@ class _TapsScreenState extends State<TapsScreen> {
   @override
   Widget build(BuildContext context) {
     final taps = TapScope.of(context);
+    _seeTaps(taps, TabShown.of(context));
     final text = Theme.of(context).textTheme;
     final list = taps?.taps;
     final now = DateTime.now();
@@ -150,6 +175,7 @@ class _TapsScreenState extends State<TapsScreen> {
                     for (final tap in list)
                       _TapRow(
                         tap: tap,
+                        isNew: _new.contains(tap.id),
                         time: timeLabel(tap.receivedAt, now),
                         onTap: () => Navigator.of(context).push(
                             MaterialPageRoute(
@@ -170,15 +196,22 @@ class _TapsScreenState extends State<TapsScreen> {
 }
 
 class _TapRow extends StatelessWidget {
-  const _TapRow({required this.tap, required this.time, required this.onTap});
+  const _TapRow(
+      {required this.tap,
+      required this.time,
+      required this.onTap,
+      this.isNew = false});
 
   final ReceivedTap tap;
+
+  /// New when Taps was opened (already read: shown as new until I leave).
+  final bool isNew;
   final String time;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final unread = !tap.isRead;
+    final unread = !tap.isRead || isNew;
     final first = tap.answers.where((a) => a.answer != null).firstOrNull;
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),

@@ -11,6 +11,7 @@ import 'package:huntr/state/app_state.dart';
 import 'package:huntr/state/messaging_state.dart';
 import 'package:huntr/state/tap_state.dart';
 import 'package:huntr/theme.dart';
+import 'package:huntr/widgets/page_title.dart' show TabShown;
 
 Profile _person(int id, {String name = 'Sam'}) => Profile.nearby({
       'id': id,
@@ -49,6 +50,12 @@ class _FakeTaps extends TapService {
   @override
   Future<void> markRead(String token, int tapId) async =>
       calls.add('read $tapId');
+
+  @override
+  Future<void> markAllRead(String token) async {
+    calls.add('read all');
+    inbox = [for (final t in inbox) t.read()];
+  }
 
   @override
   Future<TapResponse> respond(String token, int tapId,
@@ -184,12 +191,15 @@ void main() {
     });
 
     testWidgets(
-        'unread taps are marked; opening one marks it read; responding '
-        'opens the chat and the tap leaves the inbox', (tester) async {
+        'opening Taps reads them all (the new ones stay marked while it is '
+        'open); responding opens the chat and the tap leaves the inbox',
+        (tester) async {
       final service = _FakeTaps()
         ..inbox = [_tap(1), _tap(2, read: true, name: 'Jo')];
       final taps = await _open(tester, service, const TapsScreen());
-      expect(taps.unreadCount, 1);
+      // the badge clears at once, the backend is told once
+      expect(taps.unreadCount, 0);
+      expect(service.calls.where((c) => c == 'read all'), hasLength(1));
       expect(find.text('Alex tapped you'), findsOneWidget);
       expect(find.text('Jo tapped you'), findsOneWidget);
       expect(find.byKey(const Key('tapUnread-1')), findsOneWidget);
@@ -197,8 +207,8 @@ void main() {
 
       await tester.tap(find.byKey(const Key('tap-1')));
       await tester.pumpAndSettle();
-      expect(service.calls, contains('read 1'));
-      expect(taps.unreadCount, 0);
+      // already read: not told again
+      expect(service.calls, isNot(contains('read 1')));
 
       // nothing written: not sent
       await tester.tap(find.byKey(const Key('tapRespond')));
@@ -213,7 +223,8 @@ void main() {
       expect(taps.taps!.map((t) => t.id), [2]);
     });
 
-    testWidgets('a new tap event reloads the inbox', (tester) async {
+    testWidgets('a new tap while Taps is open is reloaded and read',
+        (tester) async {
       final service = _FakeTaps();
       final taps = await _open(tester, service, const TapsScreen());
       service.calls.clear();
@@ -222,8 +233,17 @@ void main() {
       service.inbox = [_tap(3)];
       taps.handleEvent({'type': 'tap.new', 'tap_id': 3});
       await tester.pumpAndSettle();
-      expect(service.calls, ['inbox']);
+      expect(service.calls, ['inbox', 'read all']);
+      expect(taps.unreadCount, 0);
+      expect(find.byKey(const Key('tapUnread-3')), findsOneWidget);
+    });
+
+    testWidgets('while another tab is shown, taps stay unread', (tester) async {
+      final service = _FakeTaps()..inbox = [_tap(1)];
+      final taps = await _open(
+          tester, service, const TabShown(shown: false, child: TapsScreen()));
       expect(taps.unreadCount, 1);
+      expect(service.calls, isNot(contains('read all')));
     });
   });
 

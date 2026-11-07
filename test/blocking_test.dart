@@ -212,6 +212,11 @@ void main() {
       await tester.longPress(find.byKey(const Key('reactable-1')));
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('reactionBar')), findsNothing);
+      // the history can still be copied, nothing else
+      expect(find.byKey(const Key('messageAction-copy')), findsOneWidget);
+      expect(find.byKey(const Key('messageAction-edit')), findsNothing);
+      await tester.tapAt(const Offset(5, 5));
+      await tester.pumpAndSettle();
       expect(find.byKey(const Key('chatMenu')), findsNothing);
 
       await tester.tap(find.byKey(const Key('chatHeader')));

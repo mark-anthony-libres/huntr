@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../models/models.dart';
@@ -157,11 +159,15 @@ class Avatar extends StatelessWidget {
       required this.profile,
       this.size = 48,
       this.showOnline = true,
+      this.showActive = false,
       this.animateStory = true});
 
   final Profile profile;
   final double size;
   final bool showOnline;
+
+  /// The blue dot, bottom left, while they're recently active (chats).
+  final bool showActive;
 
   /// The story ring's colours turn (off where many are drawn at once over
   /// something costly, like the map).
@@ -202,7 +208,75 @@ class Avatar extends StatelessWidget {
               bottom: 0,
               child: OnlineDot(size: size * 0.28),
             ),
+          if (showActive && profile.activeUntil != null)
+            Positioned(
+              left: 0,
+              bottom: 0,
+              child: RecentlyActiveDot(
+                  until: profile.activeUntil!, size: size * 0.26),
+            ),
         ],
+      ),
+    );
+  }
+}
+
+/// The blue dot of someone recently active: shown until [until], then it
+/// goes by itself (no reload needed).
+class RecentlyActiveDot extends StatefulWidget {
+  const RecentlyActiveDot({super.key, required this.until, this.size = 10});
+
+  final DateTime until;
+  final double size;
+
+  @override
+  State<RecentlyActiveDot> createState() => _RecentlyActiveDotState();
+}
+
+class _RecentlyActiveDotState extends State<RecentlyActiveDot> {
+  Timer? _timer;
+
+  void _schedule() {
+    _timer?.cancel();
+    final left = widget.until.difference(DateTime.now());
+    if (left >= Duration.zero) {
+      // just past the end, so the window's last moment still shows it
+      _timer = Timer(left + const Duration(milliseconds: 1), () {
+        if (mounted) setState(() {});
+      });
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _schedule();
+  }
+
+  @override
+  void didUpdateWidget(RecentlyActiveDot old) {
+    super.didUpdateWidget(old);
+    if (old.until != widget.until) _schedule();
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (DateTime.now().isAfter(widget.until)) return const SizedBox.shrink();
+    return Container(
+      key: const Key('recentlyActiveDot'),
+      width: widget.size,
+      height: widget.size,
+      decoration: BoxDecoration(
+        color: HuntrColors.active,
+        shape: BoxShape.circle,
+        // a dark ring keeps it clear on any picture
+        border: Border.all(color: HuntrColors.night, width: widget.size * 0.2),
       ),
     );
   }

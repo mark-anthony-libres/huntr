@@ -27,7 +27,7 @@ Future<AppState> _openMe(WidgetTester tester,
 void main() {
   testWidgets('the Me screen offers a preview of your profile', (tester) async {
     await _openMe(tester);
-    expect(find.text('See how others see your profile'), findsOneWidget);
+    expect(find.text('Preview my profile'), findsOneWidget);
     expect(find.byKey(const Key('viewMyProfile')), findsOneWidget);
   });
 

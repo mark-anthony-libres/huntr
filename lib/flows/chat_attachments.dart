@@ -74,10 +74,16 @@ Future<void> showAttachMenu(BuildContext context,
                 'Search GIPHY',
               ),
             (
+              'album',
+              Icons.photo_album_outlined,
+              'Send album',
+              'Share a private album, nothing in return'
+            ),
+            (
               'trade',
               Icons.swap_horiz_rounded,
               'Trade album',
-              'Offer one of your private albums'
+              'Swap private albums with them'
             ),
             (
               'media',
@@ -120,7 +126,7 @@ Future<void> showAttachMenu(BuildContext context,
           const Padding(
             padding: EdgeInsets.fromLTRB(16, 8, 16, 0),
             child: Text(
-              'Photos and videos disappear a while after they’re first opened.',
+              'Photos, videos and albums disappear a while after they’re first opened.',
               textAlign: TextAlign.center,
               style: TextStyle(color: HuntrColors.muted, fontSize: 13),
             ),
@@ -133,6 +139,9 @@ Future<void> showAttachMenu(BuildContext context,
   switch (choice) {
     case 'gif':
       onGif?.call();
+    case 'album':
+      await sendAlbum(context,
+          conversationId: conversationId, recipient: recipient);
     case 'trade':
       await offerAlbumTrade(context,
           conversationId: conversationId, recipient: recipient);
@@ -247,6 +256,30 @@ Future<void> offerAlbumTrade(BuildContext context,
       onChosen: (album) => messaging.offerAlbum(
           conversationId, recipient, int.parse(album.id),
           clientId: clientIds.putIfAbsent(album.id, messaging.newClientId)),
+    ),
+  ));
+}
+
+/// Sends one of my albums as it is, nothing in return (the same album can
+/// be sent again any time).
+Future<void> sendAlbum(BuildContext context,
+    {required int conversationId, required Profile recipient}) async {
+  final messaging = MessagingScope.read(context)!;
+  // one id per album chosen while this is open, so a retry is stored once
+  final clientIds = <String, String>{};
+  await Navigator.of(context).push(MaterialPageRoute(
+    fullscreenDialog: true,
+    builder: (_) => AlbumTradeScreen(
+      title: 'Send an album',
+      intro: 'Choose an album to send to ${_name(recipient)}. Nothing comes '
+          'back in return.',
+      note: 'They can open it for a while after they first look at it. '
+          'Your album stays yours.',
+      sendingLabel: 'Sending',
+      onChosen: (album) => messaging.offerAlbum(
+          conversationId, recipient, int.parse(album.id),
+          clientId: clientIds.putIfAbsent(album.id, messaging.newClientId),
+          share: true),
     ),
   ));
 }

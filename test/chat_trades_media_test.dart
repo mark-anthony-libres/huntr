@@ -61,7 +61,8 @@ ChatMessage _trade(int id,
         TradeStatus status = TradeStatus.pending,
         String? returned,
         DateTime? theirsExpiresAt,
-        bool theirsExpired = false}) =>
+        bool theirsExpired = false,
+        bool share = false}) =>
     ChatMessage(
       id: id,
       conversationId: 1,
@@ -95,6 +96,7 @@ ChatMessage _trade(int id,
                 expired: fromMe && theirsExpired),
         canRespond: !fromMe && status == TradeStatus.pending,
         canCancel: status == TradeStatus.pending,
+        isShare: share,
       ),
     );
 
@@ -190,10 +192,15 @@ class _FakeMessaging extends MessagingService {
       {required int recipientId,
       required int albumId,
       required String clientId,
-      int? replyToId}) async {
-    calls.add('offer $albumId $clientId');
+      int? replyToId,
+      bool share = false}) async {
+    calls.add('${share ? 'share' : 'offer'} $albumId $clientId');
     if (offerError != null) throw offerError!;
-    final m = _trade(_nextId++, fromMe: true);
+    // a sent album is done at once; a trade waits for an album back
+    final m = share
+        ? _trade(_nextId++,
+            fromMe: true, status: TradeStatus.completed, share: true)
+        : _trade(_nextId++, fromMe: true);
     history.add(m);
     return m;
   }
@@ -512,6 +519,7 @@ void main() {
       await tester.tap(find.byKey(const Key('attachButton')));
       await tester.pumpAndSettle();
       for (final label in [
+        'Send album',
         'Trade album',
         'Send photo or video',
         'Open camera'
@@ -563,6 +571,44 @@ void main() {
       await tester.tap(find.text('Cancel'));
       await tester.pumpAndSettle();
       expect(find.text('Create an album first'), findsOneWidget);
+    });
+
+    testWidgets('send album: sent at once, nothing back, again any time',
+        (tester) async {
+      final service = _FakeMessaging();
+      await _openChat(tester, _state(service), albums: _FakeAlbums(['Only']));
+      await _attach(tester, 'album');
+      expect(find.text('Send an album'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('tradeAlbum-60')));
+      await tester.pumpAndSettle();
+      expect(service.calls.single, startsWith('share 60 '));
+      expect(find.byType(AlbumTradeScreen), findsNothing);
+      expect(find.textContaining('sent an album', findRichText: true),
+          findsOneWidget);
+      expect(
+          find.textContaining('album trade', findRichText: true), findsNothing);
+      // no waiting for a trade back, nothing to cancel
+      expect(find.byKey(const Key('tradeStatus')), findsNothing);
+      expect(find.textContaining('to trade back'), findsNothing);
+
+      // the same album again: a second send
+      await _attach(tester, 'album');
+      await tester.tap(find.byKey(const Key('tradeAlbum-60')));
+      await tester.pumpAndSettle();
+      expect(
+          service.calls.where((c) => c.startsWith('share 60 ')), hasLength(2));
+    });
+
+    testWidgets('an album sent to me opens at once, with no trade back',
+        (tester) async {
+      final service = _FakeMessaging(history: [
+        _trade(1, fromMe: false, status: TradeStatus.completed, share: true),
+      ]);
+      await _openChat(tester, _state(service));
+      expect(find.byKey(const Key('openTheirs-10')), findsOneWidget);
+      expect(find.byKey(const Key('respondTrade-10')), findsNothing);
+      expect(find.byKey(const Key('tradeBack-10')), findsNothing);
+      expect(find.byKey(const Key('tradeExpiry')), findsOneWidget);
     });
 
     testWidgets('one album is listed too, and offered once chosen',

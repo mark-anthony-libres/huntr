@@ -193,6 +193,21 @@ class TapState extends ChangeNotifier {
     }
   }
 
+  /// I opened Taps: every tap is read, and the badge clears (the backend
+  /// is told once; nothing to do when none is unread).
+  Future<void> markAllRead() async {
+    final current = token();
+    final taps = _taps;
+    if (current == null || taps == null || unreadCount == 0) return;
+    _taps = [for (final t in taps) t.isRead ? t : t.read()];
+    notifyListeners();
+    try {
+      await service.markAllRead(current);
+    } catch (error) {
+      debugPrint('Taps not marked read: $error');
+    }
+  }
+
   /// I opened it (the backend is told once).
   Future<void> markRead(ReceivedTap tap) async {
     final current = token();

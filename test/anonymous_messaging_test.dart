@@ -438,6 +438,7 @@ void main() {
     expect(find.byKey(const Key('attachButton')), findsNothing);
     await tester.enterText(find.byKey(const Key('messageInput')), 'hi Sam');
     await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
     await tester.tap(find.byKey(const Key('sendButton')));
     await tester.pumpAndSettle();
     expect(fake.calls.last, 'anonymous 6 hi Sam');

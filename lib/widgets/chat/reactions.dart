@@ -1,4 +1,6 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../services/huntr_backend.dart';
 import '../../state/app_state.dart';
@@ -35,7 +37,9 @@ class Reactable extends StatefulWidget {
       this.otherName = '',
       this.onQuoteTap,
       this.highlighted = false,
-      this.enabled = true});
+      this.enabled = true,
+      this.onEdit,
+      this.onUnsend});
 
   final ChatMessage message;
 
@@ -64,6 +68,12 @@ class Reactable extends StatefulWidget {
   /// reactions still show).
   final bool enabled;
 
+  /// Edit my message (null: it can't be edited).
+  final VoidCallback? onEdit;
+
+  /// Unsend my message, once confirmed (null: it can't be unsent).
+  final VoidCallback? onUnsend;
+
   @override
   State<Reactable> createState() => _ReactableState();
 }
@@ -86,15 +96,64 @@ class _ReactableState extends State<Reactable> {
 
   static const _swipeToReply = 56.0;
 
-  Future<void> _pick() async {
+  /// What the menu offers for this message besides reactions: Copy for
+  /// text, and Edit / Unsend for my own.
+  List<MessageAction> get _actions => [
+        if (widget.message.copyableText != null) MessageAction.copy,
+        if (widget.onEdit != null) MessageAction.edit,
+        if (widget.onUnsend != null) MessageAction.unsend,
+      ];
+
+  /// The browser's own right-click menu is off while the pointer is over a
+  /// message (ours opens instead); on everywhere else, e.g. in the text box.
+  bool _browserMenuOff = false;
+
+  void _browserMenu({required bool off}) {
+    if (!kIsWeb || off == _browserMenuOff) return;
+    _browserMenuOff = off;
+    off
+        ? BrowserContextMenu.disableContextMenu()
+        : BrowserContextMenu.enableContextMenu();
+  }
+
+  void _hovering(bool hover) {
+    _browserMenu(off: hover);
+    setState(() => _hover = hover);
+  }
+
+  @override
+  void dispose() {
+    _browserMenu(off: false);
+    super.dispose();
+  }
+
+  /// The reaction bar (their messages) and the actions, over the message.
+  Future<void> _pick({bool reactions = true}) async {
     final box = _bubble.currentContext?.findRenderObject() as RenderBox?;
     if (box == null || !box.attached) return;
     final rect = box.localToGlobal(Offset.zero) & box.size;
-    final emoji = await showReactionBar(context,
+    final picked = await showReactionBar(context,
         anchor: rect,
         mine: widget.message.myReaction,
-        alignRight: widget.message.fromMe);
-    if (emoji != null && mounted) widget.onReact(emoji);
+        alignRight: widget.message.fromMe,
+        reactions: reactions && widget.enabled && widget.message.canReact,
+        actions: _actions);
+    if (picked == null || !mounted) return;
+    switch (MessageAction.of(picked)) {
+      case MessageAction.copy:
+        await Clipboard.setData(
+            ClipboardData(text: widget.message.copyableText ?? ''));
+        if (mounted) {
+          ScaffoldMessenger.maybeOf(context)
+              ?.showSnackBar(const SnackBar(content: Text('Copied')));
+        }
+      case MessageAction.edit:
+        widget.onEdit?.call();
+      case MessageAction.unsend:
+        widget.onUnsend?.call();
+      case null:
+        widget.onReact(picked);
+    }
   }
 
   void _swiped(DragEndDetails _) {
@@ -108,7 +167,10 @@ class _ReactableState extends State<Reactable> {
     final me = m.fromMe;
     // my own messages only show the other person's reactions
     final can = widget.enabled && m.canReact;
-    final reply = m.id == null || !widget.enabled ? null : widget.onReply;
+    // long-press / right-click: reactions and actions, when there are any
+    final menu = can || _actions.isNotEmpty;
+    final reply =
+        m.id == null || m.unsent || !widget.enabled ? null : widget.onReply;
     Widget hoverButton(
             {required Key key,
             required String tooltip,
@@ -144,13 +206,13 @@ class _ReactableState extends State<Reactable> {
     ];
     final bubble = GestureDetector(
       key: Key('reactable-${m.id}'),
-      onLongPress: can ? _pick : null,
+      onLongPress: menu ? _pick : null,
       onDoubleTap: can &&
               m.type != ChatMessageType.image &&
               m.type != ChatMessageType.video
           ? _doubleTapped
           : null,
-      onSecondaryTap: can ? _pick : null,
+      onSecondaryTap: menu ? _pick : null,
       onHorizontalDragUpdate: reply == null
           ? null
           : (d) => setState(() =>
@@ -219,8 +281,8 @@ class _ReactableState extends State<Reactable> {
       ],
     );
     return MouseRegion(
-      onEnter: (_) => setState(() => _hover = true),
-      onExit: (_) => setState(() => _hover = false),
+      onEnter: (_) => _hovering(true),
+      onExit: (_) => _hovering(false),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 300),
         decoration: BoxDecoration(
@@ -297,19 +359,48 @@ class ReactionPill extends StatelessWidget {
   }
 }
 
+/// What can be done to a message from its menu (besides reacting).
+enum MessageAction {
+  copy('Copy', Icons.copy_rounded),
+  edit('Edit', Icons.edit_outlined),
+  unsend('Unsend', Icons.undo_rounded, destructive: true);
+
+  const MessageAction(this.label, this.icon, {this.destructive = false});
+
+  final String label;
+  final IconData icon;
+  final bool destructive;
+
+  /// What the overlay returns when it's picked.
+  String get value => 'action:$name';
+
+  /// The action [picked] names (null: an emoji was picked).
+  static MessageAction? of(String picked) =>
+      values.where((a) => a.value == picked).firstOrNull;
+}
+
 /// The emoji bar above (or below, near the top) [anchor]: the quick
-/// reactions, mine highlighted, and + for any emoji. The emoji picked, or
-/// null.
+/// reactions, mine highlighted, and + for any emoji; then [actions] under
+/// the message. The emoji picked, a [MessageAction.value], or null.
+/// Without [reactions] only the actions show.
 Future<String?> showReactionBar(BuildContext context,
-    {required Rect anchor, String? mine, bool alignRight = false}) async {
+    {required Rect anchor,
+    String? mine,
+    bool alignRight = false,
+    bool reactions = true,
+    List<MessageAction> actions = const []}) async {
   final picked = await showGeneralDialog<String>(
     context: context,
     barrierDismissible: true,
     barrierLabel: 'Close reactions',
     barrierColor: Colors.black38,
     transitionDuration: const Duration(milliseconds: 140),
-    pageBuilder: (context, _, __) =>
-        _ReactionBar(anchor: anchor, mine: mine, alignRight: alignRight),
+    pageBuilder: (context, _, __) => _ReactionBar(
+        anchor: anchor,
+        mine: mine,
+        alignRight: alignRight,
+        reactions: reactions,
+        actions: actions),
     transitionBuilder: (context, animation, _, child) => FadeTransition(
       opacity: animation,
       child: ScaleTransition(
@@ -327,11 +418,17 @@ Future<String?> showReactionBar(BuildContext context,
 
 class _ReactionBar extends StatefulWidget {
   const _ReactionBar(
-      {required this.anchor, required this.mine, required this.alignRight});
+      {required this.anchor,
+      required this.mine,
+      required this.alignRight,
+      this.reactions = true,
+      this.actions = const []});
 
   final Rect anchor;
   final String? mine;
   final bool alignRight;
+  final bool reactions;
+  final List<MessageAction> actions;
 
   static const _height = 56.0;
 
@@ -439,17 +536,80 @@ class _ReactionBarState extends State<_ReactionBar> {
     // lined up with the message's own edge (not the screen's: beside a
     // chat list the message is far from it)
     final edge = widget.alignRight ? size.width - anchor.right : anchor.left;
+    final barTop = y.clamp(top + 8, size.height - _ReactionBar._height - 8);
+    // the actions: under the message (and under the bar when it's there
+    // too), kept on screen
+    final actions = widget.actions;
+    final menuHeight = actions.length * 48.0 + 12;
+    final under = widget.reactions && barTop > anchor.top
+        ? barTop + _ReactionBar._height + 8
+        : anchor.bottom + 8;
+    final menuTop = under
+        .clamp(top + 8, size.height - padding.bottom - menuHeight - 8)
+        .toDouble();
+    final side = edge.clamp(12.0, size.width / 2);
     return Stack(children: [
-      Positioned(
-        top: y.clamp(top + 8, size.height - _ReactionBar._height - 8),
-        left: widget.alignRight ? null : edge.clamp(12.0, size.width / 2),
-        right: widget.alignRight ? edge.clamp(12.0, size.width / 2) : null,
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-              maxWidth: size.width - edge.clamp(12.0, size.width / 2) - 12),
-          child: FittedBox(fit: BoxFit.scaleDown, child: bar),
+      if (actions.isNotEmpty)
+        Positioned(
+          top: menuTop,
+          left: widget.alignRight ? null : side,
+          right: widget.alignRight ? side : null,
+          child: Material(
+            key: const Key('messageActions'),
+            color: HuntrColors.surfaceHigh,
+            elevation: 6,
+            borderRadius: BorderRadius.circular(14),
+            clipBehavior: Clip.antiAlias,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: IntrinsicWidth(
+                child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      for (final action in actions)
+                        InkWell(
+                          key: Key('messageAction-${action.name}'),
+                          onTap: () => Navigator.of(context).pop(action.value),
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(
+                                minWidth: 180, minHeight: 48),
+                            child: Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 16),
+                              child: Row(children: [
+                                Icon(action.icon,
+                                    size: 20,
+                                    color: action.destructive
+                                        ? HuntrColors.coral
+                                        : Colors.white),
+                                const SizedBox(width: 14),
+                                Text(action.label,
+                                    style: TextStyle(
+                                        fontSize: 15,
+                                        color: action.destructive
+                                            ? HuntrColors.coral
+                                            : Colors.white)),
+                              ]),
+                            ),
+                          ),
+                        ),
+                    ]),
+              ),
+            ),
+          ),
         ),
-      ),
+      if (widget.reactions)
+        Positioned(
+          top: barTop,
+          left: widget.alignRight ? null : edge.clamp(12.0, size.width / 2),
+          right: widget.alignRight ? edge.clamp(12.0, size.width / 2) : null,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+                maxWidth: size.width - edge.clamp(12.0, size.width / 2) - 12),
+            child: FittedBox(fit: BoxFit.scaleDown, child: bar),
+          ),
+        ),
       // while one is dragged: the bin, to take it off the bar
       if (_dragging != null)
         Positioned(
