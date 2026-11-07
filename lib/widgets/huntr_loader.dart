@@ -58,7 +58,9 @@ class _HuntrLoaderState extends State<HuntrLoader>
   /// A leg: in from [enter] (a fraction of the height), out to [exit].
   static double _legY(double t, double inFrom, double inTo, double outFrom,
       double outTo, double enter, double exit) {
-    if (t < outFrom) return enter * (1 - _arrive.transform(_part(t, inFrom, inTo)));
+    if (t < outFrom) {
+      return enter * (1 - _arrive.transform(_part(t, inFrom, inTo)));
+    }
     return exit * _leave.transform(_part(t, outFrom, outTo));
   }
 
@@ -68,17 +70,18 @@ class _HuntrLoaderState extends State<HuntrLoader>
       offset: Offset(0, dy * size),
       child: ClipRect(
         clipper: _Slice(left, right),
-        child: Image.asset(_mark, width: size, height: size),
+        child: Image.asset(_mark,
+            width: size, height: size, color: HuntrColors.orange),
       ),
     );
   }
 
   Widget _logo(double t) {
     final size = widget.size;
-    final barRight =
-        _barStart + (_barEnd - _barStart) * _draw.transform(_part(t, 0.08, 0.15));
-    final barLeft =
-        _barStart + (_barEnd - _barStart) * _draw.transform(_part(t, 0.34, 0.40));
+    final barRight = _barStart +
+        (_barEnd - _barStart) * _draw.transform(_part(t, 0.08, 0.15));
+    final barLeft = _barStart +
+        (_barEnd - _barStart) * _draw.transform(_part(t, 0.34, 0.40));
     // the light, from beyond the left edge to beyond the right
     final shine = -0.4 + 1.8 * Curves.easeInOut.transform(_part(t, 0.17, 0.30));
     final pieces = Stack(children: [
@@ -129,8 +132,8 @@ class _HuntrLoaderState extends State<HuntrLoader>
               Builder(builder: (context) {
                 // each letter a little after the one before
                 final start = 0.5 + i * 0.023;
-                final shown = Curves.easeOutBack
-                    .transform(_part(t, start, start + 0.08));
+                final shown =
+                    Curves.easeOutBack.transform(_part(t, start, start + 0.08));
                 return Opacity(
                   opacity: shown.clamp(0.0, 1.0),
                   child: Transform.translate(
@@ -157,7 +160,9 @@ class _HuntrLoaderState extends State<HuntrLoader>
           builder: (context, _) {
             if (!_controller.isAnimating) {
               return Image.asset(_mark,
-                  width: widget.size, height: widget.size);
+                  width: widget.size,
+                  height: widget.size,
+                  color: HuntrColors.orange);
             }
             final t = _controller.value;
             // the logo's height throughout; as wide as the word needs
@@ -166,9 +171,8 @@ class _HuntrLoaderState extends State<HuntrLoader>
                   minWidth: widget.size,
                   minHeight: widget.size,
                   maxHeight: widget.size),
-              child: Center(
-                  widthFactor: 1,
-                  child: t < 0.5 ? _logo(t) : _text(t)),
+              child:
+                  Center(widthFactor: 1, child: t < 0.5 ? _logo(t) : _text(t)),
             );
           },
         ),

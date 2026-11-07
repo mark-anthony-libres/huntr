@@ -240,18 +240,6 @@ class _ExploreScreenState extends State<ExploreScreen> {
                   onPressed: () => setState(() => _searching = true),
                 ),
                 const SizedBox(width: 6),
-                if (onBackend && mapEnabled) ...[
-                  IconButton.outlined(
-                    key: const Key('exploreMapToggle'),
-                    tooltip: _mapView ? 'List' : 'Map',
-                    style: _roundButton,
-                    icon: Icon(_mapView
-                        ? Icons.grid_view_rounded
-                        : Icons.map_outlined),
-                    onPressed: () => setState(() => _mapView = !_mapView),
-                  ),
-                  const SizedBox(width: 6),
-                ],
                 IconButton.outlined(
                   tooltip: 'All filters',
                   style: _roundButton,
@@ -305,186 +293,230 @@ class _ExploreScreenState extends State<ExploreScreen> {
       ),
     );
 
+    // ---- floating, bottom right: the map, or back to the list ----
+    final Widget? mapToggle = onBackend && mapEnabled
+        ? FloatingActionButton.small(
+            key: const Key('exploreMapToggle'),
+            tooltip: _mapView ? 'List' : 'Map',
+            backgroundColor: HuntrColors.orange,
+            foregroundColor: Colors.black,
+            onPressed: () => setState(() => _mapView = !_mapView),
+            // the icon turns into the other one
+            child: AnimatedSwitcher(
+              duration: _switchDuration,
+              transitionBuilder: (child, animation) => RotationTransition(
+                turns: Tween(begin: 0.75, end: 1.0).animate(animation),
+                child: ScaleTransition(scale: animation, child: child),
+              ),
+              child: Icon(
+                  _mapView ? Icons.grid_view_rounded : Icons.map_outlined,
+                  key: ValueKey(_mapView),
+                  size: 20),
+            ),
+          )
+        : null;
+
     // ---- the map: the same header and quick filters, then the map ----
+    Widget? map;
     if (_mapView && onBackend && mapEnabled) {
-      return Scaffold(
-        body: SafeArea(
+      map = SafeArea(
+          key: const ValueKey('exploreMapView'),
           bottom: false,
           child: Column(children: [
             header,
             quickFilters,
             Expanded(
               child: ExploreMap(
-                  explore: ServicesScope.exploreOf(context)!, onOpen: _open),
+                  explore: ServicesScope.exploreOf(context)!,
+                  onOpen: _open,
+                  // the zoom buttons sit above the floating List button
+                  controlsBottom: 76),
             ),
-          ]),
-        ),
-      );
+          ]));
     }
 
     return Scaffold(
-      body: SafeArea(
-        bottom: false,
-        child: RefreshIndicator(
-          onRefresh: onBackend ? _loadNearby : app.refresh,
-          color: HuntrColors.orange,
-          child: NotificationListener<ScrollNotification>(
-            onNotification: onBackend ? _onScroll : null,
-            child: CustomScrollView(
-              slivers: [
-                // ---- header ----
-                SliverToBoxAdapter(child: header),
-
-                // ---- the website: get the app (nothing in the apps) ----
-                const SliverToBoxAdapter(child: InstallBanner()),
-
-                // ---- stories: Add Story, Your Story, then people nearby ----
-                if (onBackend && !waiting)
-                  if ((
-                    ServicesScope.storiesOf(context),
-                    ServicesScope.exploreOf(context)
-                  )
-                      case (final stories?, final explore?))
-                    SliverToBoxAdapter(
-                      child: StoryTray(
-                          key: ValueKey('tray-$_trayGeneration'),
-                          service: stories,
-                          explore: explore),
-                    ),
-
-                // ---- quick filters ----
-                SliverToBoxAdapter(child: quickFilters),
-
-                // ---- people who want what I want ----
-                if (!waiting && f.isDefault && app.showVibeBanner)
-                  SliverToBoxAdapter(
-                    child: VibeBanner(
-                      people: [
-                        for (final p in people)
-                          if (p.lookingFor
-                              .intersection(app.myLookingFor)
-                              .isNotEmpty)
-                            p,
-                      ],
-                      onTap: () => app.filters =
-                          f.copyWith(lookingFor: {...app.myLookingFor}),
-                      onHide: () => app.showVibeBanner = false,
-                    ),
-                  ),
-
-                // ---- favorites row ----
-                if (favorites.isNotEmpty && f.isDefault) ...[
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 10, 20, 8),
-                      child: Text('Your favorites',
-                          style: text.titleSmall
-                              ?.copyWith(color: HuntrColors.muted)),
-                    ),
-                  ),
-                  SliverToBoxAdapter(
-                    child: SizedBox(
-                      height: 86,
-                      child: ListView.separated(
-                        scrollDirection: Axis.horizontal,
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        itemCount: favorites.length,
-                        separatorBuilder: (_, __) => const SizedBox(width: 14),
-                        itemBuilder: (_, i) {
-                          final p = favorites[i];
-                          return InkWell(
-                            borderRadius: BorderRadius.circular(40),
-                            onTap: () => _open(p),
-                            child: Column(children: [
-                              Avatar(profile: p, size: 58),
-                              const SizedBox(height: 4),
-                              Text(p.name, style: text.labelSmall),
-                            ]),
-                          );
-                        },
-                      ),
-                    ),
-                  ),
-                ],
-
-                // ---- grid ----
-                if (waiting && _loadError != null)
-                  SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-                    sliver: SliverToBoxAdapter(
-                      child: LoadFailedCard(
-                        title: "Couldn't load people nearby",
-                        message: _loadError!,
-                        onRetry: _loadNearby,
-                        retryKey: const Key('exploreRetry'),
-                      ),
-                    ),
-                  )
-                else if (waiting)
-                  SliverPadding(
-                    padding: EdgeInsets.fromLTRB(side, 10, side, 24),
-                    sliver: SliverGrid.builder(
-                      gridDelegate: grid,
-                      itemCount: columns * 3,
-                      itemBuilder: (_, __) => _TilePlaceholder(square: wall),
-                    ),
-                  )
-                else if (people.isEmpty)
-                  SliverFillRemaining(
-                    hasScrollBody: false,
-                    child: EmptyExplore(
-                      filtered: !f.isDefault,
-                      onClear: () {
-                        _search.clear();
-                        app.filters = const ExploreFilters();
-                      },
-                      onRefresh: onBackend ? _loadNearby : null,
-                    ),
-                  )
-                else
-                  SliverPadding(
-                    padding: EdgeInsets.fromLTRB(side, 10, side, 24),
-                    sliver: SliverGrid.builder(
-                      gridDelegate: grid,
-                      itemCount: people.length,
-                      itemBuilder: (_, i) => layout == ExploreLayout.one
-                          ? ProfileRowTile(
-                              profile: people[i],
-                              favorite: app.isFavorite(people[i].id),
-                              onTap: () => _open(people[i]),
-                            )
-                          : ProfileTile(
-                              profile: people[i],
-                              favorite: app.isFavorite(people[i].id),
-                              layout: layout,
-                              onTap: () => _open(people[i]),
-                            ),
-                    ),
-                  ),
-
-                // ---- the next page, as you reach the end ----
-                if (onBackend && !waiting && _loading)
-                  const SliverToBoxAdapter(
-                    child: Padding(
-                      padding: EdgeInsets.only(bottom: 24),
-                      child: Center(child: CircularProgressIndicator()),
-                    ),
-                  )
-                else if (onBackend && !waiting && _loadError != null)
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                      child: LoadFailedCard(
-                        title: "Couldn't load more people",
-                        message: _loadError!,
-                        onRetry: () => _loadNearby(more: true),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
+      floatingActionButton: mapToggle,
+      // the list and the map fade and settle into each other
+      body: AnimatedSwitcher(
+        duration: _switchDuration,
+        switchInCurve: Curves.easeOutCubic,
+        switchOutCurve: Curves.easeInCubic,
+        transitionBuilder: (child, animation) => FadeTransition(
+          opacity: animation,
+          child: ScaleTransition(
+            scale: Tween(begin: 0.97, end: 1.0).animate(animation),
+            child: child,
           ),
         ),
+        child: map ??
+            SafeArea(
+              key: const ValueKey('exploreListView'),
+              bottom: false,
+              child: RefreshIndicator(
+                onRefresh: onBackend ? _loadNearby : app.refresh,
+                color: HuntrColors.orange,
+                child: NotificationListener<ScrollNotification>(
+                  onNotification: onBackend ? _onScroll : null,
+                  child: CustomScrollView(
+                    slivers: [
+                      // ---- header ----
+                      SliverToBoxAdapter(child: header),
+
+                      // ---- the website: get the app (nothing in the apps) ----
+                      const SliverToBoxAdapter(child: InstallBanner()),
+
+                      // ---- stories: Add Story, Your Story, then people nearby ----
+                      if (onBackend && !waiting)
+                        if ((
+                          ServicesScope.storiesOf(context),
+                          ServicesScope.exploreOf(context)
+                        )
+                            case (final stories?, final explore?))
+                          SliverToBoxAdapter(
+                            child: StoryTray(
+                                key: ValueKey('tray-$_trayGeneration'),
+                                service: stories,
+                                explore: explore),
+                          ),
+
+                      // ---- quick filters ----
+                      SliverToBoxAdapter(child: quickFilters),
+
+                      // ---- people who want what I want ----
+                      if (!waiting && f.isDefault && app.showVibeBanner)
+                        SliverToBoxAdapter(
+                          child: VibeBanner(
+                            people: [
+                              for (final p in people)
+                                if (p.lookingFor
+                                    .intersection(app.myLookingFor)
+                                    .isNotEmpty)
+                                  p,
+                            ],
+                            onTap: () => app.filters =
+                                f.copyWith(lookingFor: {...app.myLookingFor}),
+                            onHide: () => app.showVibeBanner = false,
+                          ),
+                        ),
+
+                      // ---- favorites row ----
+                      if (favorites.isNotEmpty && f.isDefault) ...[
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(20, 10, 20, 8),
+                            child: Text('Your favorites',
+                                style: text.titleSmall
+                                    ?.copyWith(color: HuntrColors.muted)),
+                          ),
+                        ),
+                        SliverToBoxAdapter(
+                          child: SizedBox(
+                            height: 86,
+                            child: ListView.separated(
+                              scrollDirection: Axis.horizontal,
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 16),
+                              itemCount: favorites.length,
+                              separatorBuilder: (_, __) =>
+                                  const SizedBox(width: 14),
+                              itemBuilder: (_, i) {
+                                final p = favorites[i];
+                                return InkWell(
+                                  borderRadius: BorderRadius.circular(40),
+                                  onTap: () => _open(p),
+                                  child: Column(children: [
+                                    Avatar(profile: p, size: 58),
+                                    const SizedBox(height: 4),
+                                    Text(p.name, style: text.labelSmall),
+                                  ]),
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+                      ],
+
+                      // ---- grid ----
+                      if (waiting && _loadError != null)
+                        SliverPadding(
+                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                          sliver: SliverToBoxAdapter(
+                            child: LoadFailedCard(
+                              title: "Couldn't load people nearby",
+                              message: _loadError!,
+                              onRetry: _loadNearby,
+                              retryKey: const Key('exploreRetry'),
+                            ),
+                          ),
+                        )
+                      else if (waiting)
+                        SliverPadding(
+                          padding: EdgeInsets.fromLTRB(side, 10, side, 24),
+                          sliver: SliverGrid.builder(
+                            gridDelegate: grid,
+                            itemCount: columns * 3,
+                            itemBuilder: (_, __) =>
+                                _TilePlaceholder(square: wall),
+                          ),
+                        )
+                      else if (people.isEmpty)
+                        SliverFillRemaining(
+                          hasScrollBody: false,
+                          child: EmptyExplore(
+                            filtered: !f.isDefault,
+                            onClear: () {
+                              _search.clear();
+                              app.filters = const ExploreFilters();
+                            },
+                            onRefresh: onBackend ? _loadNearby : null,
+                          ),
+                        )
+                      else
+                        SliverPadding(
+                          padding: EdgeInsets.fromLTRB(side, 10, side, 24),
+                          sliver: SliverGrid.builder(
+                            gridDelegate: grid,
+                            itemCount: people.length,
+                            itemBuilder: (_, i) => layout == ExploreLayout.one
+                                ? ProfileRowTile(
+                                    profile: people[i],
+                                    favorite: app.isFavorite(people[i].id),
+                                    onTap: () => _open(people[i]),
+                                  )
+                                : ProfileTile(
+                                    profile: people[i],
+                                    favorite: app.isFavorite(people[i].id),
+                                    layout: layout,
+                                    onTap: () => _open(people[i]),
+                                  ),
+                          ),
+                        ),
+
+                      // ---- the next page, as you reach the end ----
+                      if (onBackend && !waiting && _loading)
+                        const SliverToBoxAdapter(
+                          child: Padding(
+                            padding: EdgeInsets.only(bottom: 24),
+                            child: Center(child: CircularProgressIndicator()),
+                          ),
+                        )
+                      else if (onBackend && !waiting && _loadError != null)
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                            child: LoadFailedCard(
+                              title: "Couldn't load more people",
+                              message: _loadError!,
+                              onRetry: () => _loadNearby(more: true),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
       ),
     );
   }
@@ -500,6 +532,9 @@ class _ExploreScreenState extends State<ExploreScreen> {
 
 /// The round, outlined search and filter buttons.
 /// Search, map and filters: compact, so the title beside them has room.
+/// How long the list and the map take to turn into each other.
+const _switchDuration = Duration(milliseconds: 320);
+
 final _roundButton = IconButton.styleFrom(
   fixedSize: const Size(40, 40),
   minimumSize: const Size(40, 40),

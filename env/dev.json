@@ -1,1 +1,1 @@
-{"BACKEND_URL": "http://localhost:18000/api"}
+{"BACKEND_URL": "http://localhost:18000/api", "MAP_ENABLED": true}

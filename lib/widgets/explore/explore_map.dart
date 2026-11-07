@@ -18,22 +18,24 @@ const mapEnabled = bool.fromEnvironment('MAP_ENABLED');
 
 /// Where the map's images come from, set when building (env/*.json):
 ///
-/// - MAPTILER_KEY: MapTiler's plain light map, Dataviz (for the live app;
+/// - MAPTILER_KEY: MapTiler's plain dark map, Dataviz Dark (for the live app;
 ///   restrict the key to HUNTR's domains and app ids in MapTiler's
 ///   dashboard).
 /// - MAP_TILE_URL (+ MAP_TILE_ATTRIBUTION): any other provider.
-/// - neither (development): OpenStreetMap's map, made plain. Its rules don't
+/// - neither (development): OpenStreetMap's map, made dark in the app's
+///   accent. Its rules don't
 ///   allow it for a live app, so set one of the above for production.
 class MapTiles {
   const MapTiles(
-      {required this.url, required this.attributions, this.plain = false});
+      {required this.url, required this.attributions, this.night = false});
 
   /// '' for no map images (e.g. tests).
   final String url;
   final List<String> attributions;
 
-  /// A colourful map made plain: no colour, near white.
-  final bool plain;
+  /// A light, colourful map made dark like the app: near black, with
+  /// streets' names and water in the accent.
+  final bool night;
 
   static const _mapTilerKey = String.fromEnvironment('MAPTILER_KEY');
   static const _customUrl = String.fromEnvironment('MAP_TILE_URL');
@@ -48,14 +50,14 @@ class MapTiles {
     }
     if (_mapTilerKey.isNotEmpty) {
       return const MapTiles(
-          url: 'https://api.maptiler.com/maps/dataviz/{z}/{x}/{y}{r}.png'
+          url: 'https://api.maptiler.com/maps/dataviz-dark/{z}/{x}/{y}{r}.png'
               '?key=$_mapTilerKey',
           attributions: ['MapTiler', 'OpenStreetMap contributors']);
     }
     return const MapTiles(
         url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
         attributions: ['OpenStreetMap contributors'],
-        plain: true);
+        night: true);
   }
 
   static const none = MapTiles(url: '', attributions: []);
@@ -63,11 +65,20 @@ class MapTiles {
 
 /// Explore as a map: the people in the area on screen, from the backend
 /// (never where they really are: it blurs every position to about 500 m),
-/// filtered like the list. Zoomed out, small pins (grouped when they'd
-/// overlap); zoomed in, their photos. Tap someone for their profile.
+/// filtered like the list. Each person is HUNTR's mark (grouped when they'd
+/// overlap, bigger zoomed in; no photos: the map loads none). Tap
+/// someone for their profile.
 class ExploreMap extends StatefulWidget {
   const ExploreMap(
-      {super.key, required this.explore, required this.onOpen, this.tiles});
+      {super.key,
+      required this.explore,
+      required this.onOpen,
+      this.tiles,
+      this.controlsBottom = 40});
+
+  /// How far up from the bottom the zoom buttons sit (clear of anything
+  /// floating there).
+  final double controlsBottom;
 
   final ExploreService explore;
   final void Function(Profile person) onOpen;
@@ -83,6 +94,14 @@ class ExploreMap extends StatefulWidget {
   /// Photos instead of pins from here in.
   static const photoZoom = 14.0;
 
+  /// Narrower than this across (metres), people show their photos: the
+  /// backend's MAP_PHOTOS_WITHIN_METERS (it sends photos only then).
+  static const photosWithinMeters = 1000.0;
+
+  /// How far from me the map goes (km, each way): the backend's
+  /// MAP_REACH_KM.
+  static const reachKm = 100.0;
+
   @override
   State<ExploreMap> createState() => _ExploreMapState();
 }
@@ -95,6 +114,9 @@ class _ExploreMapState extends State<ExploreMap> {
   String? _error;
   Timer? _settle;
   int _asked = 0;
+
+  /// How wide the map on screen is, between the zoom buttons ("3 km").
+  String? _across;
 
   /// Manila, until my own position is known.
   static const _fallback = LatLng(14.5995, 120.9842);
@@ -111,8 +133,20 @@ class _ExploreMapState extends State<ExploreMap> {
     super.dispose();
   }
 
-  /// Once the map stops moving: the people in what's on screen.
-  void _moved() {
+  /// The square [ExploreMap.reachKm] around me.
+  static LatLngBounds _reach(LatLng me) {
+    final lat = ExploreMap.reachKm / 111.32;
+    final lng = lat / math.max(0.01, math.cos(me.latitude * math.pi / 180));
+    return LatLngBounds(LatLng(me.latitude - lat, me.longitude - lng),
+        LatLng(me.latitude + lat, me.longitude + lng));
+  }
+
+  /// Once the map stops moving: the people in what's on screen. Meanwhile,
+  /// how wide it is.
+  void _moved(MapCamera camera) {
+    final across = acrossLabel(
+        camera.center.latitude, camera.zoom, camera.nonRotatedSize.width);
+    if (across != _across) setState(() => _across = across);
     _settle?.cancel();
     _settle = Timer(const Duration(milliseconds: 400), _load);
   }
@@ -149,12 +183,22 @@ class _ExploreMapState extends State<ExploreMap> {
     }
   }
 
-  /// A group: zoom in to separate them, or (already as close as the map
-  /// goes) list them.
+  /// A group: zoom in on it just as far as they spread out (each on their
+  /// own), or as close as the map goes; already there, list them.
   void _openGroup(List<MapPerson> group, LatLng center) {
-    final zoom = _map.camera.zoom;
-    if (zoom < ExploreMap.maxZoom - 0.01) {
-      _map.move(center, math.min(zoom + 2, ExploreMap.maxZoom));
+    final camera = _map.camera;
+    if (camera.zoom < ExploreMap.maxZoom - 0.01) {
+      var zoom = ExploreMap.maxZoom;
+      // half a level at a time, from the next one in
+      for (var z = (camera.zoom * 2).floorToDouble() / 2 + 0.5;
+          z < ExploreMap.maxZoom;
+          z += 0.5) {
+        if (_groupsAt(camera, group, z).length == group.length) {
+          zoom = z;
+          break;
+        }
+      }
+      _map.move(center, zoom);
       return;
     }
     showModalBottomSheet<void>(
@@ -175,7 +219,7 @@ class _ExploreMapState extends State<ExploreMap> {
             for (final p in group)
               ListTile(
                 key: Key('mapGroup-${p.profile.id}'),
-                leading: Avatar(profile: p.profile, size: 44),
+                leading: _MarkMarker(profile: p.profile, size: 44),
                 title: Text(p.profile.nameAndAge.isEmpty
                     ? p.profile.shortName
                     : p.profile.nameAndAge),
@@ -217,14 +261,23 @@ class _ExploreMapState extends State<ExploreMap> {
         mapController: _map,
         options: MapOptions(
           initialCenter: me ?? _fallback,
+          // all of what's shown stays within [reachKm] of me: no panning
+          // past it, and no zooming out wider than it (the backend cuts any
+          // area asked for to it, too)
+          cameraConstraint: me == null
+              ? const CameraConstraint.unconstrained()
+              : CameraConstraint.contain(bounds: _reach(me)),
           initialZoom: ExploreMap.photoZoom,
           minZoom: ExploreMap.minZoom,
           maxZoom: ExploreMap.maxZoom,
-          backgroundColor: _paper,
+          backgroundColor: HuntrColors.night,
           interactionOptions: const InteractionOptions(
               flags: InteractiveFlag.all & ~InteractiveFlag.rotate),
-          onMapReady: _load,
-          onPositionChanged: (_, __) => _moved(),
+          onMapReady: () {
+            _moved(_map.camera);
+            _load();
+          },
+          onPositionChanged: (camera, _) => _moved(camera),
         ),
         children: [
           if (tiles.url.isNotEmpty)
@@ -232,8 +285,8 @@ class _ExploreMapState extends State<ExploreMap> {
             // the map images draw again; and one colour filter for all of
             // them, not one per image
             RepaintBoundary(
-              child: _plainIf(
-                tiles.plain,
+              child: _nightIf(
+                tiles.night,
                 TileLayer(
                   urlTemplate: tiles.url,
                   // sharp images on sharp screens, where the provider has
@@ -248,8 +301,8 @@ class _ExploreMapState extends State<ExploreMap> {
             MarkerLayer(markers: [
               Marker(
                 point: me,
-                width: 22,
-                height: 22,
+                width: 64,
+                height: 64,
                 child: const _MyDot(),
               ),
             ]),
@@ -268,6 +321,11 @@ class _ExploreMapState extends State<ExploreMap> {
             ),
         ],
       ),
+
+      // ---- soft edges: the map fades into the header and the tabs ----
+      const Positioned(left: 0, right: 0, top: 0, child: _Fade(fromTop: true)),
+      const Positioned(
+          left: 0, right: 0, bottom: 0, child: _Fade(fromTop: false)),
 
       // ---- loading, and what the map shows ----
       if (_loading)
@@ -291,7 +349,7 @@ class _ExploreMapState extends State<ExploreMap> {
             text: _error ??
                 (_more
                     ? 'Showing the nearest ${shown.length}. Zoom in for more.'
-                    : 'Spots are approximate, never exact'),
+                    : 'Locations are approximate'),
             error: _error != null,
           ),
         ),
@@ -300,7 +358,7 @@ class _ExploreMapState extends State<ExploreMap> {
       // ---- controls ----
       Positioned(
         right: 12,
-        bottom: 40,
+        bottom: widget.controlsBottom,
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           if (me != null) ...[
             _MapButton(
@@ -311,24 +369,18 @@ class _ExploreMapState extends State<ExploreMap> {
             ),
             const SizedBox(height: 10),
           ],
-          _MapButton(
-              key: const Key('mapZoomIn'),
-              tooltip: 'Zoom in',
-              icon: Icons.add_rounded,
-              onPressed: () => _zoomBy(1)),
-          const SizedBox(height: 6),
-          _MapButton(
-              key: const Key('mapZoomOut'),
-              tooltip: 'Zoom out',
-              icon: Icons.remove_rounded,
-              onPressed: () => _zoomBy(-1)),
+          _ZoomCard(
+            across: _across,
+            onZoomIn: () => _zoomBy(1),
+            onZoomOut: () => _zoomBy(-1),
+          ),
         ]),
       ),
     ]);
   }
 }
 
-/// The people, as pins or photos, grouped where they'd overlap on screen
+/// The people, as HUNTR's mark, grouped where they'd overlap on screen
 /// (tap a group to zoom in on it, or list it).
 class _PeopleLayer extends StatelessWidget {
   const _PeopleLayer(
@@ -342,26 +394,25 @@ class _PeopleLayer extends StatelessWidget {
   Widget build(BuildContext context) {
     final camera = MapCamera.of(context);
     final photos = camera.zoom >= ExploreMap.photoZoom;
-    // one marker per screen cell: closer than this, they'd overlap
-    final cell = photos ? 54.0 : 30.0;
-    final groups = <(int, int), List<MapPerson>>{};
-    for (final p in people) {
-      final at = camera.projectAtZoom(LatLng(p.latitude, p.longitude));
-      groups.putIfAbsent((at.dx ~/ cell, at.dy ~/ cell), () => []).add(p);
-    }
+    // close in: their photos (the backend sends them only then)
+    final faces = acrossMetres(
+            camera.center.latitude, camera.zoom, camera.nonRotatedSize.width) <
+        ExploreMap.photosWithinMeters;
+    final single = faces ? 40.0 : (photos ? 34.0 : 26.0);
+    final groups = _groupsAt(camera, people, camera.zoom);
     return MarkerLayer(markers: [
-      for (final group in groups.values)
+      for (final group in groups)
         if (group.length == 1)
           Marker(
             key: Key('mapPerson-${group.single.profile.id}'),
             point: LatLng(group.single.latitude, group.single.longitude),
-            width: photos ? 48 : 18,
-            height: photos ? 48 : 18,
+            width: single,
+            height: single,
             child: GestureDetector(
               onTap: () => onOpen(group.single.profile),
-              child: photos
-                  ? _PhotoMarker(profile: group.single.profile)
-                  : _Pin(profile: group.single.profile),
+              child: faces && group.single.profile.photoUrls.isNotEmpty
+                  ? _FaceMarker(profile: group.single.profile, size: single)
+                  : _MarkMarker(profile: group.single.profile, size: single),
             ),
           )
         else
@@ -369,27 +420,22 @@ class _PeopleLayer extends StatelessWidget {
     ]);
   }
 
-  /// A group's marker: its key is its own (the first person in it), as no
-  /// two markers may share one.
+  /// Group markers' sizes, smallest to biggest (zoomed out, zoomed in).
+  static const _smallGroup = 32.0;
+  static const _bigGroup = 42.0;
+
+  /// A group's marker: a circle with how many, bigger zoomed in (beside
+  /// the marks) and for more people. Its key is its own (the first person
+  /// in it), as no two markers may share one.
   Marker _cluster(List<MapPerson> group, {required bool photos}) {
     final center = LatLng(
       group.map((p) => p.latitude).reduce((a, b) => a + b) / group.length,
       group.map((p) => p.longitude).reduce((a, b) => a + b) / group.length,
     );
-    if (photos) {
-      // zoomed in: their faces, stacked, and how many
-      return Marker(
-        key: Key('mapCluster-${group.first.profile.id}'),
-        point: center,
-        width: 76,
-        height: 52,
-        child: GestureDetector(
-          onTap: () => onGroup(group, center),
-          child: _FaceStack(group: group),
-        ),
-      );
-    }
-    final size = (30 + 6 * math.log(group.length)).clamp(30, 56).toDouble();
+    final smallest = photos ? 32.0 : 24.0;
+    final size = (smallest + 5 * math.log(group.length))
+        .clamp(smallest, photos ? _bigGroup : _smallGroup)
+        .toDouble();
     return Marker(
       key: Key('mapCluster-${group.first.profile.id}'),
       point: center,
@@ -410,123 +456,231 @@ class _PeopleLayer extends StatelessWidget {
             ],
           ),
           child: Text(group.length > 99 ? '99+' : '${group.length}',
-              style: const TextStyle(
+              key: const Key('mapClusterCount'),
+              style: TextStyle(
                   color: Colors.black,
                   fontWeight: FontWeight.w800,
-                  fontSize: 13)),
+                  fontSize: photos ? 13 : 12)),
         ),
       ),
     );
   }
 }
 
-/// A group, zoomed in: two of their faces overlapping, and the count.
-class _FaceStack extends StatelessWidget {
-  const _FaceStack({required this.group});
+/// [people] as they'd be grouped at [zoom] (the camera's or another):
+/// whose markers would overlap on screen, as one group each:
+/// anyone closer than a marker's width to a group joins it (and groups
+/// that end up that close merge), so no two markers ever overlap.
+List<List<MapPerson>> _groupsAt(
+    MapCamera camera, List<MapPerson> people, double zoom) {
+  // the biggest marker at this zoom, and a little room around it
+  final apart = (zoom >= ExploreMap.photoZoom
+          ? _PeopleLayer._bigGroup
+          : _PeopleLayer._smallGroup) +
+      8;
+  final groups = <({List<MapPerson> people, Offset sum})>[];
+  Offset center(({List<MapPerson> people, Offset sum}) g) =>
+      g.sum / g.people.length.toDouble();
+  for (final p in people) {
+    final at = camera.projectAtZoom(LatLng(p.latitude, p.longitude), zoom);
+    final near = groups.indexWhere((g) => (center(g) - at).distance < apart);
+    if (near < 0) {
+      groups.add((people: [p], sum: at));
+    } else {
+      final g = groups[near];
+      groups[near] = (people: [...g.people, p], sum: g.sum + at);
+    }
+  }
+  // a group's centre moves as people join: merge any now too close
+  for (var merged = true; merged;) {
+    merged = false;
+    for (var i = 0; i < groups.length && !merged; i++) {
+      for (var j = i + 1; j < groups.length; j++) {
+        if ((center(groups[i]) - center(groups[j])).distance < apart) {
+          groups[i] = (
+            people: [...groups[i].people, ...groups[j].people],
+            sum: groups[i].sum + groups[j].sum
+          );
+          groups.removeAt(j);
+          merged = true;
+          break;
+        }
+      }
+    }
+  }
+  return [for (final g in groups) g.people];
+}
 
-  final List<MapPerson> group;
+/// Someone on the map: HUNTR's mark in a dark circle (never their photo, so the map
+/// loads none), ringed in the accent when they have a story I haven't
+/// seen, with the online dot.
+class _MarkMarker extends StatelessWidget {
+  const _MarkMarker({required this.profile, required this.size});
+
+  final Profile profile;
+  final double size;
 
   @override
   Widget build(BuildContext context) {
-    Widget face(Profile p) => DecoratedBox(
+    final story = profile.hasStory && !profile.storySeen;
+    final dot = math.max(9.0, size * 0.3);
+    return SizedBox.square(
+      dimension: size,
+      child: Stack(clipBehavior: Clip.none, children: [
+        Container(
+          width: size,
+          height: size,
+          padding: EdgeInsets.all(size * 0.22),
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            border: Border.all(color: Colors.white, width: 2),
-            boxShadow: const [BoxShadow(color: Colors.black38, blurRadius: 5)],
+            color: HuntrColors.surface,
+            border: Border.all(
+                color: story
+                    ? HuntrColors.orange
+                    : Colors.white.withValues(alpha: 0.85),
+                width: story ? 2.5 : 1.5),
+            boxShadow: const [BoxShadow(color: Colors.black54, blurRadius: 6)],
           ),
-          child: Avatar(
-              profile: p, size: 42, showOnline: false, animateStory: false),
-        );
-    return Stack(clipBehavior: Clip.none, children: [
-      Positioned(left: 22, top: 0, child: face(group[1].profile)),
-      Positioned(left: 0, top: 4, child: face(group[0].profile)),
-      Positioned(
-        right: 0,
-        bottom: 0,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-          decoration: BoxDecoration(
-            gradient: HuntrColors.accentGradient,
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: Colors.white, width: 2),
-          ),
-          child: Text('${group.length}',
-              key: const Key('mapClusterCount'),
-              style: const TextStyle(
-                  color: Colors.black,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 12)),
+          child: Image.asset('assets/huntr_mark.png',
+              color: HuntrColors.orange, filterQuality: FilterQuality.medium),
         ),
-      ),
-    ]);
-  }
-}
-
-/// Zoomed out: a small dot - green online, orange with a story, else grey.
-class _Pin extends StatelessWidget {
-  const _Pin({required this.profile});
-
-  final Profile profile;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = profile.online
-        ? HuntrColors.online
-        : profile.hasStory && !profile.storySeen
-            ? HuntrColors.orange
-            : const Color(0xFF6B6F7A);
-    return Container(
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: color,
-        border: Border.all(color: Colors.white, width: 3),
-        boxShadow: const [
-          BoxShadow(color: Colors.black38, blurRadius: 5, offset: Offset(0, 1)),
-        ],
-      ),
+        if (profile.online)
+          Positioned(
+            right: 0,
+            bottom: 0,
+            child: Container(
+              width: dot,
+              height: dot,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: HuntrColors.online,
+                border: Border.all(color: HuntrColors.night, width: 2),
+              ),
+            ),
+          ),
+      ]),
     );
   }
 }
 
-/// Zoomed in: their photo (with the online dot and story ring).
-class _PhotoMarker extends StatelessWidget {
-  const _PhotoMarker({required this.profile});
+/// Close in: their photo (with the online dot and a still story ring:
+/// dozens of spinning ones would redraw the whole map every frame).
+class _FaceMarker extends StatelessWidget {
+  const _FaceMarker({required this.profile, required this.size});
 
   final Profile profile;
+  final double size;
 
   @override
   Widget build(BuildContext context) => DecoratedBox(
+        key: const Key('mapFace'),
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           border: profile.hasStory
               ? null
               : Border.all(
-                  color: Colors.white.withValues(alpha: 0.85), width: 2),
+                  color: Colors.white.withValues(alpha: 0.85), width: 1.5),
           boxShadow: const [BoxShadow(color: Colors.black54, blurRadius: 6)],
         ),
-        // a still ring: dozens of spinning ones would redraw the whole map
-        // every frame
-        child: Avatar(profile: profile, size: 48, animateStory: false),
+        child: Avatar(profile: profile, size: size, animateStory: false),
       );
 }
 
-/// Where I am (only my own, exact position, to me).
-class _MyDot extends StatelessWidget {
+/// Where I am (only my own, exact position, to me): a dot in the accent
+/// with a soft ring pulsing out of it (still when the device asks for
+/// less motion).
+class _MyDot extends StatefulWidget {
   const _MyDot();
 
   @override
-  Widget build(BuildContext context) => Container(
-        key: const Key('mapMyDot'),
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: HuntrColors.orange,
-          border: Border.all(color: Colors.white, width: 3),
-          boxShadow: [
-            BoxShadow(
-                color: HuntrColors.orange.withValues(alpha: 0.6),
-                blurRadius: 12,
-                spreadRadius: 2),
-          ],
+  State<_MyDot> createState() => _MyDotState();
+}
+
+class _MyDotState extends State<_MyDot> with SingleTickerProviderStateMixin {
+  late final _pulse = AnimationController(
+      vsync: this, duration: const Duration(milliseconds: 2200));
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final still = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    if (still) {
+      _pulse.stop();
+    } else if (!_pulse.isAnimating) {
+      _pulse.repeat();
+    }
+  }
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = HuntrColors.orange;
+    return RepaintBoundary(
+      child: Stack(alignment: Alignment.center, children: [
+        AnimatedBuilder(
+          animation: _pulse,
+          builder: (context, _) {
+            final t = Curves.easeOut.transform(_pulse.value);
+            return Container(
+              width: 20 + 44 * t,
+              height: 20 + 44 * t,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: accent.withValues(alpha: 0.28 * (1 - t)),
+                border: Border.all(
+                    color: accent.withValues(alpha: 0.5 * (1 - t)), width: 1.5),
+              ),
+            );
+          },
+        ),
+        Container(
+          key: const Key('mapMyDot'),
+          width: 20,
+          height: 20,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: accent,
+            border: Border.all(color: Colors.white, width: 3),
+            boxShadow: [
+              BoxShadow(
+                  color: accent.withValues(alpha: 0.6),
+                  blurRadius: 12,
+                  spreadRadius: 1),
+              const BoxShadow(color: Colors.black54, blurRadius: 4),
+            ],
+          ),
+        ),
+      ]),
+    );
+  }
+}
+
+/// Where the map meets the header (top) or the tabs (bottom): a short
+/// fade from the app's night, so the map has no hard edge.
+class _Fade extends StatelessWidget {
+  const _Fade({required this.fromTop});
+
+  final bool fromTop;
+
+  @override
+  Widget build(BuildContext context) => IgnorePointer(
+        child: Container(
+          height: fromTop ? 28 : 20,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: fromTop ? Alignment.topCenter : Alignment.bottomCenter,
+              end: fromTop ? Alignment.bottomCenter : Alignment.topCenter,
+              colors: [
+                HuntrColors.night.withValues(alpha: 0.9),
+                HuntrColors.night.withValues(alpha: 0),
+              ],
+            ),
+          ),
         ),
       );
 }
@@ -564,6 +718,97 @@ class _Note extends StatelessWidget {
       );
 }
 
+/// Metres across a map this [width] (logical pixels) wide at this [zoom]
+/// and [latitude] (the web map's projection).
+double acrossMetres(double latitude, double zoom, double width) =>
+    156543.03392 *
+    math.cos(latitude * math.pi / 180) /
+    math.pow(2, zoom) *
+    width;
+
+/// How far it is across a map this [width] (logical pixels) wide at this
+/// [zoom] and [latitude]: "800 m", "3 km", "25 km".
+String acrossLabel(double latitude, double zoom, double width) {
+  final metres = acrossMetres(latitude, zoom, width);
+  if (metres < 1000) return '${(metres / 50).round() * 50} m';
+  final km = metres / 1000;
+  return km < 10
+      ? '${km.toStringAsFixed(1).replaceAll('.0', '')} km'
+      : '${km.round()} km';
+}
+
+/// Zoom in, how wide the map shown is, zoom out: one card.
+class _ZoomCard extends StatelessWidget {
+  const _ZoomCard(
+      {required this.across, required this.onZoomIn, required this.onZoomOut});
+
+  /// "3.7 km" (null until the map is ready).
+  final String? across;
+  final VoidCallback onZoomIn;
+  final VoidCallback onZoomOut;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget button(Key key, String tooltip, IconData icon, VoidCallback tap) =>
+        IconButton(
+          key: key,
+          tooltip: tooltip,
+          onPressed: tap,
+          style: IconButton.styleFrom(
+            foregroundColor: Colors.white,
+            fixedSize: const Size(46, 42),
+            shape: const RoundedRectangleBorder(),
+          ),
+          icon: Icon(icon, size: 22),
+        );
+    const line = SizedBox(
+        width: 26, child: Divider(height: 1, color: HuntrColors.border));
+    return Container(
+      width: 46,
+      clipBehavior: Clip.antiAlias,
+      decoration: _floating(radius: 23),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        button(const Key('mapZoomIn'), 'Zoom in', Icons.add_rounded, onZoomIn),
+        if (across case final text?) ...[
+          line,
+          Tooltip(
+            key: const Key('mapAcross'),
+            message: 'Width of the map shown',
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Column(children: [
+                FittedBox(
+                  child: Text(text,
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 11.5)),
+                ),
+                const Text('across',
+                    style: TextStyle(color: HuntrColors.muted, fontSize: 9)),
+              ]),
+            ),
+          ),
+        ],
+        line,
+        button(const Key('mapZoomOut'), 'Zoom out', Icons.remove_rounded,
+            onZoomOut),
+      ]),
+    );
+  }
+}
+
+/// Things floating over the map: the app's surface, a hairline edge and a
+/// soft shadow.
+BoxDecoration _floating({required double radius}) => BoxDecoration(
+      color: HuntrColors.surface.withValues(alpha: 0.94),
+      borderRadius: BorderRadius.circular(radius),
+      border: Border.all(color: HuntrColors.border),
+      boxShadow: const [
+        BoxShadow(color: Colors.black54, blurRadius: 12, offset: Offset(0, 4)),
+      ],
+    );
+
 class _MapButton extends StatelessWidget {
   const _MapButton(
       {super.key,
@@ -576,32 +821,51 @@ class _MapButton extends StatelessWidget {
   final VoidCallback onPressed;
 
   @override
-  Widget build(BuildContext context) => IconButton(
-        tooltip: tooltip,
-        onPressed: onPressed,
-        style: IconButton.styleFrom(
-          backgroundColor: HuntrColors.surface,
-          foregroundColor: Colors.white,
-          side: const BorderSide(color: HuntrColors.border),
-          fixedSize: const Size(46, 46),
+  Widget build(BuildContext context) => DecoratedBox(
+        decoration: _floating(radius: 23),
+        child: IconButton(
+          tooltip: tooltip,
+          onPressed: onPressed,
+          style: IconButton.styleFrom(
+            foregroundColor: HuntrColors.orange,
+            fixedSize: const Size(46, 46),
+          ),
+          icon: Icon(icon, size: 22),
         ),
-        icon: Icon(icon),
       );
 }
 
-/// The map's ground while images load.
-const _paper = Color(0xFFF4F5F7);
+/// A light map made dark ([night]): its brightness turned around (light
+/// ground goes near black, dark names go bright) and coloured from the
+/// app's night towards its accent, so it wears the chosen theme.
+Widget _nightIf(bool night, Widget map) {
+  if (!night) return map;
+  final accent = HuntrColors.orange;
+  final ground = HuntrColors.night;
+  // per channel: the ground, plus (how dark it was) x (a little grey and
+  // half the accent)
+  List<double> row(double accentChannel, double groundChannel) {
+    final reach = 0.35 * 255 + 0.45 * accentChannel * 255;
+    return [
+      -reach * 0.2126 / 255,
+      -reach * 0.7152 / 255,
+      -reach * 0.0722 / 255,
+      0,
+      groundChannel * 255 + reach,
+    ];
+  }
 
-/// A colourful map made plain ([plain]): grey, then lightened to near
-/// white, so streets stay readable and people stand out.
-Widget _plainIf(bool plain, Widget map) => !plain
-    ? map
-    : ColorFiltered(
-        colorFilter: const ColorFilter.matrix([
-          0.12, 0.38, 0.04, 0, 118, //
-          0.12, 0.38, 0.04, 0, 118, //
-          0.12, 0.38, 0.04, 0, 120, //
-          0, 0, 0, 1, 0,
-        ]),
-        child: map,
-      );
+  return ColorFiltered(
+    colorFilter: ColorFilter.matrix([
+      ...row(accent.r, ground.r),
+      ...row(accent.g, ground.g),
+      ...row(accent.b, ground.b),
+      0,
+      0,
+      0,
+      1,
+      0,
+    ]),
+    child: map,
+  );
+}

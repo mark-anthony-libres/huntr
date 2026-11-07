@@ -7,6 +7,7 @@ import '../data/sample_data.dart';
 import '../models/models.dart';
 import '../services/device_preferences.dart';
 import '../services/notification_sound.dart';
+import '../services/splash_theme/splash_theme.dart';
 import '../services/huntr_backend.dart' show AnonymousName;
 import '../theme.dart';
 
@@ -385,6 +386,7 @@ class AppState extends ChangeNotifier {
     if (appearance.value.id == palette.id) return;
     HuntrColors.use(palette);
     appearance.value = palette;
+    rememberSplashTheme(palette);
     unawaited(devicePreferences?.saveThemeId(palette.id).catchError(
         (Object error) => debugPrint('Theme choice not saved: $error')));
   }
@@ -469,6 +471,8 @@ class AppState extends ChangeNotifier {
         HuntrColors.use(palette);
         appearance.value = palette;
       }
+      // the web page before the app starts wears it next time
+      rememberSplashTheme(appearance.value);
     } catch (error) {
       debugPrint('Device preferences not loaded: $error');
     }
