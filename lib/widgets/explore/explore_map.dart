@@ -94,14 +94,6 @@ class ExploreMap extends StatefulWidget {
   /// Photos instead of pins from here in.
   static const photoZoom = 14.0;
 
-  /// Narrower than this across (metres), people show their photos: the
-  /// backend's MAP_PHOTOS_WITHIN_METERS (it sends photos only then).
-  static const photosWithinMeters = 1000.0;
-
-  /// How far from me the map goes (km, each way): the backend's
-  /// MAP_REACH_KM.
-  static const reachKm = 100.0;
-
   @override
   State<ExploreMap> createState() => _ExploreMapState();
 }
@@ -118,6 +110,12 @@ class _ExploreMapState extends State<ExploreMap> {
   /// How wide the map on screen is, between the zoom buttons ("3 km").
   String? _across;
 
+  /// How far from me the map goes (km, each way) and under how wide it
+  /// shows photos (metres): the backend's settings, from its answer (until
+  /// then the map isn't held in; the backend keeps to them anyway).
+  double? _reachKm;
+  double? _photosWithinMeters;
+
   /// Manila, until my own position is known.
   static const _fallback = LatLng(14.5995, 120.9842);
 
@@ -133,9 +131,9 @@ class _ExploreMapState extends State<ExploreMap> {
     super.dispose();
   }
 
-  /// The square [ExploreMap.reachKm] around me.
-  static LatLngBounds _reach(LatLng me) {
-    final lat = ExploreMap.reachKm / 111.32;
+  /// The square [km] around me.
+  static LatLngBounds _reach(LatLng me, double km) {
+    final lat = km / 111.32;
     final lng = lat / math.max(0.01, math.cos(me.latitude * math.pi / 180));
     return LatLngBounds(LatLng(me.latitude - lat, me.longitude - lng),
         LatLng(me.latitude + lat, me.longitude + lng));
@@ -168,6 +166,8 @@ class _ExploreMapState extends State<ExploreMap> {
       setState(() {
         _people = found.people;
         _more = found.more;
+        _reachKm = found.reachKm ?? _reachKm;
+        _photosWithinMeters = found.photosWithinMeters ?? _photosWithinMeters;
         _error = null;
       });
     } on SessionRejectedException {
@@ -261,12 +261,14 @@ class _ExploreMapState extends State<ExploreMap> {
         mapController: _map,
         options: MapOptions(
           initialCenter: me ?? _fallback,
-          // all of what's shown stays within [reachKm] of me: no panning
-          // past it, and no zooming out wider than it (the backend cuts any
-          // area asked for to it, too)
-          cameraConstraint: me == null
-              ? const CameraConstraint.unconstrained()
-              : CameraConstraint.contain(bounds: _reach(me)),
+          // all of what's shown stays within the backend's reach of me: no
+          // panning past it, and no zooming out wider than it (the backend
+          // cuts any area asked for to it, too)
+          cameraConstraint: switch ((me, _reachKm)) {
+            (final me?, final km?) =>
+              CameraConstraint.contain(bounds: _reach(me, km)),
+            _ => const CameraConstraint.unconstrained(),
+          },
           initialZoom: ExploreMap.photoZoom,
           minZoom: ExploreMap.minZoom,
           maxZoom: ExploreMap.maxZoom,
@@ -308,6 +310,7 @@ class _ExploreMapState extends State<ExploreMap> {
             ]),
           _PeopleLayer(
             people: shown,
+            photosWithinMeters: _photosWithinMeters,
             onOpen: widget.onOpen,
             onGroup: _openGroup,
           ),
@@ -384,9 +387,15 @@ class _ExploreMapState extends State<ExploreMap> {
 /// (tap a group to zoom in on it, or list it).
 class _PeopleLayer extends StatelessWidget {
   const _PeopleLayer(
-      {required this.people, required this.onOpen, required this.onGroup});
+      {required this.people,
+      required this.photosWithinMeters,
+      required this.onOpen,
+      required this.onGroup});
 
   final List<MapPerson> people;
+
+  /// Narrower than this across, their photos (null: not known yet).
+  final double? photosWithinMeters;
   final void Function(Profile) onOpen;
   final void Function(List<MapPerson> group, LatLng center) onGroup;
 
@@ -395,9 +404,11 @@ class _PeopleLayer extends StatelessWidget {
     final camera = MapCamera.of(context);
     final photos = camera.zoom >= ExploreMap.photoZoom;
     // close in: their photos (the backend sends them only then)
-    final faces = acrossMetres(
-            camera.center.latitude, camera.zoom, camera.nonRotatedSize.width) <
-        ExploreMap.photosWithinMeters;
+    final within = photosWithinMeters;
+    final faces = within != null &&
+        acrossMetres(camera.center.latitude, camera.zoom,
+                camera.nonRotatedSize.width) <
+            within;
     final single = faces ? 40.0 : (photos ? 34.0 : 26.0);
     final groups = _groupsAt(camera, people, camera.zoom);
     return MarkerLayer(markers: [

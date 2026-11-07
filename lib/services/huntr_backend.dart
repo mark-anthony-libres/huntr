@@ -3586,10 +3586,21 @@ class MapPerson {
 /// The people in an area of the map ([more]: there were too many; the
 /// nearest are these).
 class MapArea {
-  const MapArea({required this.people, required this.more});
+  const MapArea(
+      {required this.people,
+      required this.more,
+      this.reachKm,
+      this.photosWithinMeters});
 
   final List<MapPerson> people;
   final bool more;
+
+  /// How far from me the map goes (km, each way; MAP_REACH_KM).
+  final double? reachKm;
+
+  /// Under this wide (metres) people come with photos
+  /// (MAP_PHOTOS_WITHIN_METERS).
+  final double? photosWithinMeters;
 }
 
 /// GET .../explore/map: the people in this area, for Explore's map.
@@ -3617,6 +3628,8 @@ Future<MapArea> fetchMapArea(
             MapPerson.fromJson(p as Map<String, dynamic>),
         ],
         more: data['more'] as bool? ?? false,
+        reachKm: (data['reach_km'] as num?)?.toDouble(),
+        photosWithinMeters: (data['photos_within_meters'] as num?)?.toDouble(),
       ),
     );
 
