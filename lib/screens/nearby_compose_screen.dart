@@ -14,15 +14,16 @@ import '../theme.dart';
 import '../widgets/chat/picked_video_io.dart'
     if (dart.library.js_interop) '../widgets/chat/picked_video_web.dart';
 import '../widgets/load_more_row.dart';
+import '../widgets/nearby/nearby_media.dart' show NearbyMediaGrid;
 import '../widgets/nearby/nearby_post_card.dart';
 import '../widgets/nearby/nearby_tags.dart';
 import 'chats_screen.dart' show timeLabel;
 import 'nearby_post_screen.dart';
 
-/// New thread (verified members): what's on my mind (up to
-/// [NearbyService.maxLength] characters), one photo or video (optional),
-/// and how far it reaches, then Post - it goes up under a random name and
-/// animal, and stays until it's deleted. A chosen photo or video starts
+/// New thread: what's on my mind (up to [NearbyService.maxLength]
+/// characters), one photo or video (optional; verified members), and how
+/// far it reaches, then Post - it goes up under a random name and animal,
+/// for 7 days (a verified member's, until it's deleted). A chosen photo or video starts
 /// uploading at once (app-wide, [NearbyUploads]), and Post doesn't wait for
 /// it: the thread shows how it's going. Below, my live threads (open one,
 /// or delete it). Pops with the new thread once it's up.
@@ -359,30 +360,8 @@ class _NearbyComposeScreenState extends State<NearbyComposeScreen> {
     final over = count > NearbyService.maxLength;
     final mine = _mine;
     final now = DateTime.now();
-    // only verified members post (the backend says so too)
-    if (!AppScope.of(context).myVerified) {
-      return Scaffold(
-        appBar: AppBar(
-          leading: IconButton(
-            key: const Key('nearbyComposeClose'),
-            tooltip: 'Close',
-            icon: const Icon(Icons.close_rounded),
-            onPressed: () => Navigator.of(context).pop(),
-          ),
-          title: const Text('New thread'),
-          centerTitle: true,
-        ),
-        body: const Center(
-          child: Padding(
-            padding: EdgeInsets.all(32),
-            child: Text('Only verified members can post in Threads.',
-                key: Key('nearbyVerifiedOnly'),
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 16, color: HuntrColors.muted)),
-          ),
-        ),
-      );
-    }
+    // only verified members add a photo or video (the backend says so too)
+    final verified = AppScope.of(context).myVerified;
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
@@ -455,18 +434,29 @@ class _NearbyComposeScreenState extends State<NearbyComposeScreen> {
                 ),
                 const SizedBox(height: 12),
 
-                // ---- one photo or video (optional) ----
-                _Attachment(
-                  mediaId: _mediaId,
-                  choosing: _choosing,
-                  localPhoto: _localPhoto,
-                  localVideoPath: _localVideoPath,
-                  video: _pickedVideo,
-                  onPick: _posting ? null : _pickMedia,
-                  onRemove: _posting ? null : _removeMedia,
-                  onRetry: _retryMedia,
-                  onVideoLength: _checkVideoLength,
-                ),
+                // ---- one photo or video (optional; verified members) ----
+                if (!verified)
+                  const Padding(
+                    key: Key('nearbyMediaVerifiedOnly'),
+                    padding: EdgeInsets.symmetric(horizontal: 4),
+                    child: Text(
+                        'Your thread stays up for 7 days. Verified members '
+                        'can add a photo or video, and their threads stay up.',
+                        style:
+                            TextStyle(color: HuntrColors.muted, fontSize: 13)),
+                  )
+                else
+                  _Attachment(
+                    mediaId: _mediaId,
+                    choosing: _choosing,
+                    localPhoto: _localPhoto,
+                    localVideoPath: _localVideoPath,
+                    video: _pickedVideo,
+                    onPick: _posting ? null : _pickMedia,
+                    onRemove: _posting ? null : _removeMedia,
+                    onRetry: _retryMedia,
+                    onVideoLength: _checkVideoLength,
+                  ),
                 if (_mediaError != null)
                   Padding(
                     padding: const EdgeInsets.only(top: 8),
@@ -631,7 +621,7 @@ class _NearbyComposeScreenState extends State<NearbyComposeScreen> {
 }
 
 /// One of my threads: its random name and animal on that thread, how long
-/// ago, what I wrote, and its hearts and comments.
+/// ago, what I wrote, its photo or video, and its hearts and comments.
 class _MyPost extends StatelessWidget {
   const _MyPost({
     super.key,
@@ -684,8 +674,19 @@ class _MyPost extends StatelessWidget {
                                 color: HuntrColors.muted, fontSize: 13)),
                       ]),
                       const SizedBox(height: 6),
-                      Text(post.body,
-                          style: const TextStyle(fontSize: 15.5, height: 1.4)),
+                      if (post.body.isNotEmpty)
+                        Text(post.body,
+                            style:
+                                const TextStyle(fontSize: 15.5, height: 1.4)),
+                      // its photo or video (or how its upload is going)
+                      if (post.media.isNotEmpty)
+                        Padding(
+                          padding: EdgeInsets.only(
+                              top: post.body.isEmpty ? 0 : 10, right: 12),
+                          child: NearbyMediaGrid(
+                              key: Key('nearbyMineMedia-${post.id}'),
+                              media: post.media),
+                        ),
                       const SizedBox(height: 10),
                       Row(children: [
                         const Icon(Icons.favorite_border_rounded,

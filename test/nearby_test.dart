@@ -12,8 +12,10 @@ import 'package:huntr/screens/nearby_screen.dart';
 import 'package:huntr/services/huntr_backend.dart';
 import 'package:huntr/services/nearby_service.dart';
 import 'package:huntr/services/nearby_uploads.dart';
+import 'package:huntr/widgets/nearby/nearby_media.dart' show NearbyMediaViewer;
 import 'package:huntr/services/services_scope.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:visibility_detector/visibility_detector.dart';
 import 'package:huntr/state/app_state.dart';
 import 'package:huntr/theme.dart';
 
@@ -194,15 +196,15 @@ class _FakeNearby extends NearbyService {
 }
 
 Future<void> _open(WidgetTester tester, _FakeNearby service,
-    {Widget? home}) async {
+    {Widget? home, bool verified = true}) async {
   tester.view.physicalSize = const Size(500, 1400);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   await tester.pumpWidget(AppScope(
-    // only verified members post in Threads
+    // only verified members add a photo or video
     state: AppState()
       ..startSession('token')
-      ..myVerified = true,
+      ..myVerified = verified,
     child: ServicesScope(
       profiles: null,
       agreements: null,
@@ -293,14 +295,19 @@ void main() {
   testWidgets('a new thread: counter, limit, distance, and my posts below',
       (tester) async {
     final service = _FakeNearby()
-      ..posts = [_post(1), _post(2, name: 'NightCat', mine: true, comments: 7)];
+      ..posts = [
+        _post(1),
+        _post(2, name: 'NightCat', mine: true, comments: 7)
+            .copyWith(media: [_photo(9, 'uploading')]),
+      ];
     await _open(tester, service);
     await tester.tap(find.byKey(const Key('nearbyCompose')));
     await tester.pumpAndSettle();
     expect(find.text('New thread'), findsOneWidget);
-    // my posts, below
+    // my posts, below, with their photo or video
     expect(find.text('My posts'), findsOneWidget);
     expect(find.byKey(const Key('nearbyMine-2')), findsOneWidget);
+    expect(find.byKey(const Key('nearbyMineMedia-2')), findsOneWidget);
     expect(find.byKey(const Key('nearbyMine-1')), findsNothing);
     expect(find.text('Within 5 km'), findsOneWidget);
     final post = find.byKey(const Key('nearbyPost'));
@@ -327,6 +334,20 @@ void main() {
     final mine = tester.getTopLeft(find.byKey(const Key('nearbyPost-50'))).dy;
     expect(mine,
         lessThan(tester.getTopLeft(find.byKey(const Key('nearbyPost-1'))).dy));
+  });
+
+  testWidgets('not verified: text only, no photo or video', (tester) async {
+    final service = _FakeNearby();
+    await _open(tester, service, verified: false);
+    await tester.tap(find.byKey(const Key('nearbyCompose')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('nearbyAddMedia')), findsNothing);
+    expect(find.byKey(const Key('nearbyMediaVerifiedOnly')), findsOneWidget);
+    await tester.enterText(find.byKey(const Key('nearbyText')), 'Hello');
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('nearbyPost')));
+    await tester.pumpAndSettle();
+    expect(service.calls, contains('post 5000 null Hello'));
   });
 
   testWidgets(
@@ -470,6 +491,40 @@ void main() {
     await tester.pumpAndSettle();
     expect(service.calls.last, 'comment 1 10 Thanks!');
     expect(find.byKey(const Key('nearbyReplyingTo')), findsNothing);
+  });
+
+  testWidgets(
+      'a video in the feed: on black, muted until unmuted, a tap opens it '
+      'full screen', (tester) async {
+    VisibilityDetectorController.instance.updateInterval = Duration.zero;
+    final service = _FakeNearby()
+      ..posts = [
+        _post(1).copyWith(media: const [
+          NearbyMedia(
+              id: 4,
+              isVideo: true,
+              url: 'https://cdn/v4.mp4',
+              previewUrl: 'https://cdn/v4.webp',
+              width: 720,
+              height: 1280,
+              duration: Duration(seconds: 7)),
+        ]),
+      ];
+    await _open(tester, service);
+    final mute = find.byKey(const Key('nearbyMediaMute-4'));
+    expect(mute, findsOneWidget);
+    expect(find.byTooltip('Unmute'), findsOneWidget);
+    expect(find.text('0:07'), findsOneWidget);
+    await tester.tap(mute);
+    await tester.pump();
+    expect(find.byTooltip('Mute'), findsOneWidget);
+    await tester.tap(mute); // back to muted for the other tests
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('nearbyMedia-4')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.byType(NearbyMediaViewer), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
   });
 
   testWidgets('hearts at once; delete mine; report theirs', (tester) async {

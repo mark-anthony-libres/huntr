@@ -1,7 +1,6 @@
-import 'dart:ui' show ImageFilter;
-
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
+import 'package:visibility_detector/visibility_detector.dart';
 
 import '../../flows/chat_attachments.dart' show ChatMediaPicker;
 import '../../services/huntr_backend.dart';
@@ -47,8 +46,7 @@ class _Tile extends StatelessWidget {
   final VoidCallback onTap;
   final int more;
 
-  /// Shown whole (not cropped), on a blurred copy of itself: a tall one in
-  /// a square.
+  /// Shown whole (not cropped), on black: a tall one in a square.
   final bool whole;
 
   @override
@@ -59,16 +57,16 @@ class _Tile extends StatelessWidget {
             ? _UploadTile(media: media)
             : Stack(fit: StackFit.expand, children: [
                 if (whole) ...[
-                  ImageFiltered(
-                    imageFilter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-                    child: _picture(media.previewUrl),
-                  ),
-                  const ColoredBox(color: Color(0x66000000)),
+                  const ColoredBox(color: Colors.black),
                   _picture(media.previewUrl, fit: BoxFit.contain),
                 ] else
                   _picture(media.previewUrl),
+                // a video that's ready plays here, muted, while on screen
+                // (one under "+N" just opens full screen)
+                if (media.isVideo && media.url != null && more == 0)
+                  _FeedVideo(media: media)
                 // a member's photo or video being compressed, or that couldn't be
-                if (media.processing || media.failed)
+                else if (media.processing || media.failed)
                   _StatusLabel(
                       media: media,
                       onRemove: media.failed &&
@@ -152,6 +150,7 @@ class NearbyMediaGrid extends StatelessWidget {
 
   final List<NearbyMedia> media;
 
+  /// Full screen (a video carries on there, with the same player).
   void _open(BuildContext context, List<NearbyMedia> media, int index) =>
       Navigator.of(context).push(MaterialPageRoute(
           fullscreenDialog: true,
@@ -188,8 +187,7 @@ class NearbyMediaGrid extends StatelessWidget {
       // wide ones in their own shape (up to 2:1); tall ones (a phone's
       // video) in a square, so they don't take over the feed. Always whole
       // (never cropped): where the frame is wider than the picture (on a
-      // computer, capped at nearbyMediaMaxHeight), a blurred copy fills
-      // the sides
+      // computer, capped at nearbyMediaMaxHeight), black fills the sides
       final ratio = media.first.aspectRatio;
       grid = _Frame(
           aspectRatio: ratio < 1 ? 1 : ratio.clamp(1.0, 2.0),
@@ -239,7 +237,8 @@ class NearbyMediaGrid extends StatelessWidget {
 }
 
 /// Photos and videos full size, swiped one to the next: photos zoom,
-/// videos play (a tap pauses).
+/// videos play with sound (a tap pauses) - one playing in the feed carries
+/// on from where it got to, with the same player (nothing loaded again).
 class NearbyMediaViewer extends StatefulWidget {
   const NearbyMediaViewer({super.key, required this.media, this.start = 0});
 
@@ -312,18 +311,20 @@ class _Video extends StatefulWidget {
 }
 
 class _VideoState extends State<_Video> {
-  late final VideoPlayerController _player =
-      VideoPlayerController.networkUrl(Uri.parse(widget.media.url!));
+  final _videos = _FeedVideos.instance;
+  late final _SharedVideo _video = _videos.take(widget.media, fullScreen: true);
   bool _failed = false;
+
+  VideoPlayerController get _player => _video.player;
 
   @override
   void initState() {
     super.initState();
     _player.addListener(_changed);
-    _player.initialize().then((_) {
+    _video.ready.then((_) {
       if (!mounted) return;
       setState(() {});
-      if (widget.active) _player.play();
+      _follow();
     }, onError: (Object _) {
       if (mounted) setState(() => _failed = true);
     });
@@ -332,9 +333,19 @@ class _VideoState extends State<_Video> {
   @override
   void didUpdateWidget(_Video old) {
     super.didUpdateWidget(old);
+    _follow();
+  }
+
+  /// With sound while it's the one shown; waits otherwise.
+  void _follow() {
     if (!_player.value.isInitialized) return;
-    if (widget.active && !old.active) _player.play();
-    if (!widget.active) _player.pause();
+    if (widget.active) {
+      _player
+        ..setVolume(1)
+        ..play();
+    } else {
+      _player.pause();
+    }
   }
 
   void _changed() {
@@ -344,7 +355,8 @@ class _VideoState extends State<_Video> {
   @override
   void dispose() {
     _player.removeListener(_changed);
-    _player.dispose();
+    // back to the feed: it carries on there, muted or not as chosen
+    _videos.give(_video, fullScreen: true);
     super.dispose();
   }
 
@@ -386,6 +398,304 @@ class _VideoState extends State<_Video> {
           ]),
         ),
       ),
+    );
+  }
+}
+
+/// One video's player, shared by the feed and full screen (so it carries
+/// on, and nothing is loaded again), looping.
+class _SharedVideo {
+  _SharedVideo(this.mediaId, String url)
+      : player = VideoPlayerController.networkUrl(Uri.parse(url)) {
+    ready = player.initialize().then((_) => player.setLooping(true));
+    ready.then((_) {}, onError: (Object _) {
+      failed = true;
+    });
+  }
+
+  bool failed = false;
+
+  final int mediaId;
+  final VideoPlayerController player;
+  late final Future<void> ready;
+  int holders = 0;
+}
+
+/// The feed's videos: the one most on screen (at least 60% of it) plays,
+/// the rest wait - none while the app is in the background, and the feed
+/// leaves alone one open full screen. Muted until unmuted, then for all of
+/// them. Their players: shared with full screen, and the last few let go
+/// kept ready (scrolling back doesn't load them again).
+class _FeedVideos with WidgetsBindingObserver {
+  _FeedVideos._() {
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  static final instance = _FeedVideos._();
+
+  /// How much of it has to be on screen to play.
+  static const _enough = 0.6;
+
+  /// Players no one holds, kept ready.
+  static const _kept = 2;
+
+  final muted = ValueNotifier<bool>(true);
+
+  /// The one playing (a [_FeedVideoState]: the same video can be in the
+  /// feed and on its post).
+  final playing = ValueNotifier<Object?>(null);
+
+  /// Open full screen (by media id): the feed leaves it alone.
+  final fullScreen = <int>{};
+
+  final _shown = <Object, double>{};
+  bool _foreground = true;
+
+  /// Most recently used last.
+  final _players = <int, _SharedVideo>{};
+
+  _SharedVideo take(NearbyMedia media, {bool fullScreen = false}) {
+    final video =
+        _players.remove(media.id) ?? _SharedVideo(media.id, media.url!);
+    _players[media.id] = video;
+    video.holders++;
+    if (fullScreen) this.fullScreen.add(media.id);
+    return video;
+  }
+
+  void give(_SharedVideo video, {bool fullScreen = false}) {
+    video.holders--;
+    if (fullScreen) {
+      this.fullScreen.remove(video.mediaId);
+      video.player.pause();
+      // the feed takes it back (and plays it, if it's its turn)
+      playing.value = null;
+      _pick();
+    }
+    // the oldest ones no one holds go, beyond the few kept ready (one that
+    // couldn't load goes at once)
+    final idle = [
+      for (final v in _players.values)
+        if (v.holders <= 0) v
+    ];
+    final failed = [
+      for (final v in idle)
+        if (v.failed) v
+    ];
+    final ok = [
+      for (final v in idle)
+        if (!v.failed) v
+    ];
+    for (final v in [
+      ...failed,
+      if (ok.length > _kept) ...ok.take(ok.length - _kept),
+    ]) {
+      _players.remove(v.mediaId);
+      v.player.dispose();
+    }
+  }
+
+  void shown(Object tile, double fraction) {
+    if (fraction > 0) {
+      _shown[tile] = fraction;
+    } else {
+      _shown.remove(tile);
+    }
+    _pick();
+  }
+
+  void _pick() {
+    Object? best;
+    var most = _enough;
+    // the one playing keeps playing, unless another is more on screen
+    final current = playing.value;
+    if (current != null && (_shown[current] ?? 0) >= _enough) {
+      best = current;
+      most = _shown[current]!;
+    }
+    for (final MapEntry(key: tile, value: fraction) in _shown.entries) {
+      if (fraction > most || (best == null && fraction >= most)) {
+        best = tile;
+        most = fraction;
+      }
+    }
+    playing.value = _foreground ? best : null;
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _foreground = state == AppLifecycleState.resumed;
+    _pick();
+  }
+}
+
+/// A video in the feed: plays where it is, muted, while it's the one most
+/// on screen (and loops); waits when scrolled away or covered. Its length
+/// (what's left, while playing) at the bottom left, mute or unmute at the
+/// bottom right. Its still until its turn comes and it's loaded (only then:
+/// a feed full of videos doesn't load them all), or when it can't play.
+class _FeedVideo extends StatefulWidget {
+  const _FeedVideo({required this.media});
+
+  final NearbyMedia media;
+
+  @override
+  State<_FeedVideo> createState() => _FeedVideoState();
+}
+
+class _FeedVideoState extends State<_FeedVideo> {
+  final _videos = _FeedVideos.instance;
+  _SharedVideo? _video;
+  bool _failed = false;
+
+  VideoPlayerController? get _player => _video?.player;
+  bool get _ready => _player?.value.isInitialized ?? false;
+
+  @override
+  void initState() {
+    super.initState();
+    _videos.playing.addListener(_follow);
+    _videos.muted.addListener(_follow);
+  }
+
+  void _visible(VisibilityInfo info) {
+    if (!mounted) return;
+    final fraction = info.visibleFraction;
+    // let go once none of it is on screen (kept ready a while)
+    if (fraction == 0 && _video != null) setState(_letGo);
+    _videos.shown(this, fraction);
+  }
+
+  void _load() {
+    final video = _video = _videos.take(widget.media);
+    video.player.addListener(_changed);
+    video.ready.then((_) {
+      if (_video == video) _follow();
+    }, onError: (Object _) {
+      if (_video != video || !mounted) return;
+      setState(() {
+        _letGo();
+        _failed = true;
+      });
+    });
+  }
+
+  void _letGo() {
+    final video = _video;
+    _video = null;
+    if (video == null) return;
+    video.player.removeListener(_changed);
+    _videos.give(video);
+  }
+
+  void _changed() {
+    if (mounted) setState(() {});
+  }
+
+  /// Its turn: loaded (once) and played at the chosen volume. Otherwise it
+  /// waits. Not while it's open full screen (that plays it).
+  void _follow() {
+    if (!mounted) return;
+    final mine = _videos.playing.value == this;
+    if (mine && _video == null && !_failed) {
+      setState(_load);
+      return;
+    }
+    final player = _player;
+    if (player == null ||
+        !_ready ||
+        _videos.fullScreen.contains(widget.media.id)) {
+      return;
+    }
+    player.setVolume(_videos.muted.value ? 0 : 1);
+    if (mine) {
+      if (!player.value.isPlaying) player.play();
+    } else if (player.value.isPlaying) {
+      player.pause();
+    }
+  }
+
+  @override
+  void dispose() {
+    _videos.playing.removeListener(_follow);
+    _videos.muted.removeListener(_follow);
+    _videos.shown(this, 0);
+    _letGo();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final player = _player;
+    final ready = _ready;
+    final playing = ready && player!.value.isPlaying;
+    final duration = widget.media.duration;
+    return VisibilityDetector(
+      key: ObjectKey(this),
+      onVisibilityChanged: _visible,
+      child: Stack(fit: StackFit.expand, children: [
+        if (ready)
+          ColoredBox(
+            color: Colors.black,
+            child: Center(
+              child: AspectRatio(
+                  aspectRatio: player!.value.aspectRatio,
+                  child: VideoPlayer(player)),
+            ),
+          ),
+        if (!playing)
+          const Center(
+            child: DecoratedBox(
+              decoration:
+                  BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
+              child: Padding(
+                padding: EdgeInsets.all(8),
+                child: Icon(Icons.play_arrow_rounded,
+                    color: Colors.white, size: 30),
+              ),
+            ),
+          ),
+        if (duration != null)
+          Positioned(
+            left: 8,
+            bottom: 8,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.7),
+                  borderRadius: BorderRadius.circular(4)),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                child: Text(
+                    mediaDurationLabel(
+                        playing ? duration - player.value.position : duration),
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600)),
+              ),
+            ),
+          ),
+        Positioned(
+          right: 6,
+          bottom: 6,
+          child: ValueListenableBuilder<bool>(
+            valueListenable: _videos.muted,
+            builder: (context, muted, _) => IconButton(
+              key: Key('nearbyMediaMute-${widget.media.id}'),
+              tooltip: muted ? 'Unmute' : 'Mute',
+              onPressed: () => _videos.muted.value = !muted,
+              style: IconButton.styleFrom(
+                  backgroundColor: Colors.black.withValues(alpha: 0.6),
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size.square(36),
+                  padding: EdgeInsets.zero),
+              iconSize: 20,
+              icon: Icon(
+                  muted ? Icons.volume_off_rounded : Icons.volume_up_rounded),
+            ),
+          ),
+        ),
+      ]),
     );
   }
 }
