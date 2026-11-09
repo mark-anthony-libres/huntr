@@ -11,6 +11,7 @@ import '../../services/huntr_backend.dart';
 import '../../state/app_state.dart';
 import '../../theme.dart';
 import '../avatar.dart';
+import '../night_map.dart';
 
 /// Explore's map is hidden unless built with MAP_ENABLED=true (env/*.json):
 /// no Map button, no "Show me on the map" setting.
@@ -905,37 +906,5 @@ class _MapButton extends StatelessWidget {
       );
 }
 
-/// A light map made dark ([night]): its brightness turned around (light
-/// ground goes near black, dark names go bright) and coloured from the
-/// app's night towards its accent, so it wears the chosen theme.
-Widget _nightIf(bool night, Widget map) {
-  if (!night) return map;
-  final accent = HuntrColors.orange;
-  final ground = HuntrColors.night;
-  // per channel: the ground, plus (how dark it was) x (a little grey and
-  // half the accent)
-  List<double> row(double accentChannel, double groundChannel) {
-    final reach = 0.35 * 255 + 0.45 * accentChannel * 255;
-    return [
-      -reach * 0.2126 / 255,
-      -reach * 0.7152 / 255,
-      -reach * 0.0722 / 255,
-      0,
-      groundChannel * 255 + reach,
-    ];
-  }
-
-  return ColorFiltered(
-    colorFilter: ColorFilter.matrix([
-      ...row(accent.r, ground.r),
-      ...row(accent.g, ground.g),
-      ...row(accent.b, ground.b),
-      0,
-      0,
-      0,
-      1,
-      0,
-    ]),
-    child: map,
-  );
-}
+/// [map], made dark ([nightMap]) when [night].
+Widget _nightIf(bool night, Widget map) => night ? nightMap(map) : map;

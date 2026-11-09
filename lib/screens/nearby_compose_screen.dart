@@ -37,8 +37,9 @@ class NearbyComposeScreen extends StatefulWidget {
 class _NearbyComposeScreenState extends State<NearbyComposeScreen> {
   final _text = TextEditingController();
 
-  /// How far it reaches, in metres (one of [NearbyService.radii]).
-  int _radiusM = 5000;
+  /// How far it reaches, in metres (one of [NearbyService.radii]); null:
+  /// everyone on HUNTR (verified members).
+  int? _radiusM = 5000;
 
   /// The tags picked (ids), and the tags there are (once loaded).
   Set<int> _tagIds = {};
@@ -226,7 +227,8 @@ class _NearbyComposeScreenState extends State<NearbyComposeScreen> {
     try {
       final post = await service.post(token,
           body: _text.text,
-          radiusM: _radiusM,
+          radiusM:
+              AppScope.read(context).myVerified ? _radiusM : (_radiusM ?? 5000),
           tagIds: _tagIds.toList(),
           mediaId: _mediaId);
       // its photo or video keeps uploading: the thread shows how it's going
@@ -270,8 +272,14 @@ class _NearbyComposeScreenState extends State<NearbyComposeScreen> {
             if (_tagIds.contains(tag.id)) tag.name,
       ];
 
+  /// "Within 5 km", or "Everyone".
+  static String _reachLabel(int? radiusM) =>
+      radiusM == null ? 'Everyone' : 'Within ${nearbyRadiusLabel(radiusM)}';
+
   Future<void> _pickRadius() async {
-    final picked = await showModalBottomSheet<int>(
+    final verified = AppScope.read(context).myVerified;
+    // the sheet's answer: a radius, or (verified members) everyone
+    final picked = await showModalBottomSheet<({int? radiusM})>(
       context: context,
       showDragHandle: true,
       builder: (context) => SafeArea(
@@ -281,10 +289,14 @@ class _NearbyComposeScreenState extends State<NearbyComposeScreen> {
             child: Text('Who can see it',
                 style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
           ),
-          const Padding(
-            padding: EdgeInsets.fromLTRB(20, 0, 20, 8),
-            child: Text('Only people this close to where you post.',
-                style: TextStyle(color: HuntrColors.muted)),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+            child: Text(
+                verified
+                    ? 'People this close to where you post, or everyone on '
+                        'HUNTR.'
+                    : 'Only people this close to where you post.',
+                style: const TextStyle(color: HuntrColors.muted)),
           ),
           for (final m in NearbyService.radii)
             ListTile(
@@ -294,13 +306,24 @@ class _NearbyComposeScreenState extends State<NearbyComposeScreen> {
               trailing: m == _radiusM
                   ? Icon(Icons.check_rounded, color: HuntrColors.orange)
                   : null,
-              onTap: () => Navigator.of(context).pop(m),
+              onTap: () => Navigator.of(context).pop((radiusM: m)),
+            ),
+          if (verified)
+            ListTile(
+              key: const Key('nearbyRadius-everyone'),
+              leading: const Icon(Icons.public_rounded),
+              title: const Text('Everyone on HUNTR'),
+              subtitle: const Text('Wherever they are'),
+              trailing: _radiusM == null
+                  ? Icon(Icons.check_rounded, color: HuntrColors.orange)
+                  : null,
+              onTap: () => Navigator.of(context).pop((radiusM: null)),
             ),
           const SizedBox(height: 8),
         ]),
       ),
     );
-    if (picked != null && mounted) setState(() => _radiusM = picked);
+    if (picked != null && mounted) setState(() => _radiusM = picked.radiusM);
   }
 
   Future<void> _open(NearbyPost post) async {
@@ -360,8 +383,10 @@ class _NearbyComposeScreenState extends State<NearbyComposeScreen> {
     final over = count > NearbyService.maxLength;
     final mine = _mine;
     final now = DateTime.now();
-    // only verified members add a photo or video (the backend says so too)
+    // only verified members add a photo or video, or broadcast to everyone
+    // (the backend says so too)
     final verified = AppScope.of(context).myVerified;
+    final radiusM = verified ? _radiusM : (_radiusM ?? 5000);
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
@@ -557,17 +582,23 @@ class _NearbyComposeScreenState extends State<NearbyComposeScreen> {
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(14, 16, 8, 16),
                       child: Row(children: [
-                        Icon(Icons.location_on_rounded,
+                        Icon(
+                            radiusM == null
+                                ? Icons.public_rounded
+                                : Icons.location_on_rounded,
                             color: HuntrColors.orange),
                         const SizedBox(width: 8),
-                        const Expanded(
-                          child: Text('Broadcast to people nearby',
+                        Expanded(
+                          child: Text(
+                              radiusM == null
+                                  ? 'Broadcast to everyone'
+                                  : 'Broadcast to people nearby',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: TextStyle(fontSize: 14.5)),
+                              style: const TextStyle(fontSize: 14.5)),
                         ),
                         const SizedBox(width: 8),
-                        Text('Within ${nearbyRadiusLabel(_radiusM)}',
+                        Text(_reachLabel(radiusM),
                             key: const Key('nearbyRadiusLabel'),
                             style:
                                 const TextStyle(fontWeight: FontWeight.w600)),

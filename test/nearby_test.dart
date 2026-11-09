@@ -133,7 +133,7 @@ class _FakeNearby extends NearbyService {
   @override
   Future<NearbyPost> post(String token,
       {required String body,
-      required int radiusM,
+      required int? radiusM,
       AnonymousName? as,
       List<int> tagIds = const [],
       int? mediaId}) async {
@@ -150,6 +150,7 @@ class _FakeNearby extends NearbyService {
         commentCount: 0,
         mine: true,
         radiusM: radiusM,
+        everyone: radiusM == null,
         media: [if (mediaId != null) _photo(mediaId, 'uploading')]);
   }
 
@@ -336,6 +337,27 @@ void main() {
         lessThan(tester.getTopLeft(find.byKey(const Key('nearbyPost-1'))).dy));
   });
 
+  testWidgets('verified: broadcast to everyone, shown with a globe',
+      (tester) async {
+    final service = _FakeNearby();
+    await _open(tester, service);
+    await tester.tap(find.byKey(const Key('nearbyCompose')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('nearbyText')), 'Hi all');
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('nearbyRadius')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('nearbyRadius-everyone')));
+    await tester.pumpAndSettle();
+    expect(find.text('Broadcast to everyone'), findsOneWidget);
+    expect(find.text('Everyone'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('nearbyPost')));
+    await tester.pumpAndSettle();
+    expect(service.calls, contains('post null null Hi all'));
+    // on the feed: for everyone
+    expect(find.textContaining('Everyone'), findsWidgets);
+  });
+
   testWidgets('not verified: text only, no photo or video', (tester) async {
     final service = _FakeNearby();
     await _open(tester, service, verified: false);
@@ -343,6 +365,12 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('nearbyAddMedia')), findsNothing);
     expect(find.byKey(const Key('nearbyMediaVerifiedOnly')), findsOneWidget);
+    // a radius only
+    await tester.tap(find.byKey(const Key('nearbyRadius')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('nearbyRadius-everyone')), findsNothing);
+    await tester.tap(find.byKey(const Key('nearbyRadius-5000')));
+    await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const Key('nearbyText')), 'Hello');
     await tester.pump();
     await tester.tap(find.byKey(const Key('nearbyPost')));

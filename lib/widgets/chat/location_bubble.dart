@@ -7,12 +7,20 @@ import 'package:latlong2/latlong.dart' show LatLng;
 import '../../models/models.dart';
 import '../../services/huntr_backend.dart';
 import '../avatar.dart';
+import '../night_map.dart';
 import '../../theme.dart';
 import 'media_bubble.dart' show remainingLabel;
 
 /// OpenStreetMap tiles (free, no key). Loaded only while a map is on
 /// screen; the browser or device caches them.
 const _tiles = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+
+/// The map images, made dark in the app's colours ([nightMap]); drawn on
+/// their own, so what moves on top never makes them draw again.
+Widget _darkTiles() => RepaintBoundary(
+      child: nightMap(TileLayer(
+          urlTemplate: _tiles, userAgentPackageName: 'com.huntr.app')),
+    );
 
 /// A map of [position], centred on it, with whose it is as the pin (their
 /// profile photo), and how precise it is.
@@ -41,11 +49,12 @@ class LocationMap extends StatelessWidget {
       options: MapOptions(
         initialCenter: point,
         initialZoom: zoom,
+        backgroundColor: HuntrColors.night,
         interactionOptions: InteractionOptions(
             flags: interactive ? InteractiveFlag.all : InteractiveFlag.none),
       ),
       children: [
-        TileLayer(urlTemplate: _tiles, userAgentPackageName: 'com.huntr.app'),
+        _darkTiles(),
         if (position.accuracy != null && position.accuracy! > 0)
           CircleLayer(circles: [
             CircleMarker(
@@ -449,11 +458,12 @@ class LiveMap extends StatelessWidget {
                     : const EdgeInsets.fromLTRB(30, 72, 30, 12),
                 maxZoom: 16)
             : null,
+        backgroundColor: HuntrColors.night,
         interactionOptions: InteractionOptions(
             flags: interactive ? InteractiveFlag.all : InteractiveFlag.none),
       ),
       children: [
-        TileLayer(urlTemplate: _tiles, userAgentPackageName: 'com.huntr.app'),
+        _darkTiles(),
         MarkerLayer(markers: [
           for (final (m, point) in known)
             Marker(

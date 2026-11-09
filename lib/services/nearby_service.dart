@@ -44,9 +44,10 @@ class NearbyService {
       backend.fetchMyNearbyPosts(
           backendUrl: await _url(), token: token, offset: offset);
 
+  /// [radiusM] null: for everyone on HUNTR (verified members).
   Future<NearbyPost> post(String token,
           {required String body,
-          required int radiusM,
+          required int? radiusM,
           AnonymousName? as,
           List<int> tagIds = const [],
           int? mediaId}) async =>

@@ -275,7 +275,7 @@ class NearbyPostCard extends StatelessWidget {
                         // wrote it)
                         Row(children: [
                           Icon(
-                              official
+                              official || post.everyone
                                   ? Icons.public_rounded
                                   : Icons.location_on_outlined,
                               size: 14,
@@ -287,6 +287,7 @@ class NearbyPostCard extends StatelessWidget {
                                     ? 'For everyone on HUNTR'
                                     : [
                                         if (post.mine) 'You',
+                                        if (post.everyone) 'Everyone',
                                         distance == null
                                             ? 'Nearby'
                                             : distance < 10

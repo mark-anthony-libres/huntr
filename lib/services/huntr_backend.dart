@@ -4186,6 +4186,7 @@ class NearbyPost {
     this.radiusM,
     this.tags = const [],
     this.official = false,
+    this.everyone = false,
     this.media = const [],
   });
 
@@ -4205,6 +4206,7 @@ class NearbyPost {
             NearbyTag.fromJson(t as Map<String, dynamic>),
         ],
         official: json['official'] as bool? ?? false,
+        everyone: json['everyone'] as bool? ?? false,
         media: [
           for (final m in json['media'] as List? ?? const [])
             NearbyMedia.fromJson(m as Map<String, dynamic>),
@@ -4232,6 +4234,10 @@ class NearbyPost {
   /// HUNTR's own post: for everyone, wherever they are (no distance).
   final bool official;
 
+  /// A verified member's post for everyone on HUNTR (no radius; it still
+  /// has a distance).
+  final bool everyone;
+
   /// Its photos and videos, in order: an official post's, or a verified
   /// member's one.
   final List<NearbyMedia> media;
@@ -4258,6 +4264,7 @@ class NearbyPost {
         radiusM: radiusM,
         tags: tags,
         official: official,
+        everyone: everyone,
         media: media ?? this.media,
       );
 }
@@ -4461,7 +4468,7 @@ Future<NearbyPost> createNearbyPost(
         {required String backendUrl,
         required String token,
         required String body,
-        required int radiusM,
+        required int? radiusM,
         AnonymousName? as,
         List<int> tagIds = const [],
         int? mediaId,

@@ -403,22 +403,35 @@ class _VideoState extends State<_Video> {
 }
 
 /// One video's player, shared by the feed and full screen (so it carries
-/// on, and nothing is loaded again), looping.
+/// on, and nothing is loaded again), looping - from [from], when one before
+/// it broke there.
 class _SharedVideo {
-  _SharedVideo(this.mediaId, String url)
+  _SharedVideo(this.mediaId, String url, {Duration? from})
       : player = VideoPlayerController.networkUrl(Uri.parse(url)) {
-    ready = player.initialize().then((_) => player.setLooping(true));
+    ready = player.initialize().then((_) async {
+      await player.setLooping(true);
+      if (from != null && from > Duration.zero) await player.seekTo(from);
+    });
     ready.then((_) {}, onError: (Object _) {
       failed = true;
     });
+    player.addListener(() {
+      if (player.value.isInitialized) position = player.value.position;
+    });
   }
-
-  bool failed = false;
 
   final int mediaId;
   final VideoPlayerController player;
   late final Future<void> ready;
   int holders = 0;
+  bool failed = false;
+
+  /// Where it got to.
+  Duration position = Duration.zero;
+
+  /// Couldn't load, or broke since: the browser refused or cut short a
+  /// play (scrolled past quickly, say) - the player can't be used again.
+  bool get broken => failed || player.value.hasError;
 }
 
 /// The feed's videos: the one most on screen (at least 60% of it) plays,
@@ -455,8 +468,13 @@ class _FeedVideos with WidgetsBindingObserver {
   final _players = <int, _SharedVideo>{};
 
   _SharedVideo take(NearbyMedia media, {bool fullScreen = false}) {
-    final video =
-        _players.remove(media.id) ?? _SharedVideo(media.id, media.url!);
+    var video = _players.remove(media.id);
+    // a broken one is replaced (carrying on where it got to)
+    if (video != null && video.broken && video.holders <= 0) {
+      video.player.dispose();
+      video = _SharedVideo(media.id, media.url!, from: video.position);
+    }
+    video ??= _SharedVideo(media.id, media.url!);
     _players[media.id] = video;
     video.holders++;
     if (fullScreen) this.fullScreen.add(media.id);
@@ -472,19 +490,19 @@ class _FeedVideos with WidgetsBindingObserver {
       playing.value = null;
       _pick();
     }
-    // the oldest ones no one holds go, beyond the few kept ready (one that
-    // couldn't load goes at once)
+    // the oldest ones no one holds go, beyond the few kept ready (a broken
+    // one goes at once)
     final idle = [
       for (final v in _players.values)
         if (v.holders <= 0) v
     ];
     final failed = [
       for (final v in idle)
-        if (v.failed) v
+        if (v.broken) v
     ];
     final ok = [
       for (final v in idle)
-        if (!v.failed) v
+        if (!v.broken) v
     ];
     for (final v in [
       ...failed,
@@ -548,6 +566,11 @@ class _FeedVideoState extends State<_FeedVideo> {
   _SharedVideo? _video;
   bool _failed = false;
 
+  /// Players broken while it's on screen; after a few it waits until it's
+  /// shown again.
+  int _broken = 0;
+  static const _maxBroken = 3;
+
   VideoPlayerController? get _player => _video?.player;
   bool get _ready => _player?.value.isInitialized ?? false;
 
@@ -561,8 +584,13 @@ class _FeedVideoState extends State<_FeedVideo> {
   void _visible(VisibilityInfo info) {
     if (!mounted) return;
     final fraction = info.visibleFraction;
-    // let go once none of it is on screen (kept ready a while)
-    if (fraction == 0 && _video != null) setState(_letGo);
+    // let go once none of it is on screen (kept ready a while); shown
+    // again, it tries again
+    if (fraction == 0) {
+      if (_video != null) setState(_letGo);
+      _failed = false;
+      _broken = 0;
+    }
     _videos.shown(this, fraction);
   }
 
@@ -589,7 +617,17 @@ class _FeedVideoState extends State<_FeedVideo> {
   }
 
   void _changed() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    if (_video?.broken ?? false) {
+      // a new player (where this one got to), if it's still its turn
+      setState(() {
+        _letGo();
+        _failed = ++_broken >= _maxBroken;
+      });
+      _follow();
+      return;
+    }
+    setState(() {});
   }
 
   /// Its turn: loaded (once) and played at the chosen volume. Otherwise it
