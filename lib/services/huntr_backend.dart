@@ -4187,6 +4187,7 @@ class NearbyPost {
     this.tags = const [],
     this.official = false,
     this.everyone = false,
+    this.edited = false,
     this.media = const [],
   });
 
@@ -4207,6 +4208,7 @@ class NearbyPost {
         ],
         official: json['official'] as bool? ?? false,
         everyone: json['everyone'] as bool? ?? false,
+        edited: json['edited'] as bool? ?? false,
         media: [
           for (final m in json['media'] as List? ?? const [])
             NearbyMedia.fromJson(m as Map<String, dynamic>),
@@ -4238,6 +4240,9 @@ class NearbyPost {
   /// has a distance).
   final bool everyone;
 
+  /// Its text was changed after it was posted.
+  final bool edited;
+
   /// Its photos and videos, in order: an official post's, or a verified
   /// member's one.
   final List<NearbyMedia> media;
@@ -4265,6 +4270,7 @@ class NearbyPost {
         tags: tags,
         official: official,
         everyone: everyone,
+        edited: edited,
         media: media ?? this.media,
       );
 }
@@ -4485,6 +4491,26 @@ Future<NearbyPost> createNearbyPost(
                 if (as != null) 'name': as.name,
                 if (as != null) 'avatar': as.avatar,
               })),
+          NearbyPost.fromJson,
+        ));
+
+/// PUT .../nearby/posts/{id}: my post's text, who sees it ([radiusM]
+/// null: everyone on HUNTR, verified members) and tags, from now; the post
+/// as it is now.
+Future<NearbyPost> editNearbyPost(
+        {required String backendUrl,
+        required String token,
+        required int postId,
+        required String body,
+        required int? radiusM,
+        List<int> tagIds = const [],
+        http.Client? client}) =>
+    _nearbyCall(() => _sendAuthorized(
+          client,
+          (httpClient) => httpClient.put(_nearby(backendUrl, '/posts/$postId'),
+              headers: _json(token),
+              body: jsonEncode(
+                  {'body': body, 'radius_m': radiusM, 'tag_ids': tagIds})),
           NearbyPost.fromJson,
         ));
 

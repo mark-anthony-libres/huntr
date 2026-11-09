@@ -7,6 +7,7 @@ import '../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/me/section_states.dart';
 import '../widgets/nearby/nearby_post_card.dart';
+import 'nearby_compose_screen.dart' show editNearbyThread;
 
 /// A Nearby post and its discussion: comments (newest first) with their
 /// replies threaded under them, each by a random name kept for this post.
@@ -152,6 +153,11 @@ class _NearbyPostScreenState extends State<NearbyPostScreen> {
     final service = _service;
     final token = _token;
     if (service == null || token == null) return;
+    if (action == NearbyAction.edit) {
+      final edited = await editNearbyThread(context, _post);
+      if (edited != null && mounted) setState(() => _post = edited);
+      return;
+    }
     try {
       if (action == NearbyAction.delete) {
         if (!await _confirm(comment == null

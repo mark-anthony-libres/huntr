@@ -27,8 +27,13 @@ import 'nearby_post_screen.dart';
 /// uploading at once (app-wide, [NearbyUploads]), and Post doesn't wait for
 /// it: the thread shows how it's going. Below, my live threads (open one,
 /// or delete it). Pops with the new thread once it's up.
+///
+/// With [editing] (mine): its text, tags and who sees it, then Save - no
+/// photo or video, no My posts. Pops with it as it is now.
 class NearbyComposeScreen extends StatefulWidget {
-  const NearbyComposeScreen({super.key});
+  const NearbyComposeScreen({super.key, this.editing});
+
+  final NearbyPost? editing;
 
   @override
   State<NearbyComposeScreen> createState() => _NearbyComposeScreenState();
@@ -75,9 +80,24 @@ class _NearbyComposeScreenState extends State<NearbyComposeScreen> {
   @override
   void initState() {
     super.initState();
+    if (widget.editing case final post?) {
+      _text.text = post.body;
+      _radiusM = post.everyone ? null : (post.radiusM ?? 5000);
+      _tagIds = {for (final tag in post.tags) tag.id};
+    } else {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _loadMine());
+    }
     _text.addListener(() => setState(() {}));
-    WidgetsBinding.instance.addPostFrameCallback((_) => _loadMine());
   }
+
+  /// Everyone on HUNTR can be picked: I'm verified, or (editing) it's for
+  /// everyone already.
+  bool _mayReachEveryone(AppState app) =>
+      app.myVerified || (widget.editing?.everyone ?? false);
+
+  /// Who it's for: as picked, or (not allowed everyone) 5 km.
+  int? _reach(AppState app) =>
+      _mayReachEveryone(app) ? _radiusM : (_radiusM ?? 5000);
 
   @override
   void dispose() {
@@ -225,12 +245,18 @@ class _NearbyComposeScreenState extends State<NearbyComposeScreen> {
       _error = null;
     });
     try {
-      final post = await service.post(token,
-          body: _text.text,
-          radiusM:
-              AppScope.read(context).myVerified ? _radiusM : (_radiusM ?? 5000),
-          tagIds: _tagIds.toList(),
-          mediaId: _mediaId);
+      final editing = widget.editing;
+      final post = editing != null
+          ? await service.edit(token,
+              postId: editing.id,
+              body: _text.text,
+              radiusM: _reach(app),
+              tagIds: _tagIds.toList())
+          : await service.post(token,
+              body: _text.text,
+              radiusM: _reach(app),
+              tagIds: _tagIds.toList(),
+              mediaId: _mediaId);
       // its photo or video keeps uploading: the thread shows how it's going
       _posted = true;
       if (mounted) Navigator.of(context).pop(post);
@@ -240,8 +266,11 @@ class _NearbyComposeScreenState extends State<NearbyComposeScreen> {
       if (mounted) {
         setState(() => _error = error is BackendException
             ? error.message
-            : "Your thread didn't go up. Check your connection and try "
-                'again.');
+            : widget.editing != null
+                ? "Your changes weren't saved. Check your connection and "
+                    'try again.'
+                : "Your thread didn't go up. Check your connection and try "
+                    'again.');
       }
     } finally {
       if (mounted) setState(() => _posting = false);
@@ -265,19 +294,25 @@ class _NearbyComposeScreenState extends State<NearbyComposeScreen> {
     if (picked != null && mounted) setState(() => _tagIds = picked);
   }
 
-  /// The picked tags' names, in the order they're listed.
-  List<String> get _tagNames => [
-        for (final category in _tagCategories ?? const <NearbyTagCategory>[])
-          for (final tag in category.tags)
+  /// The picked tags' names, in the order they're listed (editing, before
+  /// the tags are loaded: the post's own).
+  List<String> get _tagNames => _tagCategories == null
+      ? [
+          for (final tag in widget.editing?.tags ?? const <NearbyTag>[])
             if (_tagIds.contains(tag.id)) tag.name,
-      ];
+        ]
+      : [
+          for (final category in _tagCategories!)
+            for (final tag in category.tags)
+              if (_tagIds.contains(tag.id)) tag.name,
+        ];
 
   /// "Within 5 km", or "Everyone".
   static String _reachLabel(int? radiusM) =>
       radiusM == null ? 'Everyone' : 'Within ${nearbyRadiusLabel(radiusM)}';
 
   Future<void> _pickRadius() async {
-    final verified = AppScope.read(context).myVerified;
+    final verified = _mayReachEveryone(AppScope.read(context));
     // the sheet's answer: a radius, or (verified members) everyone
     final picked = await showModalBottomSheet<({int? radiusM})>(
       context: context,
@@ -339,6 +374,16 @@ class _NearbyComposeScreenState extends State<NearbyComposeScreen> {
   Future<void> _act(NearbyPost post, NearbyAction action) async {
     final service = ServicesScope.nearbyOf(context);
     final token = AppScope.read(context).sessionToken;
+    if (action == NearbyAction.edit) {
+      final edited = await editNearbyThread(context, post);
+      if (edited != null && mounted) {
+        setState(() => _mine = [
+              for (final p in _mine ?? const <NearbyPost>[])
+                p.id == post.id ? edited : p
+            ]);
+      }
+      return;
+    }
     if (service == null || token == null || action != NearbyAction.delete) {
       return;
     }
@@ -385,8 +430,10 @@ class _NearbyComposeScreenState extends State<NearbyComposeScreen> {
     final now = DateTime.now();
     // only verified members add a photo or video, or broadcast to everyone
     // (the backend says so too)
-    final verified = AppScope.of(context).myVerified;
-    final radiusM = verified ? _radiusM : (_radiusM ?? 5000);
+    final app = AppScope.of(context);
+    final verified = app.myVerified;
+    final radiusM = _reach(app);
+    final editing = widget.editing != null;
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
@@ -395,7 +442,7 @@ class _NearbyComposeScreenState extends State<NearbyComposeScreen> {
           icon: const Icon(Icons.close_rounded),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: const Text('New thread'),
+        title: Text(editing ? 'Edit thread' : 'New thread'),
         centerTitle: true,
         actions: [
           Padding(
@@ -410,7 +457,7 @@ class _NearbyComposeScreenState extends State<NearbyComposeScreen> {
                   ? const SizedBox.square(
                       dimension: 18,
                       child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Text('Post'),
+                  : Text(editing ? 'Save' : 'Post'),
             ),
           ),
         ],
@@ -459,8 +506,11 @@ class _NearbyComposeScreenState extends State<NearbyComposeScreen> {
                 ),
                 const SizedBox(height: 12),
 
-                // ---- one photo or video (optional; verified members) ----
-                if (!verified)
+                // ---- one photo or video (optional; verified members; not
+                // changed once it's posted) ----
+                if (editing)
+                  const SizedBox.shrink()
+                else if (!verified)
                   const Padding(
                     key: Key('nearbyMediaVerifiedOnly'),
                     padding: EdgeInsets.symmetric(horizontal: 4),
@@ -608,39 +658,40 @@ class _NearbyComposeScreenState extends State<NearbyComposeScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 18),
-                const Divider(color: HuntrColors.border, height: 1),
-                const SizedBox(height: 18),
-
-                // ---- my threads ----
-                const Text('My posts',
-                    style:
-                        TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-                const SizedBox(height: 12),
-                if (mine == null)
-                  const Padding(
-                    padding: EdgeInsets.all(24),
-                    child: Center(child: CircularProgressIndicator()),
-                  )
-                else if (mine.isEmpty)
-                  const Padding(
-                    key: Key('nearbyNoMine'),
-                    padding: EdgeInsets.symmetric(vertical: 20),
-                    child: Text('Your threads will show here.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: HuntrColors.muted)),
-                  )
-                else ...[
-                  for (final post in mine)
-                    _MyPost(
-                      key: ValueKey('nearbyMine-${post.id}'),
-                      post: post,
-                      now: now,
-                      onOpen: () => _open(post),
-                      onAction: (action) => _act(post, action),
-                    ),
-                  if (_next != null)
-                    LoadMoreRow(onVisible: () => _loadMine(more: true)),
+                // ---- my threads (not while editing one) ----
+                if (!editing) ...[
+                  const SizedBox(height: 18),
+                  const Divider(color: HuntrColors.border, height: 1),
+                  const SizedBox(height: 18),
+                  const Text('My posts',
+                      style:
+                          TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 12),
+                  if (mine == null)
+                    const Padding(
+                      padding: EdgeInsets.all(24),
+                      child: Center(child: CircularProgressIndicator()),
+                    )
+                  else if (mine.isEmpty)
+                    const Padding(
+                      key: Key('nearbyNoMine'),
+                      padding: EdgeInsets.symmetric(vertical: 20),
+                      child: Text('Your threads will show here.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: HuntrColors.muted)),
+                    )
+                  else ...[
+                    for (final post in mine)
+                      _MyPost(
+                        key: ValueKey('nearbyMine-${post.id}'),
+                        post: post,
+                        now: now,
+                        onOpen: () => _open(post),
+                        onAction: (action) => _act(post, action),
+                      ),
+                    if (_next != null)
+                      LoadMoreRow(onVisible: () => _loadMine(more: true)),
+                  ],
                 ],
               ],
             ),
@@ -652,7 +703,8 @@ class _NearbyComposeScreenState extends State<NearbyComposeScreen> {
 }
 
 /// One of my threads: its random name and animal on that thread, how long
-/// ago, what I wrote, its photo or video, and its hearts and comments.
+/// ago (edited?), what I wrote, its photo or video, its tags, who it's
+/// for, and its hearts and comments.
 class _MyPost extends StatelessWidget {
   const _MyPost({
     super.key,
@@ -700,7 +752,9 @@ class _MyPost extends StatelessWidget {
                                   fontSize: 15.5, fontWeight: FontWeight.w700)),
                         ),
                         const SizedBox(width: 10),
-                        Text(ago == 'now' ? 'just now' : '$ago ago',
+                        Text(
+                            '${ago == 'now' ? 'just now' : '$ago ago'}'
+                            '${post.edited ? ' · edited' : ''}',
                             style: const TextStyle(
                                 color: HuntrColors.muted, fontSize: 13)),
                       ]),
@@ -718,6 +772,34 @@ class _MyPost extends StatelessWidget {
                               key: Key('nearbyMineMedia-${post.id}'),
                               media: post.media),
                         ),
+                      NearbyTagPills(
+                          key: ValueKey('nearbyMineTags-${post.id}'),
+                          tags: post.tags,
+                          limit: 4),
+                      const SizedBox(height: 8),
+                      // who it's for
+                      Row(children: [
+                        Icon(
+                            post.everyone
+                                ? Icons.public_rounded
+                                : Icons.location_on_outlined,
+                            size: 15,
+                            color: HuntrColors.muted),
+                        const SizedBox(width: 4),
+                        Flexible(
+                          child: Text(
+                              post.everyone
+                                  ? 'Everyone on HUNTR'
+                                  : post.radiusM == null
+                                      ? 'Nearby'
+                                      : 'Within ${nearbyRadiusLabel(post.radiusM!)}',
+                              key: ValueKey('nearbyMineReach-${post.id}'),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                  color: HuntrColors.muted, fontSize: 13)),
+                        ),
+                      ]),
                       const SizedBox(height: 10),
                       Row(children: [
                         const Icon(Icons.favorite_border_rounded,
@@ -734,7 +816,7 @@ class _MyPost extends StatelessWidget {
                       ]),
                     ]),
               ),
-              NearbyMenu(mine: true, onSelected: onAction),
+              NearbyMenu(mine: true, editable: true, onSelected: onAction),
             ]),
           ),
         ),
@@ -955,3 +1037,10 @@ class _LocalVideoFrameState extends State<_LocalVideoFrame> {
     );
   }
 }
+
+/// Opens my [post] to change its text, tags and who sees it; the post as
+/// it is now once saved (null: left as it was).
+Future<NearbyPost?> editNearbyThread(BuildContext context, NearbyPost post) =>
+    Navigator.of(context).push<NearbyPost>(MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => NearbyComposeScreen(editing: post)));

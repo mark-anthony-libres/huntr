@@ -155,6 +155,29 @@ class _FakeNearby extends NearbyService {
   }
 
   @override
+  Future<NearbyPost> edit(String token,
+      {required int postId,
+      required String body,
+      required int? radiusM,
+      List<int> tagIds = const []}) async {
+    calls.add('edit $postId $radiusM $body');
+    final before = posts.firstWhere((p) => p.id == postId);
+    return NearbyPost(
+        id: postId,
+        author: before.author,
+        body: body,
+        distanceM: before.distanceM,
+        createdAt: before.createdAt,
+        likeCount: before.likeCount,
+        liked: before.liked,
+        commentCount: before.commentCount,
+        mine: true,
+        radiusM: radiusM,
+        everyone: radiusM == null,
+        edited: body != before.body);
+  }
+
+  @override
   Future<NearbyDiscussion> discussion(String token, int postId) async =>
       NearbyDiscussion(
           post: posts.firstWhere((p) => p.id == postId), comments: comments);
@@ -310,7 +333,8 @@ void main() {
     expect(find.byKey(const Key('nearbyMine-2')), findsOneWidget);
     expect(find.byKey(const Key('nearbyMineMedia-2')), findsOneWidget);
     expect(find.byKey(const Key('nearbyMine-1')), findsNothing);
-    expect(find.text('Within 5 km'), findsOneWidget);
+    expect(tester.widget<Text>(find.byKey(const Key('nearbyRadiusLabel'))).data,
+        'Within 5 km');
     final post = find.byKey(const Key('nearbyPost'));
     expect(tester.widget<FilledButton>(post).onPressed, isNull); // empty
     await tester.enterText(find.byKey(const Key('nearbyText')), 'x' * 501);
@@ -326,7 +350,8 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('nearbyRadius-1000')));
     await tester.pumpAndSettle();
-    expect(find.text('Within 1 km'), findsOneWidget);
+    expect(tester.widget<Text>(find.byKey(const Key('nearbyRadiusLabel'))).data,
+        'Within 1 km');
     await tester.tap(post);
     await tester.pumpAndSettle();
     expect(service.calls.last, 'post 1000 null Any good coffee here?');
@@ -356,6 +381,78 @@ void main() {
     expect(service.calls, contains('post null null Hi all'));
     // on the feed: for everyone
     expect(find.textContaining('Everyone'), findsWidgets);
+  });
+
+  testWidgets('my post: edit its text and reach; shown as edited',
+      (tester) async {
+    final service = _FakeNearby()..posts = [_post(2, name: 'Me', mine: true)];
+    await _open(tester, service, verified: false);
+    final menu = find.descendant(
+        of: find.byKey(const Key('nearbyPost-2')),
+        matching: find.byTooltip('More'));
+    await tester.tap(menu);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('nearbyEdit')));
+    await tester.pumpAndSettle();
+    // as it is: its text and reach; no photo or video, no My posts
+    expect(find.text('Edit thread'), findsOneWidget);
+    expect(find.text('Within 5 km'), findsOneWidget);
+    expect(find.byKey(const Key('nearbyAddMedia')), findsNothing);
+    expect(find.text('My posts'), findsNothing);
+    await tester.enterText(find.byKey(const Key('nearbyText')), 'Changed');
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('nearbyRadius')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('nearbyRadius-1000')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('nearbyPost')));
+    await tester.pumpAndSettle();
+    expect(service.calls, contains('edit 2 1000 Changed'));
+    expect(find.text('Changed'), findsOneWidget);
+    expect(find.textContaining('edited'), findsOneWidget);
+  });
+
+  testWidgets('my posts show their tags and who they are for', (tester) async {
+    final service = _FakeNearby()
+      ..posts = [
+        _post(2, name: 'Me', mine: true),
+        NearbyPost(
+            id: 3,
+            author: const AnonymousName(name: 'Me', avatar: 'bear'),
+            body: 'For all',
+            distanceM: 10,
+            createdAt: DateTime.now(),
+            likeCount: 0,
+            liked: false,
+            commentCount: 0,
+            mine: true,
+            everyone: true,
+            tags: const [
+              NearbyTag(
+                  id: 1,
+                  slug: 'friends',
+                  category: 'looking_for',
+                  name: 'Friends')
+            ]),
+      ];
+    await _open(tester, service);
+    await tester.tap(find.byKey(const Key('nearbyCompose')));
+    await tester.pumpAndSettle();
+    expect(
+        tester
+            .widget<Text>(find.byKey(const ValueKey('nearbyMineReach-2')))
+            .data,
+        'Within 5 km');
+    expect(
+        tester
+            .widget<Text>(find.byKey(const ValueKey('nearbyMineReach-3')))
+            .data,
+        'Everyone on HUNTR');
+    expect(
+        find.descendant(
+            of: find.byKey(const ValueKey('nearbyMineTags-3')),
+            matching: find.textContaining('Friends')),
+        findsOneWidget);
   });
 
   testWidgets('not verified: text only, no photo or video', (tester) async {

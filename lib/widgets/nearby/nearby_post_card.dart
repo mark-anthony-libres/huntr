@@ -79,9 +79,9 @@ String nearbyMeta(
   ].join(' · ');
 }
 
-/// What can be done with a post or comment from its ⋯: delete mine, or
-/// report someone else's.
-enum NearbyAction { delete, report }
+/// What can be done with a post or comment from its ⋯: edit (a post) or
+/// delete mine, or report someone else's.
+enum NearbyAction { edit, delete, report }
 
 /// Opens the anonymous profile of whoever wrote it (Message, Report): what
 /// was chosen there for the caller to do ([NearbyAction.report]), or null.
@@ -112,10 +112,17 @@ Widget nearbyAuthorTap(
 
 /// The ⋯ button; [onSelected] gets what was picked.
 class NearbyMenu extends StatelessWidget {
-  const NearbyMenu({super.key, required this.mine, required this.onSelected});
+  const NearbyMenu(
+      {super.key,
+      required this.mine,
+      required this.onSelected,
+      this.editable = false});
 
   final bool mine;
   final ValueChanged<NearbyAction> onSelected;
+
+  /// A post (mine): Edit too.
+  final bool editable;
 
   @override
   Widget build(BuildContext context) => PopupMenuButton<NearbyAction>(
@@ -123,6 +130,15 @@ class NearbyMenu extends StatelessWidget {
         icon: const Icon(Icons.more_horiz, color: HuntrColors.muted),
         onSelected: onSelected,
         itemBuilder: (context) => [
+          if (mine && editable)
+            const PopupMenuItem(
+                key: Key('nearbyEdit'),
+                value: NearbyAction.edit,
+                child: Row(children: [
+                  Icon(Icons.edit_outlined),
+                  SizedBox(width: 10),
+                  Text('Edit'),
+                ])),
           if (mine)
             const PopupMenuItem(
                 value: NearbyAction.delete,
@@ -266,7 +282,9 @@ class NearbyPostCard extends StatelessWidget {
                                 tooltip: 'Official post from HUNTR',
                                 semanticLabel: 'Official'),
                           ],
-                          Text('  ·  ${timeLabel(post.createdAt, now)}',
+                          Text(
+                              '  ·  ${timeLabel(post.createdAt, now)}'
+                              '${post.edited ? ' · edited' : ''}',
                               style: const TextStyle(
                                   color: HuntrColors.muted, fontSize: 13)),
                         ]),
@@ -305,7 +323,8 @@ class NearbyPostCard extends StatelessWidget {
                 if (official)
                   const SizedBox(width: 10)
                 else
-                  NearbyMenu(mine: post.mine, onSelected: onAction),
+                  NearbyMenu(
+                      mine: post.mine, editable: true, onSelected: onAction),
               ]),
               const SizedBox(height: 10),
               if (post.body.isNotEmpty)

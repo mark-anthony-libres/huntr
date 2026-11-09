@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:pointer_interceptor/pointer_interceptor.dart';
 import 'package:video_player/video_player.dart';
 import 'package:visibility_detector/visibility_detector.dart';
 
@@ -681,6 +682,9 @@ class _FeedVideoState extends State<_FeedVideo> {
                   child: VideoPlayer(player)),
             ),
           ),
+        // on the web the video is a page element that takes the taps: this
+        // gives them back to HUNTR (a tap opens it full screen)
+        if (ready) PointerInterceptor(child: const SizedBox.expand()),
         if (!playing)
           const Center(
             child: DecoratedBox(

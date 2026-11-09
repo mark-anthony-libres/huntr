@@ -219,6 +219,16 @@ class _NearbyScreenState extends State<NearbyScreen> {
     final service = ServicesScope.nearbyOf(context);
     final token = AppScope.read(context).sessionToken;
     if (service == null || token == null) return;
+    if (action == NearbyAction.edit) {
+      final edited = await editNearbyThread(context, post);
+      if (edited != null && mounted) {
+        setState(() => _posts = [
+              for (final p in _posts ?? const <NearbyPost>[])
+                p.id == post.id ? edited : p
+            ]);
+      }
+      return;
+    }
     try {
       if (action == NearbyAction.delete) {
         final sure = await _confirmDelete();

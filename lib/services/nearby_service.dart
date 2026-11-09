@@ -44,6 +44,21 @@ class NearbyService {
       backend.fetchMyNearbyPosts(
           backendUrl: await _url(), token: token, offset: offset);
 
+  /// My post's text, who sees it ([radiusM] null: everyone on HUNTR) and
+  /// tags, from now; the post as it is now.
+  Future<NearbyPost> edit(String token,
+          {required int postId,
+          required String body,
+          required int? radiusM,
+          List<int> tagIds = const []}) async =>
+      backend.editNearbyPost(
+          backendUrl: await _url(),
+          token: token,
+          postId: postId,
+          body: body,
+          radiusM: radiusM,
+          tagIds: tagIds);
+
   /// [radiusM] null: for everyone on HUNTR (verified members).
   Future<NearbyPost> post(String token,
           {required String body,
