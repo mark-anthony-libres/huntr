@@ -340,15 +340,23 @@ class _ChatScreenState extends State<ChatScreen> {
           builder: (_) => LiveLocationScreen(
               message: m, me: _app.myPublicProfile, other: other)));
 
+  /// The message box's text when typing was last considered: the box also
+  /// notifies for the cursor, a selection or focus, which isn't typing.
+  String _typed = '';
+
   @override
   void initState() {
     super.initState();
     _input.addListener(() {
       setState(() {});
-      // tell the other person I'm typing (or stopped)
+      // tell the other person I'm typing (or stopped) - only when the text
+      // itself changed
+      final text = _input.text;
+      if (text == _typed) return;
+      _typed = text;
       final id = _conversationId;
       if (id != null) {
-        _messaging?.notifyTyping(id, _input.text.trim().isNotEmpty);
+        _messaging?.notifyTyping(id, text.trim().isNotEmpty);
       }
     });
     // near the top of the history (the list is reversed): load older ones

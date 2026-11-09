@@ -5,6 +5,7 @@ import 'album_service.dart';
 import 'explore_service.dart';
 import 'feedback_service.dart';
 import 'nearby_service.dart';
+import 'nearby_uploads.dart';
 import 'story_service.dart';
 import 'presence/presence_service.dart';
 import 'photo_cache/photo_cache.dart';
@@ -28,6 +29,7 @@ class ServicesScope extends InheritedWidget {
     this.feedback,
     this.stories,
     this.nearby,
+    this.nearbyUploads,
     required super.child,
   });
 
@@ -60,6 +62,10 @@ class ServicesScope extends InheritedWidget {
 
   /// Nearby's anonymous posts. Null: no Nearby (tests, sample data).
   final NearbyService? nearby;
+
+  /// Threads photos and videos on their way from this device (app-wide).
+  /// Null: none can be added.
+  final NearbyUploads? nearbyUploads;
 
   static ServicesScope? _of(BuildContext context) =>
       context.getInheritedWidgetOfExactType<ServicesScope>();
@@ -100,6 +106,9 @@ class ServicesScope extends InheritedWidget {
 
   static NearbyService? nearbyOf(BuildContext context) => _of(context)?.nearby;
 
+  static NearbyUploads? nearbyUploadsOf(BuildContext context) =>
+      _of(context)?.nearbyUploads;
+
   @override
   bool updateShouldNotify(ServicesScope oldWidget) =>
       profiles != oldWidget.profiles ||
@@ -113,5 +122,6 @@ class ServicesScope extends InheritedWidget {
       feedback != oldWidget.feedback ||
       stories != oldWidget.stories ||
       nearby != oldWidget.nearby ||
+      nearbyUploads != oldWidget.nearbyUploads ||
       presence != oldWidget.presence;
 }

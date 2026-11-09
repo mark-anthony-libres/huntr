@@ -101,6 +101,7 @@ class MyProfile {
     this.sexualPosition,
     this.stats = const ProfileStats(),
     this.anonymousName,
+    this.hasPlace = false,
   });
 
   factory MyProfile.fromJson(Map<String, dynamic> json) => MyProfile(
@@ -119,6 +120,7 @@ class MyProfile {
         privacy: PrivacySettings.fromJson(json),
         sexualPosition: json['sexual_position'] as String?,
         stats: ProfileStats.fromJson(json),
+        hasPlace: json['has_place'] as bool? ?? false,
         anonymousName: json['anonymous_name'] == null
             ? null
             : AnonymousName.fromJson(
@@ -132,6 +134,9 @@ class MyProfile {
   /// My user id (null from older backends).
   /// The sexual position shown (backend value; null: not shown).
   final String? sexualPosition;
+
+  /// The switch on Me: "Has a place" shows on my profile.
+  final bool hasPlace;
 
   /// All my stats (with Show Age and my units).
   final ProfileStats stats;
@@ -734,6 +739,24 @@ Future<String?> updateMyPosition({
         body: jsonEncode({'sexual_position': sexualPosition}),
       ),
       (data) => data['sexual_position'] as String?,
+    );
+
+/// Whether I have a place (PUT {backendUrl}/profile/me/place). Returns it
+/// as stored.
+Future<bool> updateMyPlace({
+  required String backendUrl,
+  required String token,
+  required bool hasPlace,
+  http.Client? client,
+}) =>
+    _sendAuthorized(
+      client,
+      (httpClient) => httpClient.put(
+        _endpoint(backendUrl, '/profile/me/place'),
+        headers: {..._authorization(token), 'Content-Type': 'application/json'},
+        body: jsonEncode({'has_place': hasPlace}),
+      ),
+      (data) => data['has_place'] as bool,
     );
 
 /// Saves the privacy settings that are given; null leaves one unchanged
@@ -4209,10 +4232,19 @@ class NearbyPost {
   /// HUNTR's own post: for everyone, wherever they are (no distance).
   final bool official;
 
-  /// An official post's photos and videos, in order.
+  /// Its photos and videos, in order: an official post's, or a verified
+  /// member's one.
   final List<NearbyMedia> media;
 
-  NearbyPost copyWith({int? likeCount, bool? liked, int? commentCount}) =>
+  /// Its photo or video is still on its way, or being compressed (shown
+  /// once it's ready).
+  bool get mediaProcessing => media.any((m) => m.uploading || m.processing);
+
+  NearbyPost copyWith(
+          {int? likeCount,
+          bool? liked,
+          int? commentCount,
+          List<NearbyMedia>? media}) =>
       NearbyPost(
         id: id,
         author: author,
@@ -4226,12 +4258,15 @@ class NearbyPost {
         radiusM: radiusM,
         tags: tags,
         official: official,
-        media: media,
+        media: media ?? this.media,
       );
 }
 
-/// A photo or video on an official Threads post: [url] in full quality,
-/// [previewUrl] a smaller still for the grid.
+/// A photo or video on a Threads post: [url] the file, [previewUrl] a
+/// smaller still for the grid. A member's one is [uploading] (its file is
+/// on its way from the app: neither yet), then [processing] (stored, and
+/// compressed in the background: no [url] yet) until it's ready, or
+/// [failed].
 class NearbyMedia {
   const NearbyMedia({
     required this.id,
@@ -4241,13 +4276,15 @@ class NearbyMedia {
     required this.width,
     required this.height,
     this.duration,
+    this.status = 'ready',
   });
 
   factory NearbyMedia.fromJson(Map<String, dynamic> json) => NearbyMedia(
         id: json['id'] as int,
         isVideo: json['type'] == 'video',
-        url: json['url'] as String,
-        previewUrl: json['preview_url'] as String,
+        status: json['status'] as String? ?? 'ready',
+        url: json['url'] as String?,
+        previewUrl: json['preview_url'] as String?,
         width: json['width'] as int,
         height: json['height'] as int,
         duration: json['duration_ms'] == null
@@ -4257,11 +4294,22 @@ class NearbyMedia {
 
   final int id;
   final bool isVideo;
-  final String url;
-  final String previewUrl;
+
+  /// The file (none until it's ready).
+  final String? url;
+
+  /// The still (none while its file is on its way).
+  final String? previewUrl;
   final int width;
   final int height;
   final Duration? duration;
+
+  /// 'uploading', 'queued', 'compressing', 'ready' or 'failed'.
+  final String status;
+
+  bool get uploading => status == 'uploading';
+  bool get processing => status == 'queued' || status == 'compressing';
+  bool get failed => status == 'failed';
 
   double get aspectRatio => height == 0 ? 1 : width / height;
 }
@@ -4416,6 +4464,7 @@ Future<NearbyPost> createNearbyPost(
         required int radiusM,
         AnonymousName? as,
         List<int> tagIds = const [],
+        int? mediaId,
         http.Client? client}) =>
     _nearbyCall(() => _sendAuthorized(
           client,
@@ -4425,11 +4474,66 @@ Future<NearbyPost> createNearbyPost(
                 'body': body,
                 'radius_m': radiusM,
                 if (tagIds.isNotEmpty) 'tag_ids': tagIds,
+                if (mediaId != null) 'media_id': mediaId,
                 if (as != null) 'name': as.name,
                 if (as != null) 'avatar': as.avatar,
               })),
           NearbyPost.fromJson,
         ));
+
+/// POST .../nearby/media: a photo or video I chose for my next post
+/// (verified members), before its file is sent: `uploading`. The post can
+/// be written at once; the file follows ([uploadNearbyMedia]).
+Future<NearbyMedia> reserveNearbyMedia(
+        {required String backendUrl,
+        required String token,
+        required bool isVideo,
+        http.Client? client}) =>
+    _sendAuthorized(
+      client,
+      (httpClient) => httpClient.post(_nearby(backendUrl, '/media'),
+          headers: _json(token),
+          body: jsonEncode({'type': isVideo ? 'video' : 'image'})),
+      NearbyMedia.fromJson,
+    );
+
+/// POST .../nearby/media/{id}/file: its file, posted already or not: stored
+/// with a still (`queued`), then compressed in the background. [onProgress]
+/// gets the share sent so far (0-1); closing [client] stops it.
+Future<NearbyMedia> uploadNearbyMedia(
+        {required String backendUrl,
+        required String token,
+        required int mediaId,
+        required List<int> bytes,
+        required String filename,
+        void Function(double sent)? onProgress,
+        http.Client? client}) =>
+    _sendAuthorized(
+      client,
+      (httpClient) {
+        final multipart = http.MultipartRequest(
+            'POST', _nearby(backendUrl, '/media/$mediaId/file'))
+          ..headers.addAll(_authorization(token))
+          ..files.add(
+              http.MultipartFile.fromBytes('file', bytes, filename: filename));
+        return _sendCountingProgress(httpClient, multipart, onProgress);
+      },
+      NearbyMedia.fromJson,
+    );
+
+/// DELETE .../nearby/media/{id}: a photo or video I chose that isn't posted,
+/// or that's on my post but isn't ready.
+Future<void> removeNearbyMedia(
+        {required String backendUrl,
+        required String token,
+        required int mediaId,
+        http.Client? client}) =>
+    _sendAuthorized(
+      client,
+      (httpClient) => httpClient.delete(_nearby(backendUrl, '/media/$mediaId'),
+          headers: _authorization(token)),
+      (_) {},
+    );
 
 /// GET .../nearby/tags: the tags a post can have, by category.
 Future<List<NearbyTagCategory>> fetchNearbyTags(

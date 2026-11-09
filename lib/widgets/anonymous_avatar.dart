@@ -121,11 +121,13 @@ class MaskOverlay extends StatelessWidget {
             ]),
           ),
         ),
+        // bottom right: green while they're online, else the blue dot of
+        // someone recently active
         if (online)
-          Positioned(right: 0, bottom: 0, child: OnlineDot(size: size * 0.28)),
-        if (activeUntil != null)
+          Positioned(right: 0, bottom: 0, child: OnlineDot(size: size * 0.28))
+        else if (activeUntil != null)
           Positioned(
-              left: 0,
+              right: 0,
               bottom: 0,
               child: RecentlyActiveDot(until: activeUntil!, size: size * 0.26)),
       ]),

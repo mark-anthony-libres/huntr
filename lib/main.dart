@@ -9,6 +9,7 @@ import 'services/album_service.dart';
 import 'services/explore_service.dart';
 import 'services/feedback_service.dart';
 import 'services/nearby_service.dart';
+import 'services/nearby_uploads.dart';
 import 'services/story_service.dart';
 import 'services/presence/presence_service.dart';
 import 'services/location_service.dart';
@@ -53,6 +54,7 @@ void main() {
   late final BlockState blocks;
   late final TapState taps;
   late final AppState state;
+  late final NearbyUploads nearbyUploads;
   state = AppState(
     // A signed-out device keeps none of the user's photos or messages.
     onSessionEnd: () async {
@@ -62,6 +64,7 @@ void main() {
       messaging.clear();
       blocks.clear();
       taps.clear();
+      nearbyUploads.clear();
       await Future.wait([
         if (photoCache != null) photoCache.clear(),
         if (albumCache != null) albumCache.clear(),
@@ -86,6 +89,8 @@ void main() {
       service: const TapService(),
       token: () => state.sessionToken,
       onSessionRejected: state.endSession);
+  nearbyUploads =
+      NearbyUploads(const NearbyService(), onSessionRejected: state.endSession);
   runApp(HuntrApp(
     state: state,
     updates: AppUpdateGate(),
@@ -102,6 +107,7 @@ void main() {
     feedback: const FeedbackService(),
     stories: const StoryService(),
     nearby: const NearbyService(),
+    nearbyUploads: nearbyUploads,
     locationAccess: LocationAccess(const GeolocatorPermissions()),
     blocks: blocks,
     taps: taps,
@@ -124,6 +130,7 @@ class HuntrApp extends StatelessWidget {
     this.feedback,
     this.stories,
     this.nearby,
+    this.nearbyUploads,
     this.messaging,
     this.locate = locateDevice,
     this.locationAccess,
@@ -174,6 +181,9 @@ class HuntrApp extends StatelessWidget {
   /// Nearby's anonymous posts. Null: no Nearby tab content (tests).
   final NearbyService? nearby;
 
+  /// Threads photos and videos on their way from this device.
+  final NearbyUploads? nearbyUploads;
+
   /// My direct messages on the backend. Null keeps the sample chats.
   final MessagingState? messaging;
 
@@ -213,6 +223,7 @@ class HuntrApp extends StatelessWidget {
               feedback: feedback,
               stories: stories,
               nearby: nearby,
+              nearbyUploads: nearbyUploads,
               child: ThemeFollower(
                 appearance: state.appearance,
                 builder: (context) => MaterialApp(

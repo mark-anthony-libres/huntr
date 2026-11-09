@@ -36,10 +36,50 @@ class _NearbyScreenState extends State<NearbyScreen> {
   String? _error;
   bool _noLocation = false;
 
+  /// While a post's video is being compressed: when its post is looked
+  /// at again (it shows once it's ready).
+  Timer? _recheck;
+  static const _recheckEvery = Duration(seconds: 20);
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+  }
+
+  @override
+  void dispose() {
+    _recheck?.cancel();
+    super.dispose();
+  }
+
+  /// Looks again soon at posts whose video is still processing.
+  void _watchProcessing() {
+    if (_recheck?.isActive ?? false) return;
+    if (!(_posts ?? const <NearbyPost>[]).any((p) => p.mediaProcessing)) {
+      return;
+    }
+    _recheck = Timer(_recheckEvery, _recheckProcessing);
+  }
+
+  Future<void> _recheckProcessing() async {
+    final service = ServicesScope.nearbyOf(context);
+    final token = AppScope.read(context).sessionToken;
+    if (!mounted || service == null || token == null) return;
+    for (final post in [...?_posts]) {
+      if (!post.mediaProcessing) continue;
+      try {
+        final now = (await service.discussion(token, post.id)).post;
+        if (!mounted) return;
+        setState(() => _posts = [
+              for (final p in _posts ?? const <NearbyPost>[])
+                p.id == now.id ? now : p,
+            ]);
+      } catch (error) {
+        debugPrint('Thread ${post.id} not checked again: $error');
+      }
+    }
+    if (mounted) _watchProcessing();
   }
 
   /// The first page again, or ([more]) the next one.
@@ -74,6 +114,7 @@ class _NearbyScreenState extends State<NearbyScreen> {
         _next = page.nextOffset;
         _noLocation = false;
       });
+      _watchProcessing();
     } on SessionRejectedException {
       if (mounted) app.endSession();
     } on NearbyNoLocationException {
@@ -138,6 +179,7 @@ class _NearbyScreenState extends State<NearbyScreen> {
             builder: (_) => const NearbyComposeScreen()));
     if (posted == null || !mounted) return;
     setState(() => _posts = [posted, ...?_posts]);
+    _watchProcessing();
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
@@ -271,48 +313,46 @@ class _NearbyScreenState extends State<NearbyScreen> {
                     fit: BoxFit.scaleDown,
                     alignment: Alignment.centerLeft,
                     child: Row(children: [
-                        for (final (latest, label, key) in const [
-                          (false, 'Nearby', 'nearbySortNearby'),
-                          (true, 'Latest', 'nearbySortLatest'),
-                        ]) ...[
-                          ChoiceChip(
-                            key: Key(key),
-                            visualDensity: VisualDensity.compact,
-                            materialTapTargetSize:
-                                MaterialTapTargetSize.shrinkWrap,
-                            labelPadding:
-                                const EdgeInsets.symmetric(horizontal: 4),
-                            label: Text(label),
-                            selected: _latest == latest,
-                            showCheckmark: false,
-                            selectedColor:
-                                HuntrColors.orange.withValues(alpha: 0.18),
-                            side: BorderSide(
-                                color: _latest == latest
-                                    ? HuntrColors.orange
-                                    : HuntrColors.border),
-                            onSelected: (_) => _sort(latest),
-                          ),
-                          const SizedBox(width: 8),
-                        ],
-                        ActionChip(
-                          key: const Key('nearbyWithin'),
+                      for (final (latest, label, key) in const [
+                        (false, 'Nearby', 'nearbySortNearby'),
+                        (true, 'Latest', 'nearbySortLatest'),
+                      ]) ...[
+                        ChoiceChip(
+                          key: Key(key),
                           visualDensity: VisualDensity.compact,
                           materialTapTargetSize:
                               MaterialTapTargetSize.shrinkWrap,
                           labelPadding:
                               const EdgeInsets.symmetric(horizontal: 4),
-                          avatar:
-                              const Icon(Icons.location_on_outlined, size: 16),
-                          label: Row(mainAxisSize: MainAxisSize.min, children: [
-                            Text(_withinM == null
-                                ? 'Distance'
-                                : nearbyRadiusLabel(_withinM!)),
-                            const Icon(Icons.expand_more_rounded, size: 16),
-                          ]),
-                          onPressed: _pickWithin,
+                          label: Text(label),
+                          selected: _latest == latest,
+                          showCheckmark: false,
+                          selectedColor:
+                              HuntrColors.orange.withValues(alpha: 0.18),
+                          side: BorderSide(
+                              color: _latest == latest
+                                  ? HuntrColors.orange
+                                  : HuntrColors.border),
+                          onSelected: (_) => _sort(latest),
                         ),
-                      ]),
+                        const SizedBox(width: 8),
+                      ],
+                      ActionChip(
+                        key: const Key('nearbyWithin'),
+                        visualDensity: VisualDensity.compact,
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        labelPadding: const EdgeInsets.symmetric(horizontal: 4),
+                        avatar:
+                            const Icon(Icons.location_on_outlined, size: 16),
+                        label: Row(mainAxisSize: MainAxisSize.min, children: [
+                          Text(_withinM == null
+                              ? 'Distance'
+                              : nearbyRadiusLabel(_withinM!)),
+                          const Icon(Icons.expand_more_rounded, size: 16),
+                        ]),
+                        onPressed: _pickWithin,
+                      ),
+                    ]),
                   ),
                 ),
                 const SizedBox(width: 8),

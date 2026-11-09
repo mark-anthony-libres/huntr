@@ -44,6 +44,13 @@ class ProfileService {
         sexualPosition: position?.apiName,
       ));
 
+  /// Whether I have a place; returns it as stored.
+  Future<bool> updatePlace(String token, bool hasPlace) async => updateMyPlace(
+        backendUrl: await GoogleOAuthConfig.loadBackendUrl(),
+        token: token,
+        hasPlace: hasPlace,
+      );
+
   /// Saves whichever privacy settings are given.
   Future<PrivacySettings> updatePrivacy(String token,
           {bool? showOnline,

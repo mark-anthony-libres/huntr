@@ -1,20 +1,31 @@
-import 'package:flutter/material.dart';
+import 'dart:async';
+import 'dart:typed_data';
 
+import 'package:flutter/material.dart';
+import 'package:video_player/video_player.dart';
+
+import '../flows/chat_attachments.dart' show ChatMediaPicker;
 import '../services/huntr_backend.dart';
 import '../services/nearby_service.dart';
+import '../services/nearby_uploads.dart';
 import '../services/services_scope.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
+import '../widgets/chat/picked_video_io.dart'
+    if (dart.library.js_interop) '../widgets/chat/picked_video_web.dart';
 import '../widgets/load_more_row.dart';
 import '../widgets/nearby/nearby_post_card.dart';
 import '../widgets/nearby/nearby_tags.dart';
 import 'chats_screen.dart' show timeLabel;
 import 'nearby_post_screen.dart';
 
-/// New thread: what's on my mind (up to [NearbyService.maxLength]
-/// characters) and how far it reaches, then Post - it goes up under a random
-/// name and animal. Below, my live threads (open one, or delete it). Pops
-/// with the new thread once it's up.
+/// New thread (verified members): what's on my mind (up to
+/// [NearbyService.maxLength] characters), one photo or video (optional),
+/// and how far it reaches, then Post - it goes up under a random name and
+/// animal, and stays until it's deleted. A chosen photo or video starts
+/// uploading at once (app-wide, [NearbyUploads]), and Post doesn't wait for
+/// it: the thread shows how it's going. Below, my live threads (open one,
+/// or delete it). Pops with the new thread once it's up.
 class NearbyComposeScreen extends StatefulWidget {
   const NearbyComposeScreen({super.key});
 
@@ -34,6 +45,26 @@ class _NearbyComposeScreenState extends State<NearbyComposeScreen> {
   bool _posting = false;
   String? _error;
 
+  /// The photo or video chosen for it: its id once it's written on the
+  /// backend (its file is sent from then on), and (while that's asked)
+  /// [_choosing]; its picture from this device; why the last one couldn't
+  /// be added.
+  int? _mediaId;
+  bool _choosing = false;
+  Uint8List? _localPhoto;
+  String? _localVideoPath;
+  bool _pickedVideo = false;
+  String? _mediaError;
+
+  /// Counts picks: a Remove or Replace makes one still being written stale.
+  int _pick = 0;
+
+  /// Where the chosen one is uploading, and as whom: it's removed if the
+  /// thread isn't posted.
+  NearbyUploads? _uploads;
+  String? _token;
+  bool _posted = false;
+
   /// My live threads (null: loading), and where the next page starts.
   List<NearbyPost>? _mine;
   int? _next;
@@ -48,6 +79,8 @@ class _NearbyComposeScreenState extends State<NearbyComposeScreen> {
 
   @override
   void dispose() {
+    // closed without posting: the chosen one goes
+    if (!_posted) _discardChosen();
     _text.dispose();
     super.dispose();
   }
@@ -77,7 +110,108 @@ class _NearbyComposeScreenState extends State<NearbyComposeScreen> {
 
   bool get _ready =>
       _text.text.trim().isNotEmpty &&
-      _text.text.length <= NearbyService.maxLength;
+      _text.text.length <= NearbyService.maxLength &&
+      !_choosing;
+
+  /// One photo or video from the library: checked for size here (and by
+  /// the backend), shown from this device, and uploaded from now on.
+  /// Replaces one chosen before.
+  Future<void> _pickMedia() async {
+    final uploads = ServicesScope.nearbyUploadsOf(context);
+    final app = AppScope.read(context);
+    final token = app.sessionToken;
+    if (uploads == null || token == null) return;
+    final file = await ChatMediaPicker.instance.pickMedia();
+    if (file == null || !mounted) return;
+    if (await file.length() > NearbyService.maxUploadBytes) {
+      if (mounted) {
+        setState(() =>
+            _mediaError = 'The file is too large. The maximum is 100 MB.');
+      }
+      return;
+    }
+    final bytes = await file.readAsBytes();
+    if (!mounted) return;
+    final name = file.name.toLowerCase();
+    final video = (file.mimeType ?? '').startsWith('video/') ||
+        const ['.mp4', '.mov', '.webm', '.m4v']
+            .any((extension) => name.endsWith(extension));
+    final pick = ++_pick;
+    _discardChosen();
+    setState(() {
+      _choosing = true;
+      _pickedVideo = video;
+      _localPhoto = video ? null : bytes;
+      _localVideoPath = video ? file.path : null;
+      _mediaError = null;
+    });
+    try {
+      final media = await uploads.choose(token,
+          bytes: bytes,
+          // a file with no name would be sent as a plain field, not a file
+          filename: file.name.isNotEmpty
+              ? file.name
+              : (video ? 'video.mp4' : 'photo.jpg'),
+          isVideo: video);
+      _uploads = uploads;
+      _token = token;
+      if (!mounted || pick != _pick) {
+        unawaited(uploads.remove(token, media.id));
+        return;
+      }
+      setState(() {
+        _mediaId = media.id;
+        _choosing = false;
+      });
+    } on SessionRejectedException {
+      if (mounted) app.endSession();
+    } catch (error) {
+      if (!mounted || pick != _pick) return;
+      _clearChosen(error is BackendException
+          ? error.message
+          : "It couldn't be added. Check your connection and try again.");
+    }
+  }
+
+  /// A video longer than the backend takes is refused here already (when
+  /// its length can be read on this device).
+  void _checkVideoLength(Duration length) {
+    if (length <= NearbyService.maxVideoLength) return;
+    _pick++;
+    _discardChosen();
+    _clearChosen('The video is too long. The maximum is '
+        '${NearbyService.maxVideoLength.inMinutes} minutes.');
+  }
+
+  void _removeMedia() {
+    _pick++;
+    _discardChosen();
+    _clearChosen(null);
+  }
+
+  void _retryMedia() {
+    final id = _mediaId, token = _token;
+    if (id != null && token != null) _uploads?.retry(token, id);
+  }
+
+  /// The chosen one stops uploading and goes on the backend - just after
+  /// this, as it may be while the screen closes (when nothing on screen may
+  /// change).
+  void _discardChosen() {
+    final id = _mediaId, token = _token, uploads = _uploads;
+    _mediaId = null;
+    if (id != null && token != null && uploads != null) {
+      scheduleMicrotask(() => uploads.remove(token, id));
+    }
+  }
+
+  void _clearChosen(String? error) => setState(() {
+        _mediaId = null;
+        _choosing = false;
+        _localPhoto = null;
+        _localVideoPath = null;
+        _mediaError = error;
+      });
 
   Future<void> _post() async {
     final service = ServicesScope.nearbyOf(context);
@@ -90,7 +224,12 @@ class _NearbyComposeScreenState extends State<NearbyComposeScreen> {
     });
     try {
       final post = await service.post(token,
-          body: _text.text, radiusM: _radiusM, tagIds: _tagIds.toList());
+          body: _text.text,
+          radiusM: _radiusM,
+          tagIds: _tagIds.toList(),
+          mediaId: _mediaId);
+      // its photo or video keeps uploading: the thread shows how it's going
+      _posted = true;
       if (mounted) Navigator.of(context).pop(post);
     } on SessionRejectedException {
       if (mounted) app.endSession();
@@ -220,6 +359,30 @@ class _NearbyComposeScreenState extends State<NearbyComposeScreen> {
     final over = count > NearbyService.maxLength;
     final mine = _mine;
     final now = DateTime.now();
+    // only verified members post (the backend says so too)
+    if (!AppScope.of(context).myVerified) {
+      return Scaffold(
+        appBar: AppBar(
+          leading: IconButton(
+            key: const Key('nearbyComposeClose'),
+            tooltip: 'Close',
+            icon: const Icon(Icons.close_rounded),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+          title: const Text('New thread'),
+          centerTitle: true,
+        ),
+        body: const Center(
+          child: Padding(
+            padding: EdgeInsets.all(32),
+            child: Text('Only verified members can post in Threads.',
+                key: Key('nearbyVerifiedOnly'),
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 16, color: HuntrColors.muted)),
+          ),
+        ),
+      );
+    }
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
@@ -290,6 +453,27 @@ class _NearbyComposeScreenState extends State<NearbyComposeScreen> {
                     ),
                   ]),
                 ),
+                const SizedBox(height: 12),
+
+                // ---- one photo or video (optional) ----
+                _Attachment(
+                  mediaId: _mediaId,
+                  choosing: _choosing,
+                  localPhoto: _localPhoto,
+                  localVideoPath: _localVideoPath,
+                  video: _pickedVideo,
+                  onPick: _posting ? null : _pickMedia,
+                  onRemove: _posting ? null : _removeMedia,
+                  onRetry: _retryMedia,
+                  onVideoLength: _checkVideoLength,
+                ),
+                if (_mediaError != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Text(_mediaError!,
+                        key: const Key('nearbyMediaError'),
+                        style: const TextStyle(color: HuntrColors.coral)),
+                  ),
                 if (_error != null)
                   Padding(
                     padding: const EdgeInsets.only(top: 10),
@@ -421,8 +605,7 @@ class _NearbyComposeScreenState extends State<NearbyComposeScreen> {
                   const Padding(
                     key: Key('nearbyNoMine'),
                     padding: EdgeInsets.symmetric(vertical: 20),
-                    child: Text(
-                        "Your threads will show here. They're up for 7 days.",
+                    child: Text('Your threads will show here.',
                         textAlign: TextAlign.center,
                         style: TextStyle(color: HuntrColors.muted)),
                   )
@@ -524,6 +707,219 @@ class _MyPost extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// The thread's photo or video: "Add photo or video" until one is chosen;
+/// then its picture from this device (a photo, or a video's first frame),
+/// how its upload is going, and Replace or Remove (Try again when it
+/// failed). Only one: no way to add a second.
+class _Attachment extends StatelessWidget {
+  const _Attachment({
+    required this.mediaId,
+    required this.choosing,
+    required this.localPhoto,
+    required this.localVideoPath,
+    required this.video,
+    required this.onPick,
+    required this.onRemove,
+    required this.onRetry,
+    required this.onVideoLength,
+  });
+
+  final int? mediaId;
+  final bool choosing;
+  final Uint8List? localPhoto;
+  final String? localVideoPath;
+  final bool video;
+  final VoidCallback? onPick;
+  final VoidCallback? onRemove;
+  final VoidCallback onRetry;
+  final ValueChanged<Duration> onVideoLength;
+
+  @override
+  Widget build(BuildContext context) {
+    if (mediaId == null && !choosing) {
+      return OutlinedButton.icon(
+        key: const Key('nearbyAddMedia'),
+        onPressed: onPick,
+        style: OutlinedButton.styleFrom(
+          minimumSize: const Size.fromHeight(52),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          side: const BorderSide(color: HuntrColors.border),
+        ),
+        icon:
+            Icon(Icons.add_photo_alternate_outlined, color: HuntrColors.orange),
+        label: const Text('Add photo or video'),
+      );
+    }
+    final Widget picture;
+    if (localPhoto != null) {
+      picture = Image.memory(localPhoto!, fit: BoxFit.cover);
+    } else if (localVideoPath != null) {
+      picture = _LocalVideoFrame(
+          key: ValueKey(localVideoPath),
+          path: localVideoPath!,
+          onLength: onVideoLength);
+    } else {
+      picture = const ColoredBox(
+          color: HuntrColors.surfaceHigh,
+          child: Center(
+              child: Icon(Icons.videocam_outlined,
+                  size: 40, color: HuntrColors.muted)));
+    }
+    final uploads = ServicesScope.nearbyUploadsOf(context);
+    return Container(
+      key: const Key('nearbyMediaPicked'),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: HuntrColors.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: HuntrColors.border),
+      ),
+      child: Row(children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: SizedBox.square(dimension: 84, child: picture),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(video ? 'Video' : 'Photo',
+                  style: const TextStyle(fontWeight: FontWeight.w700)),
+              const SizedBox(height: 4),
+              if (uploads != null)
+                ListenableBuilder(
+                  listenable: uploads,
+                  builder: (context, _) => _UploadLine(
+                      upload: mediaId == null ? null : uploads.of(mediaId!)),
+                ),
+              const SizedBox(height: 4),
+              // on a narrow screen Try again goes under the others
+              Wrap(children: [
+                TextButton(
+                  key: const Key('nearbyReplaceMedia'),
+                  onPressed: onPick,
+                  child: const Text('Replace'),
+                ),
+                TextButton(
+                  key: const Key('nearbyRemoveMedia'),
+                  onPressed: onRemove,
+                  child: const Text('Remove',
+                      style: TextStyle(color: HuntrColors.coral)),
+                ),
+                if (uploads != null && mediaId != null)
+                  ListenableBuilder(
+                    listenable: uploads,
+                    builder: (context, _) => uploads.of(mediaId!)?.error == null
+                        ? const SizedBox.shrink()
+                        : TextButton(
+                            key: const Key('nearbyRetryMedia'),
+                            onPressed: onRetry,
+                            child: const Text('Try again'),
+                          ),
+                  ),
+              ]),
+            ],
+          ),
+        ),
+      ]),
+    );
+  }
+}
+
+/// How its upload is going: "Uploading 40%" with a bar, "Uploaded", or why
+/// it failed.
+class _UploadLine extends StatelessWidget {
+  const _UploadLine({required this.upload});
+
+  /// Null while it's being written on the backend (nothing sent yet).
+  final NearbyUpload? upload;
+
+  @override
+  Widget build(BuildContext context) {
+    final upload = this.upload;
+    if (upload?.error case final error?) {
+      return Text(error,
+          key: const Key('nearbyMediaUploadError'),
+          style: const TextStyle(color: HuntrColors.coral, fontSize: 13));
+    }
+    if (upload?.stored != null) {
+      return const Text('Uploaded',
+          key: Key('nearbyMediaUploaded'),
+          style: TextStyle(color: HuntrColors.muted, fontSize: 13));
+    }
+    final sent = upload?.sent ?? 0;
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text('Uploading ${(sent * 100).floor()}%',
+          key: const Key('nearbyMediaProgress'),
+          style: const TextStyle(color: HuntrColors.muted, fontSize: 13)),
+      const SizedBox(height: 6),
+      LinearProgressIndicator(
+          value: sent, minHeight: 4, borderRadius: BorderRadius.circular(4)),
+    ]);
+  }
+}
+
+/// A video chosen on this device: its first frame, and (once read) how
+/// long it is. Some can't be read here (a format the browser can't play):
+/// a video mark, and the backend checks it.
+class _LocalVideoFrame extends StatefulWidget {
+  const _LocalVideoFrame(
+      {super.key, required this.path, required this.onLength});
+
+  final String path;
+  final ValueChanged<Duration> onLength;
+
+  @override
+  State<_LocalVideoFrame> createState() => _LocalVideoFrameState();
+}
+
+class _LocalVideoFrameState extends State<_LocalVideoFrame> {
+  late final VideoPlayerController _player = pickedVideoController(widget.path);
+  bool _failed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _player.initialize().then((_) {
+      if (!mounted) return;
+      setState(() {});
+      widget.onLength(_player.value.duration);
+    }, onError: (Object _) {
+      if (mounted) setState(() => _failed = true);
+    });
+  }
+
+  @override
+  void dispose() {
+    _player.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final size = _player.value.size;
+    return ColoredBox(
+      color: HuntrColors.surfaceHigh,
+      child: Stack(fit: StackFit.expand, children: [
+        if (!_failed && _player.value.isInitialized && !size.isEmpty)
+          FittedBox(
+            fit: BoxFit.cover,
+            clipBehavior: Clip.hardEdge,
+            child: SizedBox(
+                width: size.width,
+                height: size.height,
+                child: VideoPlayer(_player)),
+          ),
+        const Center(
+            child: Icon(Icons.play_circle_fill_rounded,
+                color: Colors.white70, size: 30)),
+      ]),
     );
   }
 }

@@ -222,6 +222,8 @@ class _ExploreMapState extends State<ExploreMap> {
       if (!mounted || asked != _asked) return; // moved on meanwhile
       setState(() {
         _people = found.people;
+        // so their profile opens from here (they may not be in the list)
+        app.rememberPeople([for (final p in found.people) p.profile]);
         _more = found.more;
         _reachKm = found.reachKm ?? _reachKm;
         _photosWithinMeters = found.photosWithinMeters ?? _photosWithinMeters;

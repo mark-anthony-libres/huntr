@@ -1,13 +1,19 @@
-// Nearby: the feed (sort, distance filter, states), writing a post, the
-// discussion (threaded comments, replies), hearts, delete and report - with
-// the backend faked.
+// Nearby: the feed (sort, distance filter, states), writing a post (with a
+// photo uploading meanwhile), the discussion (threaded comments, replies),
+// hearts, delete and report - with the backend faked.
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:huntr/flows/chat_attachments.dart';
 import 'package:huntr/screens/nearby_post_screen.dart';
 import 'package:huntr/screens/nearby_screen.dart';
 import 'package:huntr/services/huntr_backend.dart';
 import 'package:huntr/services/nearby_service.dart';
+import 'package:huntr/services/nearby_uploads.dart';
 import 'package:huntr/services/services_scope.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:huntr/state/app_state.dart';
 import 'package:huntr/theme.dart';
 
@@ -49,12 +55,61 @@ NearbyComment _comment(int id, String name, String body,
         byAuthor: false,
         replies: replies);
 
+NearbyMedia _photo(int id, String status) => NearbyMedia(
+    id: id,
+    isVideo: false,
+    url: null,
+    previewUrl: status == 'uploading' ? null : 'https://cdn/p$id.webp',
+    width: 400,
+    height: 300,
+    status: status);
+
+/// A 1 x 1 PNG.
+final _png = base64Decode(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=');
+
+class _FakePicker extends ChatMediaPicker {
+  final List<XFile> next = [];
+
+  @override
+  Future<XFile?> pickMedia() async => next.isEmpty ? null : next.removeAt(0);
+}
+
 class _FakeNearby extends NearbyService {
   List<NearbyPost> posts = [];
   int? next;
   Object? feedError;
   final calls = <String>[];
   List<NearbyComment> comments = [];
+
+  /// An upload waits for this (then fails with [uploadError], if any).
+  Completer<void>? uploadGate;
+  Object? uploadError;
+
+  @override
+  Future<NearbyMedia> reserveMedia(String token,
+      {required bool isVideo}) async {
+    calls.add('reserve ${isVideo ? 'video' : 'image'}');
+    return _photo(7, 'uploading');
+  }
+
+  @override
+  Future<NearbyMedia> uploadMedia(String token,
+      {required int mediaId,
+      required List<int> bytes,
+      required String filename,
+      void Function(double sent)? onProgress,
+      Object? client}) async {
+    calls.add('upload $mediaId $filename');
+    onProgress?.call(0.4);
+    await uploadGate?.future;
+    if (uploadError != null) throw uploadError!;
+    return _photo(mediaId, 'queued');
+  }
+
+  @override
+  Future<void> removeMedia(String token, int mediaId) async =>
+      calls.add('remove $mediaId');
 
   @override
   Future<NearbyFeedPage> feed(String token,
@@ -78,8 +133,10 @@ class _FakeNearby extends NearbyService {
       {required String body,
       required int radiusM,
       AnonymousName? as,
-      List<int> tagIds = const []}) async {
-    calls.add('post $radiusM ${as?.name} $body');
+      List<int> tagIds = const [],
+      int? mediaId}) async {
+    calls.add(
+        'post $radiusM ${as?.name} $body${mediaId == null ? '' : ' +$mediaId'}');
     return NearbyPost(
         id: 50,
         author: const AnonymousName(name: 'HappyMango', avatar: 'bear'),
@@ -90,7 +147,8 @@ class _FakeNearby extends NearbyService {
         liked: false,
         commentCount: 0,
         mine: true,
-        radiusM: radiusM);
+        radiusM: radiusM,
+        media: [if (mediaId != null) _photo(mediaId, 'uploading')]);
   }
 
   @override
@@ -141,11 +199,15 @@ Future<void> _open(WidgetTester tester, _FakeNearby service,
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   await tester.pumpWidget(AppScope(
-    state: AppState()..startSession('token'),
+    // only verified members post in Threads
+    state: AppState()
+      ..startSession('token')
+      ..myVerified = true,
     child: ServicesScope(
       profiles: null,
       agreements: null,
       nearby: service,
+      nearbyUploads: NearbyUploads(service),
       child: MaterialApp(
           theme: buildHuntrTheme(),
           home: home ?? const Scaffold(body: NearbyScreen())),
@@ -155,6 +217,8 @@ Future<void> _open(WidgetTester tester, _FakeNearby service,
 }
 
 void main() {
+  tearDown(() => ChatMediaPicker.instance = const ChatMediaPicker());
+
   test('distances, radii and times read naturally', () {
     expect(nearbyDistanceLabel(0), 'here');
     expect(nearbyDistanceLabel(320), '320 m');
@@ -263,6 +327,109 @@ void main() {
     final mine = tester.getTopLeft(find.byKey(const Key('nearbyPost-50'))).dy;
     expect(mine,
         lessThan(tester.getTopLeft(find.byKey(const Key('nearbyPost-1'))).dy));
+  });
+
+  testWidgets(
+      "a photo uploads once it's chosen; Post doesn't wait; the post shows "
+      'how it goes', (tester) async {
+    final service = _FakeNearby()..uploadGate = Completer();
+    ChatMediaPicker.instance = _FakePicker()
+      ..next.add(XFile.fromData(_png,
+          name: 'pic.png', path: 'pic.png', mimeType: 'image/png'));
+    await _open(tester, service);
+    await tester.tap(find.byKey(const Key('nearbyCompose')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('nearbyText')), 'Sunset');
+    await tester.tap(find.byKey(const Key('nearbyAddMedia')));
+    await tester.pump();
+    await tester.pump();
+    // written on the backend and sending at once
+    expect(service.calls,
+        containsAllInOrder(['reserve image', 'upload 7 pic.png']));
+    expect(find.text('Uploading 40%'), findsOneWidget);
+    // Post doesn't wait for it
+    final post = find.byKey(const Key('nearbyPost'));
+    expect(tester.widget<FilledButton>(post).onPressed, isNotNull);
+    await tester.tap(post);
+    await tester.pump();
+    // the thread closes (its spinner never settles: pumped by time)
+    await tester.pump(const Duration(seconds: 1));
+    expect(service.calls, contains('post 5000 null Sunset +7'));
+    // on the feed: how it's going, then (stored) processing
+    expect(find.byKey(const Key('nearbyMediaUploading-7')), findsOneWidget);
+    expect(find.text('Uploading 40%'), findsOneWidget);
+    service.uploadGate!.complete();
+    await tester.pump();
+    await tester.pump();
+    expect(find.text('Processing…'), findsOneWidget);
+    expect(service.calls.where((c) => c.startsWith('remove')), isEmpty);
+    await tester.pumpWidget(const SizedBox()); // the feed's re-check stops
+  });
+
+  testWidgets('a failed upload: Try again or Remove (the post stays)',
+      (tester) async {
+    final service = _FakeNearby()
+      ..uploadError =
+          const BackendException('Could not reach the Huntr server.');
+    ChatMediaPicker.instance = _FakePicker()
+      ..next.add(XFile.fromData(_png,
+          name: 'pic.png', path: 'pic.png', mimeType: 'image/png'));
+    await _open(tester, service);
+    await tester.tap(find.byKey(const Key('nearbyCompose')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('nearbyText')), 'Sunset');
+    await tester.tap(find.byKey(const Key('nearbyAddMedia')));
+    await tester.pumpAndSettle();
+    const why = "It didn't upload. Check your connection and try again.";
+    expect(find.text(why), findsOneWidget);
+    expect(find.byKey(const Key('nearbyRetryMedia')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('nearbyPost')));
+    await tester.pumpAndSettle();
+    // on the post too, with what to do
+    expect(find.text(why), findsOneWidget);
+    service.uploadError = null;
+    await tester.tap(find.byKey(const Key('nearbyMediaRetry-7')));
+    await tester.pump();
+    await tester.pump();
+    expect(service.calls.where((c) => c == 'upload 7 pic.png'), hasLength(2));
+    expect(find.text('Processing…'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('a failed upload removed from the post; one never posted goes',
+      (tester) async {
+    final service = _FakeNearby()..uploadError = const BackendException('No.');
+    ChatMediaPicker.instance = _FakePicker()
+      ..next.addAll([
+        XFile.fromData(_png,
+            name: 'a.png', path: 'a.png', mimeType: 'image/png'),
+        XFile.fromData(_png,
+            name: 'b.png', path: 'b.png', mimeType: 'image/png'),
+      ]);
+    await _open(tester, service);
+    await tester.tap(find.byKey(const Key('nearbyCompose')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('nearbyText')), 'Sunset');
+    await tester.tap(find.byKey(const Key('nearbyAddMedia')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('nearbyPost')));
+    await tester.pumpAndSettle();
+    expect(find.text('No.'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('nearbyMediaRemove-7')));
+    await tester.pumpAndSettle();
+    expect(service.calls.last, 'remove 7');
+    expect(find.byKey(const Key('nearbyMedia-7')), findsNothing);
+    expect(find.byKey(const Key('nearbyPost-50')), findsOneWidget);
+
+    // chosen, then the thread closed without posting: it goes
+    await tester.tap(find.byKey(const Key('nearbyCompose')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('nearbyAddMedia')));
+    await tester.pumpAndSettle();
+    service.calls.clear();
+    await tester.tap(find.byKey(const Key('nearbyComposeClose')));
+    await tester.pumpAndSettle();
+    expect(service.calls, ['remove 7']);
   });
 
   testWidgets('the discussion: threaded, comment and reply to the right one',

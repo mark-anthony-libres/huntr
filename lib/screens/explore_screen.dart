@@ -266,6 +266,14 @@ class _ExploreScreenState extends State<ExploreScreen> {
             onSelected: (v) => app.filters = f.copyWith(onlineOnly: v),
           ),
           const SizedBox(width: 8),
+          PillChip(
+            key: const Key('hasPlaceChip'),
+            icon: Icons.home_rounded,
+            label: 'Has a place',
+            selected: f.hasPlace,
+            onSelected: (v) => app.filters = f.copyWith(hasPlace: v),
+          ),
+          const SizedBox(width: 8),
           // every "looking for" choice, as on profiles
           for (final l in LookingFor.values) ...[
             PillChip(
@@ -295,23 +303,44 @@ class _ExploreScreenState extends State<ExploreScreen> {
 
     // ---- floating, bottom right: the map, or back to the list ----
     final Widget? mapToggle = onBackend && mapEnabled
-        ? FloatingActionButton.small(
-            key: const Key('exploreMapToggle'),
-            tooltip: _mapView ? 'List' : 'Map',
-            backgroundColor: HuntrColors.orange,
-            foregroundColor: Colors.black,
-            onPressed: () => setState(() => _mapView = !_mapView),
-            // the icon turns into the other one
-            child: AnimatedSwitcher(
-              duration: _switchDuration,
-              transitionBuilder: (child, animation) => RotationTransition(
-                turns: Tween(begin: 0.75, end: 1.0).animate(animation),
-                child: ScaleTransition(scale: animation, child: child),
-              ),
-              child: Icon(
-                  _mapView ? Icons.grid_view_rounded : Icons.map_outlined,
+        ? SizedBox(
+            height: 44,
+            child: FloatingActionButton.extended(
+              key: const Key('exploreMapToggle'),
+              tooltip: _mapView ? 'Show the list' : 'Show the map',
+              backgroundColor: HuntrColors.orange,
+              foregroundColor: Colors.black,
+              elevation: 6,
+              // a light edge keeps it clear on the dark map and the photos
+              shape: StadiumBorder(
+                  side: BorderSide(
+                      color: Colors.white.withValues(alpha: 0.35), width: 1)),
+              extendedPadding: const EdgeInsets.symmetric(horizontal: 16),
+              onPressed: () => setState(() => _mapView = !_mapView),
+              // what it shows next: the map (a pin) or the list (a grid);
+              // the icon and word turn into the other ones
+              label: AnimatedSwitcher(
+                duration: _switchDuration,
+                transitionBuilder: (child, animation) => FadeTransition(
+                  opacity: animation,
+                  child: ScaleTransition(scale: animation, child: child),
+                ),
+                child: Row(
                   key: ValueKey(_mapView),
-                  size: 20),
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                        _mapView
+                            ? Icons.grid_view_rounded
+                            : Icons.location_on_rounded,
+                        size: 20),
+                    const SizedBox(width: 6),
+                    Text(_mapView ? 'List' : 'Map',
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w800, fontSize: 15)),
+                  ],
+                ),
+              ),
             ),
           )
         : null;

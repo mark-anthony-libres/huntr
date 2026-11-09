@@ -328,6 +328,7 @@ class Profile {
     this.storySeen = false,
     this.stickers,
     this.activeUntil,
+    this.hasPlace = false,
   });
 
   /// Someone anonymous to me (the sender of an anonymous conversation): only
@@ -409,6 +410,7 @@ class Profile {
           ? StickerCount.listFromJson(json['stickers'])
           : null,
       activeUntil: _time(json['active_until']),
+      hasPlace: json['has_place'] == true,
     );
   }
 
@@ -492,6 +494,7 @@ class Profile {
         hasStory: hasStory ?? this.hasStory,
         storySeen: storySeen ?? this.storySeen,
         stickers: stickers,
+        hasPlace: hasPlace,
       );
 
   /// A block between us (as the chat list knows it): I block them, or they
@@ -544,6 +547,9 @@ class Profile {
 
   /// Base hue (0-360) for this person's generated avatar.
   final double hue;
+
+  /// They switched on "Has a place" (shown on their profile and card).
+  final bool hasPlace;
   final String? pronouns;
   final int? heightCm;
   final bool verified;
@@ -711,9 +717,13 @@ class ExploreFilters {
     this.ageRange = const RangeValues(18, 60),
     this.lookingFor = const {},
     this.query = '',
+    this.hasPlace = false,
   });
 
   final ExploreSort sort;
+
+  /// Only people who have a place.
+  final bool hasPlace;
   final bool onlineOnly;
   final double? maxDistanceKm;
   final RangeValues ageRange;
@@ -727,7 +737,8 @@ class ExploreFilters {
       ageRange.start <= 18 &&
       ageRange.end >= 60 &&
       lookingFor.isEmpty &&
-      query.isEmpty;
+      query.isEmpty &&
+      !hasPlace;
 
   ExploreFilters copyWith({
     ExploreSort? sort,
@@ -737,6 +748,7 @@ class ExploreFilters {
     RangeValues? ageRange,
     Set<LookingFor>? lookingFor,
     String? query,
+    bool? hasPlace,
   }) {
     return ExploreFilters(
       sort: sort ?? this.sort,
@@ -746,6 +758,7 @@ class ExploreFilters {
       ageRange: ageRange ?? this.ageRange,
       lookingFor: lookingFor ?? this.lookingFor,
       query: query ?? this.query,
+      hasPlace: hasPlace ?? this.hasPlace,
     );
   }
 
@@ -766,6 +779,7 @@ class ExploreFilters {
         p.lookingFor.intersection(lookingFor).isEmpty) {
       return false;
     }
+    if (hasPlace && !p.hasPlace) return false;
     if (query.isNotEmpty) {
       final q = query.toLowerCase();
       final hit = p.name.toLowerCase().contains(q) ||

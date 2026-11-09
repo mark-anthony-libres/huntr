@@ -70,6 +70,7 @@ class AppState extends ChangeNotifier {
     if (albumLimits != null) myAlbums.clear(); // they came from the backend
     nearby = null;
     nearbyNextOffset = null;
+    _seenElsewhere.clear();
     myUserId = null;
     myStats = const ProfileStats();
     anonymousMessaging = true;
@@ -78,6 +79,7 @@ class AppState extends ChangeNotifier {
     _anonymousName = null;
     myIsNew = false;
     myVerified = false;
+    myHasPlace = false;
     albumLimits = null;
     onboarded = false;
     agreementAccepted = false;
@@ -166,6 +168,15 @@ class AppState extends ChangeNotifier {
   /// I have the blue check (my preview shows it).
   bool myVerified = false;
 
+  /// The switch on Me: "Has a place" shows on my profile.
+  bool myHasPlace = false;
+
+  void setHasPlace(bool hasPlace) {
+    if (myHasPlace == hasPlace) return;
+    myHasPlace = hasPlace;
+    notifyListeners();
+  }
+
   /// Built by the same rules as other people's profiles, so the preview
   /// matches what they see: no alias means no name, the same avatar colour,
   /// and the "New" badge.
@@ -176,6 +187,7 @@ class AppState extends ChangeNotifier {
         name: myName.trim(),
         isNew: myIsNew,
         verified: myVerified,
+        hasPlace: myHasPlace,
         age: myAge,
         distanceKm: 0,
         bio: myBio,
@@ -495,9 +507,30 @@ class AppState extends ChangeNotifier {
   /// A person nearby as loaded on their own (e.g. with all their photos).
   void updateNearbyPerson(Profile person) {
     final people = nearby;
-    if (people == null) return;
-    nearby = [for (final p in people) p.id == person.id ? person : p];
+    if (people != null && people.any((p) => p.id == person.id)) {
+      nearby = [for (final p in people) p.id == person.id ? person : p];
+    } else if (_seenElsewhere.containsKey(person.id)) {
+      _seenElsewhere[person.id] = person;
+    } else {
+      return;
+    }
     notifyListeners();
+  }
+
+  /// People shown somewhere other than Explore's list (the map), by id:
+  /// their profile opens from there too, without them joining the list.
+  /// The most recent [_seenElsewhereLimit].
+  final Map<String, Profile> _seenElsewhere = {};
+  static const _seenElsewhereLimit = 1000;
+
+  void rememberPeople(Iterable<Profile> people) {
+    for (final p in people) {
+      _seenElsewhere.remove(p.id); // to the end: the most recent
+      _seenElsewhere[p.id] = p;
+    }
+    while (_seenElsewhere.length > _seenElsewhereLimit) {
+      _seenElsewhere.remove(_seenElsewhere.keys.first);
+    }
   }
 
   List<Profile> get _explored => nearby ?? _profiles;
@@ -519,7 +552,7 @@ class AppState extends ChangeNotifier {
     for (final p in [...?nearby, ..._profiles]) {
       if (p.id == id) return p;
     }
-    return null;
+    return _seenElsewhere[id];
   }
 
   bool isFavorite(String id) => _favorites.contains(id);

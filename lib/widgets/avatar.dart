@@ -202,15 +202,17 @@ class Avatar extends StatelessWidget {
                   )
                 : art,
           ),
-          if (showOnline && profile.online)
+          // bottom right: green while they're online; otherwise (where
+          // shown) the blue dot of someone recently active
+          if (profile.online && (showOnline || showActive))
             Positioned(
               right: 0,
               bottom: 0,
               child: OnlineDot(size: size * 0.28),
-            ),
-          if (showActive && profile.activeUntil != null)
+            )
+          else if (showActive && profile.activeUntil != null)
             Positioned(
-              left: 0,
+              right: 0,
               bottom: 0,
               child: RecentlyActiveDot(
                   until: profile.activeUntil!, size: size * 0.26),
@@ -221,8 +223,9 @@ class Avatar extends StatelessWidget {
   }
 }
 
-/// The blue dot of someone recently active: shown until [until], then it
-/// goes by itself (no reload needed).
+/// The blue dot of someone recently active, a soft ring pulsing out of it
+/// now and then (still when the device asks for less motion): shown until
+/// [until], then it goes by itself (no reload needed).
 class RecentlyActiveDot extends StatefulWidget {
   const RecentlyActiveDot({super.key, required this.until, this.size = 10});
 
@@ -233,8 +236,33 @@ class RecentlyActiveDot extends StatefulWidget {
   State<RecentlyActiveDot> createState() => _RecentlyActiveDotState();
 }
 
-class _RecentlyActiveDotState extends State<RecentlyActiveDot> {
+class _RecentlyActiveDotState extends State<RecentlyActiveDot>
+    with SingleTickerProviderStateMixin {
   Timer? _timer;
+
+  /// One pulse, then a rest before the next (cheap in a long list).
+  late final _pulse = AnimationController(
+      vsync: this, duration: const Duration(milliseconds: 1400));
+  Timer? _rest;
+
+  void _pulseAgain() {
+    _rest?.cancel();
+    if (!mounted || (MediaQuery.maybeDisableAnimationsOf(context) ?? false)) {
+      return;
+    }
+    if (DateTime.now().isAfter(widget.until)) return;
+    _pulse.forward(from: 0).whenComplete(() {
+      if (mounted) {
+        _rest = Timer(const Duration(milliseconds: 1600), _pulseAgain);
+      }
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_pulse.isAnimating && (_rest?.isActive != true)) _pulseAgain();
+  }
 
   void _schedule() {
     _timer?.cancel();
@@ -256,19 +284,25 @@ class _RecentlyActiveDotState extends State<RecentlyActiveDot> {
   @override
   void didUpdateWidget(RecentlyActiveDot old) {
     super.didUpdateWidget(old);
-    if (old.until != widget.until) _schedule();
+    if (old.until != widget.until) {
+      _schedule();
+      // active again after the pulse had stopped
+      if (!_pulse.isAnimating && (_rest?.isActive != true)) _pulseAgain();
+    }
   }
 
   @override
   void dispose() {
     _timer?.cancel();
+    _rest?.cancel();
+    _pulse.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     if (DateTime.now().isAfter(widget.until)) return const SizedBox.shrink();
-    return Container(
+    final dot = Container(
       key: const Key('recentlyActiveDot'),
       width: widget.size,
       height: widget.size,
@@ -278,6 +312,35 @@ class _RecentlyActiveDotState extends State<RecentlyActiveDot> {
         // a dark ring keeps it clear on any picture
         border: Border.all(color: HuntrColors.night, width: widget.size * 0.2),
       ),
+    );
+    return RepaintBoundary(
+      child: Stack(
+          clipBehavior: Clip.none,
+          alignment: Alignment.center,
+          children: [
+            // the ring: grows out of the dot and fades (drawn around it, the
+            // dot keeps its size)
+            AnimatedBuilder(
+              animation: _pulse,
+              builder: (context, _) {
+                final t = Curves.easeOut.transform(_pulse.value);
+                if (_pulse.value == 0) return const SizedBox.shrink();
+                return Transform.scale(
+                  scale: 1 + 1.2 * t,
+                  child: Container(
+                    width: widget.size,
+                    height: widget.size,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color:
+                          HuntrColors.active.withValues(alpha: 0.55 * (1 - t)),
+                    ),
+                  ),
+                );
+              },
+            ),
+            dot,
+          ]),
     );
   }
 }

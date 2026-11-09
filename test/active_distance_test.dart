@@ -81,7 +81,7 @@ void main() {
       expect(_dot, findsOneWidget);
       final avatar = tester.getRect(find.byType(Avatar));
       final dot = tester.getRect(_dot);
-      expect(dot.left, avatar.left);
+      expect(dot.right, avatar.right);
       expect(dot.bottom, avatar.bottom);
       // the avatar keeps its size
       expect(avatar.size, const Size(56, 56));

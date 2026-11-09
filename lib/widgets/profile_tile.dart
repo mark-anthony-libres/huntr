@@ -155,6 +155,15 @@ class ProfileTile extends StatelessWidget {
                                   color: Colors.white70),
                             ),
                           ),
+                          // they have a place
+                          if (profile.hasPlace) ...[
+                            const SizedBox(width: 6),
+                            Icon(Icons.home_rounded,
+                                key: const Key('tileHasPlace'),
+                                semanticLabel: 'Has a place',
+                                size: compact ? 13 : 16,
+                                color: HuntrColors.orange),
+                          ],
                         ]),
                       ],
                     ],

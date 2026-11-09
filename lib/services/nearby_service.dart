@@ -1,3 +1,5 @@
+import 'package:http/http.dart' as http;
+
 import '../config/google_oauth_config.dart';
 import 'huntr_backend.dart' as backend;
 import 'huntr_backend.dart'
@@ -5,6 +7,7 @@ import 'huntr_backend.dart'
         NearbyDiscussion,
         AnonymousName,
         NearbyFeedPage,
+        NearbyMedia,
         NearbyPost,
         NearbyTagCategory;
 
@@ -18,6 +21,12 @@ class NearbyService {
 
   /// The longest post or comment.
   static const maxLength = 500;
+
+  /// The largest photo or video (the backend's
+  /// NEARBY_USER_MEDIA_MAX_UPLOAD_BYTES), and the longest video
+  /// (NEARBY_USER_VIDEO_MAX_SECONDS).
+  static const maxUploadBytes = 100 * 1024 * 1024;
+  static const maxVideoLength = Duration(minutes: 30);
 
   Future<String> _url() => GoogleOAuthConfig.loadBackendUrl();
 
@@ -39,14 +48,44 @@ class NearbyService {
           {required String body,
           required int radiusM,
           AnonymousName? as,
-          List<int> tagIds = const []}) async =>
+          List<int> tagIds = const [],
+          int? mediaId}) async =>
       backend.createNearbyPost(
           backendUrl: await _url(),
           token: token,
           body: body,
           radiusM: radiusM,
           as: as,
-          tagIds: tagIds);
+          tagIds: tagIds,
+          mediaId: mediaId);
+
+  /// A photo or video I chose for my next post (verified members), before
+  /// its file is sent.
+  Future<NearbyMedia> reserveMedia(String token,
+          {required bool isVideo}) async =>
+      backend.reserveNearbyMedia(
+          backendUrl: await _url(), token: token, isVideo: isVideo);
+
+  /// Its file; closing [client] stops it.
+  Future<NearbyMedia> uploadMedia(String token,
+          {required int mediaId,
+          required List<int> bytes,
+          required String filename,
+          void Function(double sent)? onProgress,
+          http.Client? client}) async =>
+      backend.uploadNearbyMedia(
+          backendUrl: await _url(),
+          token: token,
+          mediaId: mediaId,
+          bytes: bytes,
+          filename: filename,
+          onProgress: onProgress,
+          client: client);
+
+  /// One I chose that isn't posted, or that's on my post but isn't ready.
+  Future<void> removeMedia(String token, int mediaId) async =>
+      backend.removeNearbyMedia(
+          backendUrl: await _url(), token: token, mediaId: mediaId);
 
   /// The tags a post can have, by category (Looking for, Meet preference).
   Future<List<NearbyTagCategory>> tags(String token) async =>

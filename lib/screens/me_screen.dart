@@ -6,6 +6,7 @@ import '../widgets/me/me_profile_card.dart';
 import '../widgets/me/my_albums_section.dart';
 import '../widgets/me/my_story_section.dart';
 import '../widgets/me/profile_photos_section.dart';
+import '../widgets/me/has_place_setting.dart';
 import '../widgets/me/profile_preview_banner.dart';
 import '../theme.dart';
 import 'settings_screen.dart';
@@ -37,6 +38,9 @@ class MeScreen extends StatelessWidget {
       ),
       const SizedBox(height: 16),
       const MyStorySection(),
+      const SizedBox(height: 16),
+      // whether I have a place (shown on my profile)
+      const HasPlaceSetting(),
       const SizedBox(height: 16),
       // how others see me anonymously (and a new name there)
       if (app.anonymousName != null) ...[

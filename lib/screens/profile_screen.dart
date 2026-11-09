@@ -197,6 +197,12 @@ class ProfileScreen extends StatelessWidget {
                           ? 'Distance shown to others'
                           : 'Distance hidden')
                       : p.distanceLabel),
+              if (p.hasPlace)
+                ProfileMeta(
+                    key: const Key('profileHasPlace'),
+                    icon: Icons.home_rounded,
+                    label: 'Has a place',
+                    color: HuntrColors.orange),
               if (p.pronouns != null)
                 ProfileMeta(icon: Icons.person_outline, label: p.pronouns!),
               if (p.heightCm != null)

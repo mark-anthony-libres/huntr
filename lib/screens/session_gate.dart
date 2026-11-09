@@ -117,8 +117,7 @@ class _SessionGateState extends State<SessionGate> {
 
   Future<void> _loadProfile(ProfileService profiles, String token) async {
     try {
-      final profile =
-          await profiles.fetchMine(token).timeout(startupTimeout);
+      final profile = await profiles.fetchMine(token).timeout(startupTimeout);
       if (!mounted) return;
       final app = AppScope.read(context);
       // The saved privacy settings apply everywhere, onboarded or not.
@@ -128,6 +127,7 @@ class _SessionGateState extends State<SessionGate> {
         onMap: profile.privacy.showOnMap,
       );
       app.myStats = profile.stats;
+      app.setHasPlace(profile.hasPlace);
       app.anonymousMessaging = profile.privacy.anonymousMessaging;
       app.anonymousName = profile.anonymousName;
       app.updateNotifications(
