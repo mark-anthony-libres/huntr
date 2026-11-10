@@ -33,6 +33,11 @@ abstract class LocationPermissions {
   /// This device can open Huntr's settings page (phones, desktop; not web).
   bool get canOpenSettings;
 
+  /// Once allowed, a later check saying "not asked yet" doesn't mean it was
+  /// taken back (only a block does): some browsers say that again a moment
+  /// after allowing it (Aloha, notably with its VPN on).
+  bool get grantOutlivesPrompt;
+
   Future<void> openSettings();
 }
 
@@ -82,6 +87,9 @@ class GeolocatorPermissions implements LocationPermissions {
   bool get canOpenSettings => !kIsWeb;
 
   @override
+  bool get grantOutlivesPrompt => kIsWeb;
+
+  @override
   Future<void> openSettings() => Geolocator.openAppSettings();
 }
 
@@ -119,6 +127,13 @@ class LocationAccess extends ChangeNotifier {
       // location: only Try again (or a block) changes that
       if (_status == LocationAccessStatus.unavailable &&
           status != LocationAccessStatus.blocked) {
+        return;
+      }
+      // a browser that forgets it was allowed: still allowed (positions
+      // still come); a block takes it back
+      if (_status == LocationAccessStatus.granted &&
+          status == LocationAccessStatus.denied &&
+          permissions.grantOutlivesPrompt) {
         return;
       }
       _set(status);
