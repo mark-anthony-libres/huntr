@@ -86,28 +86,17 @@ void main() {
     await tester.pumpWidget(HuntrApp(state: AppState()));
     await tester.pumpAndSettle();
     expect(find.text('Sign in with Google'), findsOneWidget);
-    expect(find.text('Sign in with Facebook'), findsOneWidget);
+    expect(find.text('Continue with email'), findsOneWidget);
+    // no Facebook sign-in
+    expect(find.textContaining('Facebook'), findsNothing);
     expect(find.bySemanticsLabel('Google logo'), findsOneWidget);
     expect(find.byKey(const Key('googleLogo')), findsOneWidget);
-    expect(find.byKey(const Key('facebookLogo')), findsOneWidget);
     expect(find.text('Meet people\nnear you.'), findsOneWidget);
     expect(find.text('See who’s nearby, say hi,\nand chat.'), findsOneWidget);
     expect(
         find.text('We never post anything to social media.'), findsOneWidget);
     expect(find.byKey(const Key('signInPrivacy')), findsOneWidget);
-    expect(AppScope.read(tester.element(find.byType(Scaffold))).onboarded,
-        isFalse);
-
-    await tester.ensureVisible(find.byKey(const Key('signInFacebook')));
-    await tester.tap(find.byKey(const Key('signInFacebook')));
-    await tester.pumpAndSettle();
-    // Facebook is not available and must not get anyone past sign-in.
-    expect(
-        find.text('Facebook sign-in is not available yet. '
-            'Please sign in with Google.'),
-        findsOneWidget);
-    expect(find.byKey(const Key('onboardWelcome')), findsNothing);
-    final app = AppScope.read(tester.element(find.byType(Scaffold).first));
+    final app = AppScope.read(tester.element(find.byType(Scaffold)));
     expect(app.signedIn, isFalse);
     expect(app.onboarded, isFalse);
   });

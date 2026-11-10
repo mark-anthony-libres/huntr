@@ -5,11 +5,13 @@ import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 import '../config/google_oauth_config.dart';
+import '../config/turnstile_config.dart';
 import '../services/huntr_backend.dart';
 import '../services/photo_cache/photo_cache.dart';
 import '../services/services_scope.dart';
 import '../services/session_service.dart';
 import '../state/app_state.dart';
+import 'email_sign_in_screen.dart';
 import 'sign_in_screen.dart';
 import '../widgets/google_sign_in_web_button_stub.dart'
     if (dart.library.js_interop) '../widgets/google_sign_in_web_button_web.dart'
@@ -154,6 +156,12 @@ class _EntryScreenState extends State<EntryScreen> {
     }
     final backendAccount = await signInToBackendWithGoogle(
         backendUrl: _backendUrl, idToken: idToken);
+    await _enter(backendAccount, app, caches);
+  }
+
+  /// Starts the Huntr session for a signed-in account (Google or email).
+  Future<void> _enter(BackendAccount backendAccount, AppState app,
+      List<PhotoCache?> caches) async {
     await widget.sessions?.remember(backendAccount.token);
     // This may be a different account: none of the last one's photos.
     await Future.wait([
@@ -182,13 +190,68 @@ class _EntryScreenState extends State<EntryScreen> {
     });
   }
 
-  void _showFacebookUnavailable() {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(const SnackBar(
-        content: Text('Facebook sign-in is not available yet. '
-            'Please sign in with Google.'),
-      ));
+  /// The backend URL, from assets/google_oauth.json (also read for Google;
+  /// email sign-in works even when Google isn't set up).
+  Future<String> _backendUrlForEmail() async {
+    if (_backendUrl.isEmpty) {
+      _backendUrl = (await GoogleOAuthConfig.load()).backendUrl.trim();
+    }
+    return _backendUrl;
+  }
+
+  Future<void> _signInWithEmail() async {
+    final app = AppScope.read(context);
+    final caches = [
+      for (final collection in PhotoCollection.values)
+        ServicesScope.photoCacheOf(context, collection)
+    ];
+    final navigator = Navigator.of(context);
+    if (!await _emailSignInAvailable()) {
+      final useGoogle = await navigator.push<bool>(MaterialPageRoute(
+          builder: (_) => const EmailSignInUnavailableScreen()));
+      if (useGoogle == true) await _useGoogleInstead();
+      return;
+    }
+    final account = await navigator.push<BackendAccount>(
+      MaterialPageRoute(
+        builder: (_) => EmailSignInScreen(
+          botCheckSiteKey: TurnstileConfig.siteKey,
+          onUseGoogle: () {
+            navigator.pop();
+            unawaited(_useGoogleInstead());
+          },
+          requestCode: (email, turnstileToken) async => requestEmailSignInCode(
+              backendUrl: await _backendUrlForEmail(),
+              email: email,
+              turnstileToken: turnstileToken),
+          signIn: (email, code) async => signInToBackendWithEmailCode(
+              backendUrl: await _backendUrlForEmail(),
+              email: email,
+              code: code),
+        ),
+      ),
+    );
+    if (account == null || app.signedIn) return;
+    await _enter(account, app, caches);
+  }
+
+  /// Email sign-in won't work for now: back on the sign-in screen, and on
+  /// phones straight into Google's sign-in (on the web only Google's own
+  /// button, there, can start it).
+  Future<void> _useGoogleInstead() async {
+    if (!kIsWeb && mounted) await _signInWithGoogle();
+  }
+
+  /// Whether codes can be emailed now. When the backend can't say, the email
+  /// screen opens anyway and shows whatever goes wrong when a code is asked for.
+  Future<bool> _emailSignInAvailable() async {
+    try {
+      return await isEmailSignInAvailable(
+          backendUrl: await _backendUrlForEmail());
+    } catch (error) {
+      debugPrint('Email sign-in availability unknown: $error');
+      return true;
+    }
   }
 
   @override
@@ -201,7 +264,7 @@ class _EntryScreenState extends State<EntryScreen> {
   Widget build(BuildContext context) {
     return SignInScreen(
       onGoogleSignIn: _signInWithGoogle,
-      onFacebookSignIn: _showFacebookUnavailable,
+      onEmailSignIn: _signInWithEmail,
       googleSignInReady: _googleInitialized,
       googleSignInBusy: _googleSigningIn,
       googleSignInError: _googleError,

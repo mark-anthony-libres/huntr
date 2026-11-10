@@ -10,10 +10,18 @@ import '../widgets/sign_in/google_sign_in_card.dart';
 import '../widgets/sign_in/sign_in_button.dart';
 import '../widgets/sign_in/privacy_card.dart';
 import '../widgets/install_banner.dart' show InstallWebsiteButton;
-import '../widgets/sign_in/brand_marks.dart';
 
 /// The HUNTR website: everything the app does, for people deciding to join.
 final huntrWebsite = Uri.parse('https://web.huntr.online/');
+
+/// The sign-in screens' background: a warm glow fading into the night.
+const signInBackground = BoxDecoration(
+  gradient: RadialGradient(
+    center: Alignment(0, -0.25),
+    radius: 1.15,
+    colors: [Color(0xFF17130F), HuntrColors.night],
+  ),
+);
 
 /// The buttons under sign-in (See all features, Install HUNTR): pills with
 /// a soft orange tint, the text and icon in orange; full height on every
@@ -32,7 +40,7 @@ class SignInScreen extends StatelessWidget {
   const SignInScreen({
     super.key,
     required this.onGoogleSignIn,
-    required this.onFacebookSignIn,
+    required this.onEmailSignIn,
     required this.googleSignInReady,
     required this.googleSignInBusy,
     required this.googleSignInError,
@@ -40,7 +48,8 @@ class SignInScreen extends StatelessWidget {
   });
 
   final VoidCallback onGoogleSignIn;
-  final VoidCallback onFacebookSignIn;
+  /// Continue with email: a code by email signs in or signs up.
+  final VoidCallback onEmailSignIn;
   final bool googleSignInReady;
   final bool googleSignInBusy;
   final String? googleSignInError;
@@ -62,24 +71,21 @@ class SignInScreen extends StatelessWidget {
     return Scaffold(
       body: SafeArea(
         child: DecoratedBox(
-          decoration: const BoxDecoration(
-            gradient: RadialGradient(
-              center: Alignment(0, -0.25),
-              radius: 1.15,
-              colors: [Color(0xFF17130F), HuntrColors.night],
-            ),
-          ),
+          decoration: signInBackground,
           child: LayoutBuilder(
             builder: (context, box) {
               final contentWidth =
                   (box.maxWidth - (narrow ? 40 : 48)).clamp(0.0, 520.0);
               final logoHeight = (box.maxHeight * (narrow ? 0.12 : 0.15))
                   .clamp(60.0, narrow ? 112.0 : 140.0);
-              // scaleDown guarantees the screen never overflows or scrolls:
-              // if the content is ever taller than the screen it shrinks.
+              // room above and below that grows with the screen (never
+              // pressed against its edges); scaleDown guarantees the screen
+              // never overflows or scrolls: if the content is ever taller
+              // than what's left, it shrinks.
+              final edge = (box.maxHeight * 0.07).clamp(24.0, 64.0);
               return Center(
                 child: Padding(
-                  padding: EdgeInsets.symmetric(vertical: dense ? 12 : 24),
+                  padding: EdgeInsets.symmetric(vertical: edge),
                   child: FittedBox(
                     fit: BoxFit.scaleDown,
                     child: SizedBox(
@@ -128,11 +134,12 @@ class SignInScreen extends StatelessWidget {
                           ),
                           SizedBox(height: dense || narrow ? 12 : 18),
                           SignInButton(
-                            key: const Key('signInFacebook'),
+                            key: const Key('signInEmail'),
                             dense: dense,
-                            onPressed: onFacebookSignIn,
-                            icon: const FacebookMark(),
-                            label: 'Sign in with Facebook',
+                            onPressed: onEmailSignIn,
+                            icon: Icon(Icons.mail_outline_rounded,
+                                size: 26, color: HuntrColors.orange),
+                            label: 'Continue with email',
                           ),
                           SizedBox(height: gap * 1.4),
                           if (size.height >= 560) ...[

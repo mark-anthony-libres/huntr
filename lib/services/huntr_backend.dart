@@ -245,6 +245,142 @@ Future<BackendAccount> signInToBackendWithGoogle({
   }
 }
 
+/// Whether email sign-in can send a code now (GET {backendUrl}/email/available):
+/// false once the email provider's daily or monthly allowance is used up.
+/// Throws [BackendException] when the backend can't say.
+Future<bool> isEmailSignInAvailable({
+  required String backendUrl,
+  http.Client? client,
+}) async {
+  final httpClient = client ?? http.Client();
+  try {
+    final response =
+        await httpClient.get(_endpoint(backendUrl, '/email/available'));
+    _checkRateLimit(response);
+    if (response.statusCode != 200) {
+      throw BackendException(
+          'Email sign-in availability unknown (${response.statusCode}).');
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return body['available'] as bool? ?? true;
+  } finally {
+    if (client == null) httpClient.close();
+  }
+}
+
+/// A sign-in code out for an address: how long it still works, and whether
+/// it's the one sent earlier (reused: no new email was sent).
+class EmailSignInCode {
+  const EmailSignInCode({required this.expiresIn, required this.reused});
+  final Duration expiresIn;
+  final bool reused;
+}
+
+/// A code was sent from this device's network moments ago: a code to a
+/// different address waits [retryIn].
+/// Email sign-in won't work here for now (too many codes from this network
+/// today, too many wrong codes for this address today, or no emails can be
+/// sent): Sign in with Google is offered in its place.
+class EmailSignInUseGoogleException extends BackendException {
+  const EmailSignInUseGoogleException(super.message);
+}
+
+class EmailCodeCooldownException extends BackendException {
+  const EmailCodeCooldownException(super.message, this.retryIn);
+  final Duration retryIn;
+}
+
+/// Emails a 6-digit sign-in code to [email] (POST {backendUrl}/email/code),
+/// or reuses the one still working for it. [turnstileToken] is from the bot
+/// check (Cloudflare Turnstile); each works once. The same answer whether the
+/// address has an account or not. Throws [EmailCodeCooldownException] when
+/// a code went to another address moments ago, and [BackendException] with
+/// what to tell the user otherwise (an invalid address, too many codes, or
+/// email sign-in busy for the day).
+Future<EmailSignInCode> requestEmailSignInCode({
+  required String backendUrl,
+  required String email,
+  required String? turnstileToken,
+  http.Client? client,
+}) async {
+  final httpClient = client ?? http.Client();
+  try {
+    final response = await httpClient.post(
+      _endpoint(backendUrl, '/email/code'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'email': email, 'turnstile_token': turnstileToken}),
+    );
+    _checkRateLimit(response);
+    if (response.statusCode == 409) _throwEmailRefusal(response.body);
+    if (response.statusCode != 200) {
+      throw BackendException(_detailMessage(response.body) ??
+          (response.statusCode == 422
+              ? 'Enter a valid email address.'
+              : "The code couldn't be sent. Try again."));
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return EmailSignInCode(
+      expiresIn: Duration(seconds: (body['expires_in'] as num).toInt()),
+      reused: body['reused'] as bool? ?? false,
+    );
+  } finally {
+    if (client == null) httpClient.close();
+  }
+}
+
+/// Email sign-in's refusals that say more than a message:
+/// `detail: {message, retry_in_seconds}` (the cooldown) or
+/// `detail: {message, suggest_google}` (use Google instead).
+void _throwEmailRefusal(String body) {
+  try {
+    final detail = (jsonDecode(body) as Map<String, dynamic>)['detail'];
+    if (detail is! Map<String, dynamic> || detail['message'] is! String) return;
+    final message = detail['message'] as String;
+    if (detail['retry_in_seconds'] is num) {
+      throw EmailCodeCooldownException(message,
+          Duration(seconds: (detail['retry_in_seconds'] as num).toInt()));
+    }
+    if (detail['suggest_google'] == true) {
+      throw EmailSignInUseGoogleException(message);
+    }
+  } on FormatException {
+    // not JSON: handled as any other refusal
+  }
+}
+
+/// Signs in with the emailed code, or creates the account the first time
+/// (POST {backendUrl}/email/login), like [signInToBackendWithGoogle].
+Future<BackendAccount> signInToBackendWithEmailCode({
+  required String backendUrl,
+  required String email,
+  required String code,
+  http.Client? client,
+}) async {
+  final httpClient = client ?? http.Client();
+  try {
+    final response = await httpClient.post(
+      _endpoint(backendUrl, '/email/login'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'email': email, 'code': code}),
+    );
+    _checkRateLimit(response);
+    if (response.statusCode == 403) {
+      throw const BackendException('This account has been deactivated.');
+    }
+    if (response.statusCode == 409) _throwEmailRefusal(response.body);
+    if (response.statusCode != 200) {
+      throw BackendException(_detailMessage(response.body) ??
+          "That code didn't work. Ask for a new one.");
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    final user = body['user'] as Map<String, dynamic>?;
+    return BackendAccount(
+        token: body['token'] as String, name: user?['name'] as String?);
+  } finally {
+    if (client == null) httpClient.close();
+  }
+}
+
 /// Asks the backend whether [token] still belongs to an active session
 /// (GET {backendUrl}/auth/verify). Throws [BackendException] when the
 /// backend can't give an answer, e.g. it is unreachable.
