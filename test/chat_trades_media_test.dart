@@ -908,13 +908,15 @@ void main() {
       expect(find.byKey(const Key('sendError')), findsOneWidget);
     });
 
-    testWidgets('a non-image is refused before upload', (tester) async {
+    // any picture goes to the server (which decides what it really is); an
+    // empty file never gets that far
+    testWidgets('an empty file is refused before upload', (tester) async {
       ChatMediaPicker.instance = _FakePicker()
-        ..next.add(XFile.fromData(utf8.encode('GIF89a......'), name: 'a.gif'));
+        ..next.add(XFile.fromData(Uint8List(0), name: 'a.gif'));
       final service = _FakeMessaging();
       await _openChat(tester, _state(service));
       await _attach(tester, 'media');
-      expect(find.textContaining('GIFs aren'), findsOneWidget);
+      expect(find.text('The file is empty.'), findsOneWidget);
       expect(service.calls, isEmpty);
     });
 

@@ -49,18 +49,14 @@ String? checkPickedVideo(List<int> bytes, {required int maxBytes}) {
   return null;
 }
 
-/// Why the picked file can't be used, or null if it looks fine.
+/// Why the picked file can't be used, or null if it looks fine. Any
+/// picture goes (JPEG, PNG, WebP, HEIC, AVIF, a still GIF, ...): the backend
+/// decides what it really is, and refuses what isn't a still picture.
 String? checkPickedPhoto(List<int> bytes, {required int maxBytes}) {
   if (bytes.isEmpty) return 'The file is empty.';
   if (bytes.length > maxBytes) {
     return 'The photo is too large. The maximum is '
         '${maxBytes ~/ (1024 * 1024)} MB.';
   }
-  return switch (detectImageType(bytes)) {
-    ImageFileType.gif =>
-      "GIFs aren't supported. Please choose a JPEG, PNG or WebP photo.",
-    ImageFileType.other =>
-      'Unsupported image type. Please choose a JPEG, PNG or WebP photo.',
-    _ => null,
-  };
+  return null;
 }

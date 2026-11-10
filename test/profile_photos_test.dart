@@ -153,17 +153,15 @@ void main() {
       expect(find.text('PROFILE PHOTOS · 1/6'), findsOneWidget);
     });
 
-    testWidgets('a GIF is refused before uploading', (tester) async {
-      final photos = _FakePhotos(1)
-        ..toPick = const PickedPhoto(bytes: _gifBytes, filename: 'fun.jpg');
-      await _openMe(tester, photos);
-      await tester.tap(find.byKey(const Key('addProfilePhoto')));
-      await tester.pumpAndSettle();
-      expect(
-          find.text(
-              "GIFs aren't supported. Please choose a JPEG, PNG or WebP photo."),
-          findsOneWidget);
-      expect(photos.calls, isNot(contains('upload')));
+    test('any picture goes to the server; empty or too large ones don\'t',
+        () {
+      // a GIF, and a HEIC (iPhone) photo's start: the backend decides
+      const heic = [0, 0, 0, 24, 0x66, 0x74, 0x79, 0x70, 0x68, 0x65, 0x69, 0x63];
+      expect(checkPickedPhoto(_gifBytes, maxBytes: 1000), isNull);
+      expect(checkPickedPhoto(heic, maxBytes: 1000), isNull);
+      expect(checkPickedPhoto(const [], maxBytes: 1000), 'The file is empty.');
+      expect(checkPickedPhoto(List.filled(3 * 1024 * 1024, 1), maxBytes: 1 << 20),
+          'The photo is too large. The maximum is 1 MB.');
     });
   });
 
