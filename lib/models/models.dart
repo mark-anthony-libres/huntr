@@ -540,11 +540,6 @@ class Profile {
   /// backend then sends no last-seen time), so it's never taken as recent.
   final bool lastActiveKnown;
 
-  /// Online, or active within [window] (how "Online now" in Explore counts).
-  bool activeWithin(Duration window, DateTime now) =>
-      online ||
-      (lastActiveKnown && !isAnonymous && now.difference(lastActive) <= window);
-
   /// Base hue (0-360) for this person's generated avatar.
   final double hue;
 
@@ -705,9 +700,6 @@ enum ExploreSort {
   final IconData icon;
 }
 
-/// How recent counts as "Online now" in Explore's filter: online, or active
-/// within this long ("Active just now", "Active 30m ago").
-const onlineNowWindow = Duration(minutes: 30);
 
 class ExploreFilters {
   const ExploreFilters({
@@ -763,7 +755,9 @@ class ExploreFilters {
   }
 
   bool matches(Profile p) {
-    if (onlineOnly && !p.activeWithin(onlineNowWindow, DateTime.now())) {
+    // "Online now": connected right now (the green dot), the same as the
+    // "N online near you" count
+    if (onlineOnly && !p.online) {
       return false;
     }
     // A hidden distance never counts as near (nor reveals anything).

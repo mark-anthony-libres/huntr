@@ -225,6 +225,7 @@ class _ConversationListState extends State<ConversationList> {
                         typing: messaging.isTyping(c.id),
                         selected: c.id == selected?.id,
                         onTap: () => open(c),
+                        onLongPress: () => _peek(context, messaging, c, open),
                       );
                     },
                   ),
@@ -250,6 +251,145 @@ class _ConversationListState extends State<ConversationList> {
                 onClose: () => setState(() => _selected = null)),
       ),
     ]);
+  }
+}
+
+/// A conversation held in the list: its latest messages over the list,
+/// without opening it - they aren't marked read, so the other person doesn't
+/// see that they were (as on Instagram). Open chat opens it as a tap would.
+Future<void> _peek(BuildContext context, MessagingState messaging,
+    ConversationSummary c, void Function(ConversationSummary) open) async {
+  final messages = messaging.peek(c.id);
+  final opened = await showDialog<bool>(
+    context: context,
+    barrierColor: Colors.black.withValues(alpha: 0.7),
+    builder: (context) => _Peek(conversation: c, messages: messages),
+  );
+  if (opened == true && context.mounted) open(c);
+}
+
+class _Peek extends StatelessWidget {
+  const _Peek({required this.conversation, required this.messages});
+
+  final ConversationSummary conversation;
+  final Future<List<ChatMessage>?> messages;
+
+  /// How many of the latest are shown.
+  static const _shown = 12;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = conversation;
+    final height = MediaQuery.sizeOf(context).height;
+    return Dialog(
+      key: Key('chatPeek-${c.id}'),
+      backgroundColor: HuntrColors.surface,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 40),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+      clipBehavior: Clip.antiAlias,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: 420, maxHeight: height * 0.7),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+            child: Row(children: [
+              Avatar(profile: c.other, size: 40, showOnline: false),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(c.other.nameAndAge,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.w700)),
+              ),
+            ]),
+          ),
+          const Divider(height: 1, color: HuntrColors.border),
+          Flexible(
+            child: FutureBuilder<List<ChatMessage>?>(
+              future: messages,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState != ConnectionState.done) {
+                  return const Padding(
+                    padding: EdgeInsets.all(32),
+                    child: Center(child: CircularProgressIndicator()),
+                  );
+                }
+                final all = snapshot.data;
+                if (all == null || all.isEmpty) {
+                  return Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Text(
+                        all == null
+                            ? "The messages couldn't be loaded."
+                            : 'No messages yet.',
+                        style: const TextStyle(color: HuntrColors.muted)),
+                  );
+                }
+                final shown = all.length > _shown
+                    ? all.sublist(all.length - _shown)
+                    : all;
+                return ListView(
+                  key: const Key('chatPeekMessages'),
+                  shrinkWrap: true,
+                  // the latest at the bottom, in view
+                  reverse: true,
+                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                  children: [
+                    for (final m in shown.reversed) _PeekBubble(message: m),
+                  ],
+                );
+              },
+            ),
+          ),
+          const Divider(height: 1, color: HuntrColors.border),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+            child: Row(children: [
+              const Expanded(
+                child: Text('Not marked as read',
+                    style: TextStyle(color: HuntrColors.muted, fontSize: 13)),
+              ),
+              TextButton(
+                key: const Key('chatPeekOpen'),
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Open chat'),
+              ),
+            ]),
+          ),
+        ]),
+      ),
+    );
+  }
+}
+
+/// One message in the preview: mine on the right, theirs on the left, as
+/// the chat list says it (a photo, a sticker, ...).
+class _PeekBubble extends StatelessWidget {
+  const _PeekBubble({required this.message});
+
+  final ChatMessage message;
+
+  @override
+  Widget build(BuildContext context) {
+    final mine = message.fromMe;
+    return Align(
+      alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 3),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        constraints: const BoxConstraints(maxWidth: 280),
+        decoration: BoxDecoration(
+          color: mine ? HuntrColors.orange : HuntrColors.surfaceHigh,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Text(message.preview,
+            style: TextStyle(
+                color: mine ? Colors.white : null,
+                fontSize: 14.5,
+                height: 1.3)),
+      ),
+    );
   }
 }
 
@@ -378,12 +518,16 @@ class _ConversationRow extends StatelessWidget {
       {required this.conversation,
       required this.now,
       required this.onTap,
+      this.onLongPress,
       this.selected = false,
       this.typing = false});
 
   final ConversationSummary conversation;
   final DateTime now;
   final VoidCallback onTap;
+
+  /// Held: its latest messages, without opening it ([_peek]).
+  final VoidCallback? onLongPress;
 
   /// They're typing in this chat right now: shown instead of the preview.
   final bool typing;
@@ -418,6 +562,7 @@ class _ConversationRow extends StatelessWidget {
         child: InkWell(
           key: Key('conversation-${c.id}'),
           onTap: onTap,
+          onLongPress: onLongPress,
           hoverColor: HuntrColors.surface,
           child: Padding(
             padding: const EdgeInsets.fromLTRB(10, 10, 14, 10),

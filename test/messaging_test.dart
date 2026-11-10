@@ -389,6 +389,41 @@ void main() {
       expect(find.byKey(const Key('unread-1')), findsNothing);
     });
 
+    testWidgets('holding a chat shows its latest messages, not marked read',
+        (tester) async {
+      final service = _FakeMessaging(
+          history: [_msg(1, body: 'Hi'), _msg(2, body: 'Are you around?')],
+          unread: 2);
+      final messaging = _state(service, _Sound());
+      await messaging.refresh();
+      await tester.pumpWidget(_app(AppState()..startSession('token'), messaging,
+          ChatsScreen(onExplore: () {})));
+      await tester.pump();
+
+      await tester.longPress(find.byKey(const Key('conversation-1')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('chatPeek-1')), findsOneWidget);
+      final peek = find.byKey(const Key('chatPeekMessages'));
+      expect(
+          find.descendant(of: peek, matching: find.text('Hi')), findsOneWidget);
+      expect(find.descendant(of: peek, matching: find.text('Are you around?')),
+          findsOneWidget);
+      // closed: still unread, and they weren't told
+      await tester.tapAt(const Offset(5, 5));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('chatPeek-1')), findsNothing);
+      expect(service.calls.where((c) => c.startsWith('read')), isEmpty);
+      expect(find.byKey(const Key('unread-1')), findsOneWidget);
+      expect(find.byType(ChatScreen), findsNothing);
+
+      // Open chat opens it (and only then is it read)
+      await tester.longPress(find.byKey(const Key('conversation-1')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('chatPeekOpen')));
+      await tester.pumpAndSettle();
+      expect(find.byType(ChatScreen), findsOneWidget);
+    });
+
     testWidgets('the chat list shows typing… while they type', (tester) async {
       final service = _FakeMessaging(history: [_msg(1, body: 'See you')]);
       final messaging = _state(service, _Sound());

@@ -124,6 +124,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(state.visibleProfiles.length, lessThan(everyone));
     expect(state.visibleProfiles.every((p) => p.online), isTrue);
+    // the same people as "N online near you"
+    expect(state.visibleProfiles.length, state.onlineCount);
   });
 
   testWidgets('both chosen albums are sent when the request is approved',

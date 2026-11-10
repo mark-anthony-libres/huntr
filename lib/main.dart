@@ -36,12 +36,16 @@ import 'widgets/location_gate.dart';
 import 'widgets/rate_limit_screen.dart';
 import 'widgets/update_required_screen.dart';
 import 'widgets/theme_follower.dart';
+import 'widgets/video_taps_io.dart'
+    if (dart.library.js_interop) 'widgets/video_taps_web.dart';
 import 'services/push_notifications.dart';
 import 'theme.dart';
 
 void main() {
   // before anything reads the device (saved preferences, secure storage)
   WidgetsFlutterBinding.ensureInitialized();
+  // in a browser, a tap on a video reaches the app (not the video element)
+  letAppTakeVideoTaps();
   // My own pictures, kept on the phone. Not in a browser: it caches images
   // itself, and downloading them for a cache there needs the bucket to allow
   // cross-origin requests - without that, every picture was fetched twice.

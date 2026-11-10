@@ -232,144 +232,155 @@ class NearbyPostCard extends StatelessWidget {
     final official = post.official;
     // HUNTR's own posts: no anonymous profile to open, nothing to report
     final onAuthor = official ? null : this.onAuthor;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Material(
-        color: HuntrColors.surface,
-        borderRadius: BorderRadius.circular(20),
-        child: InkWell(
-          key: Key('nearbyPost-${post.id}'),
-          borderRadius: BorderRadius.circular(20),
-          onTap: onOpen,
+    final avatar = official
+        ? const HuntrPostAvatar(size: 40)
+        : nearbyAuthorTap(
+            key: Key('nearbyAuthor-${post.id}'),
+            onTap: onAuthor,
+            child: NearbyAvatar(
+                animal: post.author.avatar, size: 40, mine: post.mine));
+    // no card: the picture on the left, the rest beside it, a line under
+    return Material(
+      type: MaterialType.transparency,
+      child: InkWell(
+        key: Key('nearbyPost-${post.id}'),
+        onTap: onOpen,
+        child: DecoratedBox(
+          decoration: const BoxDecoration(
+              border: Border(bottom: BorderSide(color: HuntrColors.border))),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 6, 10),
-            child:
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Row(children: [
-                official
-                    ? const HuntrPostAvatar(size: 48)
-                    : nearbyAuthorTap(
-                        key: Key('nearbyAuthor-${post.id}'),
-                        onTap: onAuthor,
-                        child: NearbyAvatar(
-                            animal: post.author.avatar,
-                            size: 48,
-                            mine: post.mine)),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // the name, and how long ago (short)
-                        Row(children: [
-                          Flexible(
-                            child: nearbyAuthorTap(
-                              onTap: onAuthor,
-                              child: Text(post.author.name,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w700)),
+            padding: const EdgeInsets.fromLTRB(4, 14, 0, 8),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              avatar,
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(children: [
+                        Expanded(
+                          child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // the name, and how long ago (short)
+                                Row(children: [
+                                  Flexible(
+                                    child: nearbyAuthorTap(
+                                      onTap: onAuthor,
+                                      child: Text(post.author.name,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                              fontSize: 15,
+                                              fontWeight: FontWeight.w700)),
+                                    ),
+                                  ),
+                                  if (official) ...[
+                                    const SizedBox(width: 4),
+                                    const VerifiedBadge(
+                                        key: Key('huntrPostCheck'),
+                                        size: 16,
+                                        interactive: false,
+                                        tooltip: 'Official post from HUNTR',
+                                        semanticLabel: 'Official'),
+                                  ],
+                                  Text(
+                                      '  ${timeLabel(post.createdAt, now)}'
+                                      '${post.edited ? ' · edited' : ''}',
+                                      style: const TextStyle(
+                                          color: HuntrColors.muted,
+                                          fontSize: 13)),
+                                ]),
+                                // how far it is from me (mine too: from
+                                // where I wrote it)
+                                Row(children: [
+                                  Icon(
+                                      official || post.everyone
+                                          ? Icons.public_rounded
+                                          : Icons.location_on_outlined,
+                                      size: 13,
+                                      color: HuntrColors.muted),
+                                  const SizedBox(width: 3),
+                                  Flexible(
+                                    child: Text(
+                                        official
+                                            ? 'For everyone on HUNTR'
+                                            : [
+                                                if (post.mine) 'You',
+                                                if (post.everyone) 'Everyone',
+                                                distance == null
+                                                    ? 'Nearby'
+                                                    : distance < 10
+                                                        ? 'Right here'
+                                                        : '${nearbyDistanceLabel(distance)} away',
+                                              ].join(' · '),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                            color: HuntrColors.muted,
+                                            fontSize: 12.5)),
+                                  ),
+                                ]),
+                              ]),
+                        ),
+                        if (!official)
+                          NearbyMenu(
+                              mine: post.mine,
+                              editable: true,
+                              onSelected: onAction),
+                      ]),
+                      const SizedBox(height: 4),
+                      if (post.body.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 12),
+                          child:
+                              _Body(post: post, large: large, onOpen: onOpen),
+                        ),
+                      if (post.media.isNotEmpty)
+                        Padding(
+                          padding: EdgeInsets.only(
+                              right: 12, top: post.body.isEmpty ? 2 : 10),
+                          child: NearbyMediaGrid(
+                              key: Key('nearbyMediaGrid-${post.id}'),
+                              media: post.media),
+                        ),
+                      // its tags, right under the text (all of them on the
+                      // post itself)
+                      NearbyTagPills(
+                          key: ValueKey('nearbyTags-${post.id}'),
+                          tags: post.tags,
+                          limit: large ? null : 4),
+                      const SizedBox(height: 4),
+                      Transform.translate(
+                        // the heart lines up with the text above
+                        offset: const Offset(-6, 0),
+                        child: Row(children: [
+                          NearbyHeart(
+                              key: Key('nearbyLike-${post.id}'),
+                              count: post.likeCount,
+                              liked: post.liked,
+                              onTap: onLike),
+                          const SizedBox(width: 10),
+                          InkWell(
+                            borderRadius: BorderRadius.circular(20),
+                            onTap: onOpen,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 4),
+                              child: Row(children: [
+                                const Icon(Icons.chat_bubble_outline_rounded,
+                                    size: 20),
+                                const SizedBox(width: 6),
+                                Text('${post.commentCount}',
+                                    key: Key('nearbyComments-${post.id}'),
+                                    style: const TextStyle(fontSize: 14)),
+                              ]),
                             ),
                           ),
-                          if (official) ...[
-                            const SizedBox(width: 4),
-                            const VerifiedBadge(
-                                key: Key('huntrPostCheck'),
-                                size: 18,
-                                interactive: false,
-                                tooltip: 'Official post from HUNTR',
-                                semanticLabel: 'Official'),
-                          ],
-                          Text(
-                              '  ·  ${timeLabel(post.createdAt, now)}'
-                              '${post.edited ? ' · edited' : ''}',
-                              style: const TextStyle(
-                                  color: HuntrColors.muted, fontSize: 13)),
                         ]),
-                        const SizedBox(height: 2),
-                        // how far it is from me (mine too: from where I
-                        // wrote it)
-                        Row(children: [
-                          Icon(
-                              official || post.everyone
-                                  ? Icons.public_rounded
-                                  : Icons.location_on_outlined,
-                              size: 14,
-                              color: HuntrColors.muted),
-                          const SizedBox(width: 4),
-                          Flexible(
-                            child: Text(
-                                official
-                                    ? 'For everyone on HUNTR'
-                                    : [
-                                        if (post.mine) 'You',
-                                        if (post.everyone) 'Everyone',
-                                        distance == null
-                                            ? 'Nearby'
-                                            : distance < 10
-                                                ? 'Right here'
-                                                : '${nearbyDistanceLabel(distance)} away',
-                                      ].join(' · '),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                    color: HuntrColors.muted, fontSize: 13)),
-                          ),
-                        ]),
-                      ]),
-                ),
-                if (official)
-                  const SizedBox(width: 10)
-                else
-                  NearbyMenu(
-                      mine: post.mine, editable: true, onSelected: onAction),
-              ]),
-              const SizedBox(height: 10),
-              if (post.body.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(right: 10),
-                  child: _Body(post: post, large: large, onOpen: onOpen),
-                ),
-              if (post.media.isNotEmpty)
-                Padding(
-                  padding: EdgeInsets.only(
-                      right: 10, top: post.body.isEmpty ? 0 : 10),
-                  child: NearbyMediaGrid(
-                      key: Key('nearbyMediaGrid-${post.id}'),
-                      media: post.media),
-                ),
-              // its tags, right under the text (all of them on the post itself)
-              NearbyTagPills(
-                  key: ValueKey('nearbyTags-${post.id}'),
-                  tags: post.tags,
-                  limit: large ? null : 4),
-              const SizedBox(height: 8),
-              Row(children: [
-                NearbyHeart(
-                    key: Key('nearbyLike-${post.id}'),
-                    count: post.likeCount,
-                    liked: post.liked,
-                    onTap: onLike),
-                const SizedBox(width: 10),
-                InkWell(
-                  borderRadius: BorderRadius.circular(20),
-                  onTap: onOpen,
-                  child: Padding(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                    child: Row(children: [
-                      const Icon(Icons.chat_bubble_outline_rounded, size: 21),
-                      const SizedBox(width: 6),
-                      Text('${post.commentCount}',
-                          key: Key('nearbyComments-${post.id}'),
-                          style: const TextStyle(fontSize: 15)),
+                      ),
                     ]),
-                  ),
-                ),
-                const Spacer(),
-              ]),
+              ),
             ]),
           ),
         ),

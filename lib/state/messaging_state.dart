@@ -613,6 +613,21 @@ class MessagingState extends ChangeNotifier {
   bool isLoaded(int conversationId) =>
       _threads[conversationId]?.loaded ?? false;
 
+  /// A conversation's latest messages, oldest first, to look at without
+  /// opening it (held in the list): not marked read, so they don't see it
+  /// was read, and nothing here changes. Null: they couldn't be loaded.
+  Future<List<ChatMessage>?> peek(int conversationId) async {
+    try {
+      final page = await _call((t) => service.fetchMessages(t, conversationId));
+      return page == null
+          ? null
+          : ([...page.messages]..sort((a, b) => a.sentAt.compareTo(b.sentAt)));
+    } catch (error) {
+      debugPrint('Chat preview not loaded: $error');
+      return null;
+    }
+  }
+
   /// Why the conversation's messages couldn't be loaded (null if they could).
   String? loadErrorOf(int conversationId) => _threads[conversationId]?.error;
 

@@ -21,9 +21,10 @@ import 'chats_screen.dart' show timeLabel;
 import 'nearby_post_screen.dart';
 
 /// New thread: what's on my mind (up to [NearbyService.maxLength]
-/// characters), one photo or video (optional; verified members), and how
-/// far it reaches, then Post - it goes up under a random name and animal,
-/// for 7 days (a verified member's, until it's deleted). A chosen photo or video starts
+/// characters), one photo or video (optional; with one, the text is too),
+/// and who sees it (everyone on HUNTR, unless a distance is picked), then
+/// Post - it goes up under a random name and animal, and stays until it's
+/// deleted. A chosen photo or video starts
 /// uploading at once (app-wide, [NearbyUploads]), and Post doesn't wait for
 /// it: the thread shows how it's going. Below, my live threads (open one,
 /// or delete it). Pops with the new thread once it's up.
@@ -43,8 +44,8 @@ class _NearbyComposeScreenState extends State<NearbyComposeScreen> {
   final _text = TextEditingController();
 
   /// How far it reaches, in metres (one of [NearbyService.radii]); null:
-  /// everyone on HUNTR (verified members).
-  int? _radiusM = 5000;
+  /// everyone on HUNTR (as at first).
+  int? _radiusM;
 
   /// The tags picked (ids), and the tags there are (once loaded).
   Set<int> _tagIds = {};
@@ -90,15 +91,6 @@ class _NearbyComposeScreenState extends State<NearbyComposeScreen> {
     _text.addListener(() => setState(() {}));
   }
 
-  /// Everyone on HUNTR can be picked: I'm verified, or (editing) it's for
-  /// everyone already.
-  bool _mayReachEveryone(AppState app) =>
-      app.myVerified || (widget.editing?.everyone ?? false);
-
-  /// Who it's for: as picked, or (not allowed everyone) 5 km.
-  int? _reach(AppState app) =>
-      _mayReachEveryone(app) ? _radiusM : (_radiusM ?? 5000);
-
   @override
   void dispose() {
     // closed without posting: the chosen one goes
@@ -130,8 +122,12 @@ class _NearbyComposeScreenState extends State<NearbyComposeScreen> {
     }
   }
 
+  /// Text, or a photo or video (chosen now, or the edited one's), within
+  /// the length, and not still being added.
   bool get _ready =>
-      _text.text.trim().isNotEmpty &&
+      (_text.text.trim().isNotEmpty ||
+          _mediaId != null ||
+          (widget.editing?.media.isNotEmpty ?? false)) &&
       _text.text.length <= NearbyService.maxLength &&
       !_choosing;
 
@@ -148,7 +144,7 @@ class _NearbyComposeScreenState extends State<NearbyComposeScreen> {
     if (await file.length() > NearbyService.maxUploadBytes) {
       if (mounted) {
         setState(() =>
-            _mediaError = 'The file is too large. The maximum is 100 MB.');
+            _mediaError = 'The file is too large. The maximum is 300 MB.');
       }
       return;
     }
@@ -250,11 +246,11 @@ class _NearbyComposeScreenState extends State<NearbyComposeScreen> {
           ? await service.edit(token,
               postId: editing.id,
               body: _text.text,
-              radiusM: _reach(app),
+              radiusM: _radiusM,
               tagIds: _tagIds.toList())
           : await service.post(token,
               body: _text.text,
-              radiusM: _reach(app),
+              radiusM: _radiusM,
               tagIds: _tagIds.toList(),
               mediaId: _mediaId);
       // its photo or video keeps uploading: the thread shows how it's going
@@ -312,26 +308,37 @@ class _NearbyComposeScreenState extends State<NearbyComposeScreen> {
       radiusM == null ? 'Everyone' : 'Within ${nearbyRadiusLabel(radiusM)}';
 
   Future<void> _pickRadius() async {
-    final verified = _mayReachEveryone(AppScope.read(context));
-    // the sheet's answer: a radius, or (verified members) everyone
+    // the sheet's answer: a radius, or everyone
     final picked = await showModalBottomSheet<({int? radiusM})>(
       context: context,
       showDragHandle: true,
+      // as tall as its choices (not the usual part of the screen), and it
+      // scrolls when the screen is shorter than that
+      isScrollControlled: true,
       builder: (context) => SafeArea(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
+        child: SingleChildScrollView(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
           const Padding(
             padding: EdgeInsets.fromLTRB(20, 0, 20, 4),
             child: Text('Who can see it',
                 style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(20, 0, 20, 8),
             child: Text(
-                verified
-                    ? 'People this close to where you post, or everyone on '
-                        'HUNTR.'
-                    : 'Only people this close to where you post.',
-                style: const TextStyle(color: HuntrColors.muted)),
+                'Everyone on HUNTR, or only people this close to where you '
+                'post.',
+                style: TextStyle(color: HuntrColors.muted)),
+          ),
+          ListTile(
+            key: const Key('nearbyRadius-everyone'),
+            leading: const Icon(Icons.public_rounded),
+            title: const Text('Everyone on HUNTR'),
+            subtitle: const Text('Wherever they are'),
+            trailing: _radiusM == null
+                ? Icon(Icons.check_rounded, color: HuntrColors.orange)
+                : null,
+            onTap: () => Navigator.of(context).pop((radiusM: null)),
           ),
           for (final m in NearbyService.radii)
             ListTile(
@@ -343,19 +350,8 @@ class _NearbyComposeScreenState extends State<NearbyComposeScreen> {
                   : null,
               onTap: () => Navigator.of(context).pop((radiusM: m)),
             ),
-          if (verified)
-            ListTile(
-              key: const Key('nearbyRadius-everyone'),
-              leading: const Icon(Icons.public_rounded),
-              title: const Text('Everyone on HUNTR'),
-              subtitle: const Text('Wherever they are'),
-              trailing: _radiusM == null
-                  ? Icon(Icons.check_rounded, color: HuntrColors.orange)
-                  : null,
-              onTap: () => Navigator.of(context).pop((radiusM: null)),
-            ),
           const SizedBox(height: 8),
-        ]),
+        ])),
       ),
     );
     if (picked != null && mounted) setState(() => _radiusM = picked.radiusM);
@@ -428,11 +424,7 @@ class _NearbyComposeScreenState extends State<NearbyComposeScreen> {
     final over = count > NearbyService.maxLength;
     final mine = _mine;
     final now = DateTime.now();
-    // only verified members add a photo or video, or broadcast to everyone
-    // (the backend says so too)
-    final app = AppScope.of(context);
-    final verified = app.myVerified;
-    final radiusM = _reach(app);
+    final radiusM = _radiusM;
     final editing = widget.editing != null;
     return Scaffold(
       appBar: AppBar(
@@ -506,20 +498,10 @@ class _NearbyComposeScreenState extends State<NearbyComposeScreen> {
                 ),
                 const SizedBox(height: 12),
 
-                // ---- one photo or video (optional; verified members; not
-                // changed once it's posted) ----
+                // ---- one photo or video (optional; not changed once it's
+                // posted) ----
                 if (editing)
                   const SizedBox.shrink()
-                else if (!verified)
-                  const Padding(
-                    key: Key('nearbyMediaVerifiedOnly'),
-                    padding: EdgeInsets.symmetric(horizontal: 4),
-                    child: Text(
-                        'Your thread stays up for 7 days. Verified members '
-                        'can add a photo or video, and their threads stay up.',
-                        style:
-                            TextStyle(color: HuntrColors.muted, fontSize: 13)),
-                  )
                 else
                   _Attachment(
                     mediaId: _mediaId,

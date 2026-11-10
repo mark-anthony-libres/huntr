@@ -4236,7 +4236,7 @@ class NearbyPost {
   /// HUNTR's own post: for everyone, wherever they are (no distance).
   final bool official;
 
-  /// A verified member's post for everyone on HUNTR (no radius; it still
+  /// A post for everyone on HUNTR (no radius; it still
   /// has a distance).
   final bool everyone;
 
@@ -4495,7 +4495,7 @@ Future<NearbyPost> createNearbyPost(
         ));
 
 /// PUT .../nearby/posts/{id}: my post's text, who sees it ([radiusM]
-/// null: everyone on HUNTR, verified members) and tags, from now; the post
+/// null: everyone on HUNTR) and tags, from now; the post
 /// as it is now.
 Future<NearbyPost> editNearbyPost(
         {required String backendUrl,
@@ -4515,7 +4515,7 @@ Future<NearbyPost> editNearbyPost(
         ));
 
 /// POST .../nearby/media: a photo or video I chose for my next post
-/// (verified members), before its file is sent: `uploading`. The post can
+/// before its file is sent: `uploading`. The post can
 /// be written at once; the file follows ([uploadNearbyMedia]).
 Future<NearbyMedia> reserveNearbyMedia(
         {required String backendUrl,

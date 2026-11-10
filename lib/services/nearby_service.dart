@@ -25,7 +25,7 @@ class NearbyService {
   /// The largest photo or video (the backend's
   /// NEARBY_USER_MEDIA_MAX_UPLOAD_BYTES), and the longest video
   /// (NEARBY_USER_VIDEO_MAX_SECONDS).
-  static const maxUploadBytes = 100 * 1024 * 1024;
+  static const maxUploadBytes = 300 * 1024 * 1024;
   static const maxVideoLength = Duration(minutes: 30);
 
   Future<String> _url() => GoogleOAuthConfig.loadBackendUrl();
@@ -59,7 +59,7 @@ class NearbyService {
           radiusM: radiusM,
           tagIds: tagIds);
 
-  /// [radiusM] null: for everyone on HUNTR (verified members).
+  /// [radiusM] null: for everyone on HUNTR.
   Future<NearbyPost> post(String token,
           {required String body,
           required int? radiusM,
@@ -75,7 +75,7 @@ class NearbyService {
           tagIds: tagIds,
           mediaId: mediaId);
 
-  /// A photo or video I chose for my next post (verified members), before
+  /// A photo or video I chose for my next post, before
   /// its file is sent.
   Future<NearbyMedia> reserveMedia(String token,
           {required bool isVideo}) async =>

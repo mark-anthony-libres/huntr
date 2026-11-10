@@ -275,7 +275,7 @@ void main() {
     expect(find.text('ChillCorgi'), findsOneWidget);
     expect(find.text('320 m away'), findsOneWidget);
     expect(find.text('2.3 km away'), findsOneWidget);
-    expect(find.text('  ·  12m'), findsWidgets);
+    expect(find.text('  12m'), findsWidgets);
     expect(find.text('You · 120 m away'), findsOneWidget);
     expect(find.byKey(const Key('nearbyComments-1')), findsOneWidget);
     expect(find.text('14'), findsOneWidget);
@@ -333,8 +333,9 @@ void main() {
     expect(find.byKey(const Key('nearbyMine-2')), findsOneWidget);
     expect(find.byKey(const Key('nearbyMineMedia-2')), findsOneWidget);
     expect(find.byKey(const Key('nearbyMine-1')), findsNothing);
+    // for everyone, unless a distance is picked
     expect(tester.widget<Text>(find.byKey(const Key('nearbyRadiusLabel'))).data,
-        'Within 5 km');
+        'Everyone');
     final post = find.byKey(const Key('nearbyPost'));
     expect(tester.widget<FilledButton>(post).onPressed, isNull); // empty
     await tester.enterText(find.byKey(const Key('nearbyText')), 'x' * 501);
@@ -455,24 +456,32 @@ void main() {
         findsOneWidget);
   });
 
-  testWidgets('not verified: text only, no photo or video', (tester) async {
+  testWidgets('not verified: a photo with no text, for everyone',
+      (tester) async {
     final service = _FakeNearby();
+    ChatMediaPicker.instance = _FakePicker()
+      ..next.add(XFile.fromData(_png,
+          name: 'pic.png', path: 'pic.png', mimeType: 'image/png'));
     await _open(tester, service, verified: false);
     await tester.tap(find.byKey(const Key('nearbyCompose')));
     await tester.pumpAndSettle();
-    expect(find.byKey(const Key('nearbyAddMedia')), findsNothing);
-    expect(find.byKey(const Key('nearbyMediaVerifiedOnly')), findsOneWidget);
-    // a radius only
+    // everyone can be picked (and is, at first)
     await tester.tap(find.byKey(const Key('nearbyRadius')));
     await tester.pumpAndSettle();
-    expect(find.byKey(const Key('nearbyRadius-everyone')), findsNothing);
-    await tester.tap(find.byKey(const Key('nearbyRadius-5000')));
+    expect(find.byKey(const Key('nearbyRadius-everyone')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('nearbyRadius-everyone')));
     await tester.pumpAndSettle();
-    await tester.enterText(find.byKey(const Key('nearbyText')), 'Hello');
+    // no text: Post waits for a photo or video
+    final post = find.byKey(const Key('nearbyPost'));
+    expect(tester.widget<FilledButton>(post).onPressed, isNull);
+    await tester.tap(find.byKey(const Key('nearbyAddMedia')));
     await tester.pump();
-    await tester.tap(find.byKey(const Key('nearbyPost')));
-    await tester.pumpAndSettle();
-    expect(service.calls, contains('post 5000 null Hello'));
+    await tester.pump();
+    expect(tester.widget<FilledButton>(post).onPressed, isNotNull);
+    await tester.tap(post);
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    expect(service.calls, contains('post null null  +7'));
   });
 
   testWidgets(
@@ -500,7 +509,7 @@ void main() {
     await tester.pump();
     // the thread closes (its spinner never settles: pumped by time)
     await tester.pump(const Duration(seconds: 1));
-    expect(service.calls, contains('post 5000 null Sunset +7'));
+    expect(service.calls, contains('post null null Sunset +7'));
     // on the feed: how it's going, then (stored) processing
     expect(find.byKey(const Key('nearbyMediaUploading-7')), findsOneWidget);
     expect(find.text('Uploading 40%'), findsOneWidget);

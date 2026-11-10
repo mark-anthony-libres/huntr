@@ -1,5 +1,6 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
-import 'package:pointer_interceptor/pointer_interceptor.dart';
 import 'package:video_player/video_player.dart';
 import 'package:visibility_detector/visibility_detector.dart';
 
@@ -37,18 +38,11 @@ Widget _picture(String? url, {BoxFit fit = BoxFit.cover, Key? key}) => url ==
 /// One square of the grid: the still, a play mark and length on videos,
 /// "+N" over the last when there are more.
 class _Tile extends StatelessWidget {
-  const _Tile(
-      {required this.media,
-      required this.onTap,
-      this.more = 0,
-      this.whole = false});
+  const _Tile({required this.media, required this.onTap, this.more = 0});
 
   final NearbyMedia media;
   final VoidCallback onTap;
   final int more;
-
-  /// Shown whole (not cropped), on black: a tall one in a square.
-  final bool whole;
 
   @override
   Widget build(BuildContext context) => GestureDetector(
@@ -57,11 +51,7 @@ class _Tile extends StatelessWidget {
         child: media.uploading
             ? _UploadTile(media: media)
             : Stack(fit: StackFit.expand, children: [
-                if (whole) ...[
-                  const ColoredBox(color: Colors.black),
-                  _picture(media.previewUrl, fit: BoxFit.contain),
-                ] else
-                  _picture(media.previewUrl),
+                _picture(media.previewUrl),
                 // a video that's ready plays here, muted, while on screen
                 // (one under "+N" just opens full screen)
                 if (media.isVideo && media.url != null && more == 0)
@@ -126,21 +116,30 @@ class _Tile extends StatelessWidget {
 const nearbyMediaMaxHeight = 440.0;
 
 /// [aspectRatio] (width / height) across the full width, but never taller
-/// than [nearbyMediaMaxHeight].
+/// than [nearbyMediaMaxHeight] - or, [own] (a single photo or video), in its
+/// own shape: as wide as it fits, narrower (from the left) when it would be
+/// taller than that, so nothing fills around it.
 class _Frame extends StatelessWidget {
-  const _Frame({required this.aspectRatio, required this.child});
+  const _Frame(
+      {required this.aspectRatio, required this.child, this.own = false});
 
   final double aspectRatio;
   final Widget child;
+  final bool own;
 
   @override
-  Widget build(BuildContext context) => LayoutBuilder(
-        builder: (context, box) => SizedBox(
-          width: box.maxWidth,
-          height: (box.maxWidth / aspectRatio).clamp(0.0, nearbyMediaMaxHeight),
-          child: child,
-        ),
-      );
+  Widget build(BuildContext context) => LayoutBuilder(builder: (context, box) {
+        var width = box.maxWidth;
+        var height = width / aspectRatio;
+        if (height > nearbyMediaMaxHeight) {
+          height = nearbyMediaMaxHeight;
+          if (own) width = height * aspectRatio;
+        }
+        return Align(
+          alignment: Alignment.centerLeft,
+          child: SizedBox(width: width, height: height, child: child),
+        );
+      });
 }
 
 /// An official post's photos and videos as a grid: one in its own shape;
@@ -176,23 +175,22 @@ class NearbyMediaGrid extends StatelessWidget {
 
   Widget _grid(BuildContext context, List<NearbyMedia> media) {
     if (media.isEmpty) return const SizedBox.shrink();
-    Widget tile(int i, {int more = 0, bool whole = false}) => _Tile(
+    Widget tile(int i, {int more = 0}) => _Tile(
         media: media[i],
         more: more,
-        whole: whole,
         // a video still processing (or failed) has nothing to open yet
         onTap: media[i].url == null ? () {} : () => _open(context, media, i));
     const gap = SizedBox.square(dimension: 2);
     final Widget grid;
     if (media.length == 1) {
-      // wide ones in their own shape (up to 2:1); tall ones (a phone's
-      // video) in a square, so they don't take over the feed. Always whole
-      // (never cropped): where the frame is wider than the picture (on a
-      // computer, capped at nearbyMediaMaxHeight), black fills the sides
+      // in its own shape (a very wide one at most 3:1), nothing around it;
+      // a tall one (a phone's video) no taller than nearbyMediaMaxHeight
       final ratio = media.first.aspectRatio;
-      grid = _Frame(
-          aspectRatio: ratio < 1 ? 1 : ratio.clamp(1.0, 2.0),
-          child: tile(0, whole: true));
+      return _Frame(
+          aspectRatio: ratio.clamp(0.4, 3.0),
+          own: true,
+          child: ClipRRect(
+              borderRadius: BorderRadius.circular(12), child: tile(0)));
     } else if (media.length == 2) {
       grid = _Frame(
           aspectRatio: 16 / 10,
@@ -316,6 +314,18 @@ class _VideoState extends State<_Video> {
   late final _SharedVideo _video = _videos.take(widget.media, fullScreen: true);
   bool _failed = false;
 
+  /// Controls show at first and on a tap, and go after a few seconds while
+  /// it plays.
+  bool _controls = true;
+  Timer? _hide;
+
+  /// As in the feed (muted unless unmuted there): sound only once someone
+  /// taps unmute.
+  bool get _muted => _videos.muted.value;
+
+  /// Where the bar is being dragged to, in milliseconds.
+  double? _dragging;
+
   VideoPlayerController get _player => _video.player;
 
   @override
@@ -326,6 +336,7 @@ class _VideoState extends State<_Video> {
       if (!mounted) return;
       setState(() {});
       _follow();
+      _hideSoon();
     }, onError: (Object _) {
       if (mounted) setState(() => _failed = true);
     });
@@ -337,12 +348,13 @@ class _VideoState extends State<_Video> {
     _follow();
   }
 
-  /// With sound while it's the one shown; waits otherwise.
+  /// Plays while it's the one shown (with sound unless muted); waits
+  /// otherwise.
   void _follow() {
     if (!_player.value.isInitialized) return;
     if (widget.active) {
       _player
-        ..setVolume(1)
+        ..setVolume(_muted ? 0 : 1)
         ..play();
     } else {
       _player.pause();
@@ -353,10 +365,64 @@ class _VideoState extends State<_Video> {
     if (mounted) setState(() {});
   }
 
+  void _hideSoon() {
+    _hide?.cancel();
+    _hide = Timer(const Duration(seconds: 3), () {
+      if (mounted && _player.value.isPlaying && _dragging == null) {
+        setState(() => _controls = false);
+      }
+    });
+  }
+
+  void _show() {
+    setState(() => _controls = true);
+    _hideSoon();
+  }
+
+  void _toggleControls() {
+    if (_controls) {
+      _hide?.cancel();
+      setState(() => _controls = false);
+    } else {
+      _show();
+    }
+  }
+
+  void _togglePlay() {
+    _player.value.isPlaying ? _player.pause() : _player.play();
+    _show();
+  }
+
+  void _skip(Duration by) {
+    final v = _player.value;
+    var to = v.position + by;
+    if (to < Duration.zero) to = Duration.zero;
+    if (to > v.duration) to = v.duration;
+    _player.seekTo(to);
+    _show();
+  }
+
+  /// While the bar is dragged the picture follows it (a few times a second,
+  /// not on every move), so the right moment is easy to find.
+  DateTime _previewed = DateTime(0);
+  void _preview(double ms) {
+    final now = DateTime.now();
+    if (now.difference(_previewed) < const Duration(milliseconds: 200)) return;
+    _previewed = now;
+    _player.seekTo(Duration(milliseconds: ms.round()));
+  }
+
+  void _toggleMute() {
+    setState(() => _videos.muted.value = !_muted);
+    _player.setVolume(_muted ? 0 : 1);
+    _show();
+  }
+
   @override
   void dispose() {
+    _hide?.cancel();
     _player.removeListener(_changed);
-    // back to the feed: it carries on there, muted or not as chosen
+    // back to the feed: it carries on there, muted or not as chosen there
     _videos.give(_video, fullScreen: true);
     super.dispose();
   }
@@ -378,27 +444,160 @@ class _VideoState extends State<_Video> {
         const Center(child: CircularProgressIndicator()),
       ]);
     }
+    final v = _player.value;
     return GestureDetector(
       key: Key('nearbyMediaVideo-${widget.media.id}'),
-      onTap: () => _player.value.isPlaying ? _player.pause() : _player.play(),
-      child: Center(
-        child: AspectRatio(
-          aspectRatio: _player.value.aspectRatio,
-          child: Stack(fit: StackFit.expand, children: [
-            VideoPlayer(_player),
-            if (!_player.value.isPlaying)
-              const Center(
-                  child: Icon(Icons.play_circle_fill_rounded,
-                      size: 72, color: Colors.white70)),
-            Positioned(
-              left: 12,
-              right: 12,
-              bottom: 8,
-              child: VideoProgressIndicator(_player, allowScrubbing: true),
+      behavior: HitTestBehavior.opaque,
+      onTap: _toggleControls,
+      child: Stack(fit: StackFit.expand, children: [
+        Center(
+          child: AspectRatio(
+              aspectRatio: v.aspectRatio,
+              // taps go to the controls, not to the video's page element
+              child: IgnorePointer(child: VideoPlayer(_player))),
+        ),
+        IgnorePointer(
+          ignoring: !_controls,
+          child: AnimatedOpacity(
+            opacity: _controls ? 1 : 0,
+            duration: const Duration(milliseconds: 200),
+            child: _controlsOver(v),
+          ),
+        ),
+      ]),
+    );
+  }
+
+  /// Play or pause and 10 seconds back or on in the middle; the time, a bar
+  /// to drag and mute at the bottom.
+  Widget _controlsOver(VideoPlayerValue v) {
+    const white = Colors.white;
+    final total = v.duration.inMilliseconds.toDouble();
+    final max = total > 0 ? total : 1.0;
+    final at = (_dragging ?? v.position.inMilliseconds.toDouble())
+        .clamp(0.0, max)
+        .toDouble();
+    const time = TextStyle(
+        color: white,
+        fontSize: 13,
+        fontFeatures: [FontFeature.tabularFigures()]);
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Colors.transparent, Colors.black54],
+          stops: [0.6, 1],
+        ),
+      ),
+      child: Stack(children: [
+        if (_dragging != null)
+          // the time it goes to, big, while the bar is dragged
+          Center(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                  color: Colors.black54,
+                  borderRadius: BorderRadius.circular(12)),
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Text(
+                  key: const Key('nearbyFullSeekTime'),
+                  '${mediaDurationLabel(Duration(milliseconds: at.round()))}'
+                  ' / ${mediaDurationLabel(v.duration)}',
+                  style:
+                      time.copyWith(fontSize: 28, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ),
+          )
+        else
+          Center(
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              IconButton(
+                key: const Key('nearbyFullBack10'),
+                tooltip: 'Back 10 seconds',
+                iconSize: 36,
+                color: white,
+                onPressed: () => _skip(const Duration(seconds: -10)),
+                icon: const Icon(Icons.replay_10_rounded),
+              ),
+              const SizedBox(width: 24),
+              IconButton(
+                key: const Key('nearbyFullPlay'),
+                tooltip: v.isPlaying ? 'Pause' : 'Play',
+                iconSize: 64,
+                color: white,
+                style: IconButton.styleFrom(backgroundColor: Colors.black38),
+                onPressed: _togglePlay,
+                icon: Icon(v.isPlaying
+                    ? Icons.pause_rounded
+                    : Icons.play_arrow_rounded),
+              ),
+              const SizedBox(width: 24),
+              IconButton(
+                key: const Key('nearbyFullForward10'),
+                tooltip: 'Forward 10 seconds',
+                iconSize: 36,
+                color: white,
+                onPressed: () => _skip(const Duration(seconds: 10)),
+                icon: const Icon(Icons.forward_10_rounded),
+              ),
+            ]),
+          ),
+        Positioned(
+          left: 12,
+          right: 4,
+          bottom: 4,
+          child: Row(children: [
+            Text(mediaDurationLabel(Duration(milliseconds: at.round())),
+                style: time),
+            Expanded(
+              child: SliderTheme(
+                data: SliderTheme.of(context).copyWith(
+                  activeTrackColor: white,
+                  inactiveTrackColor: Colors.white24,
+                  thumbColor: white,
+                  overlayColor: Colors.white24,
+                  // bigger while dragged, so it's easy to see where it is
+                  trackHeight: _dragging != null ? 6 : 4,
+                  thumbShape: RoundSliderThumbShape(
+                      enabledThumbRadius: _dragging != null ? 10 : 8),
+                  overlayShape:
+                      const RoundSliderOverlayShape(overlayRadius: 22),
+                ),
+                child: Slider(
+                  key: const Key('nearbyFullSeek'),
+                  value: at,
+                  max: max,
+                  onChangeStart: (x) {
+                    _hide?.cancel();
+                    setState(() => _dragging = x);
+                  },
+                  onChanged: (x) {
+                    setState(() => _dragging = x);
+                    _preview(x);
+                  },
+                  onChangeEnd: (x) {
+                    _player.seekTo(Duration(milliseconds: x.round()));
+                    setState(() => _dragging = null);
+                    _hideSoon();
+                  },
+                ),
+              ),
+            ),
+            Text(mediaDurationLabel(v.duration), style: time),
+            IconButton(
+              key: const Key('nearbyFullMute'),
+              tooltip: _muted ? 'Unmute' : 'Mute',
+              color: white,
+              onPressed: _toggleMute,
+              icon: Icon(
+                  _muted ? Icons.volume_off_rounded : Icons.volume_up_rounded),
             ),
           ]),
         ),
-      ),
+      ]),
     );
   }
 }
@@ -486,8 +685,11 @@ class _FeedVideos with WidgetsBindingObserver {
     video.holders--;
     if (fullScreen) {
       this.fullScreen.remove(video.mediaId);
-      video.player.pause();
-      // the feed takes it back (and plays it, if it's its turn)
+      video.player
+        ..pause()
+        ..setVolume(0);
+      // the feed takes it back, muted (and plays it, if it's its turn)
+      muted.value = true;
       playing.value = null;
       _pick();
     }
@@ -673,18 +875,17 @@ class _FeedVideoState extends State<_FeedVideo> {
       key: ObjectKey(this),
       onVisibilityChanged: _visible,
       child: Stack(fit: StackFit.expand, children: [
-        if (ready)
-          ColoredBox(
-            color: Colors.black,
-            child: Center(
-              child: AspectRatio(
-                  aspectRatio: player!.value.aspectRatio,
-                  child: VideoPlayer(player)),
-            ),
+        if (ready && !player!.value.size.isEmpty)
+          // fills its frame (the video's own shape), nothing around it
+          FittedBox(
+            fit: BoxFit.cover,
+            clipBehavior: Clip.hardEdge,
+            child: SizedBox(
+                width: player.value.size.width,
+                height: player.value.size.height,
+                // a tap opens full screen: the video's page element takes none
+                child: IgnorePointer(child: VideoPlayer(player))),
           ),
-        // on the web the video is a page element that takes the taps: this
-        // gives them back to HUNTR (a tap opens it full screen)
-        if (ready) PointerInterceptor(child: const SizedBox.expand()),
         if (!playing)
           const Center(
             child: DecoratedBox(
