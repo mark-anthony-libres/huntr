@@ -1,3 +1,4 @@
+import 'person_photo_viewer_screen.dart';
 import 'dart:async';
 import 'dart:math';
 
@@ -64,6 +65,15 @@ class ProfileScreen extends StatelessWidget {
   final bool showDistance;
 
   bool get _isPreview => previewProfile != null;
+
+  /// Someone's photo, tapped: full screen, to reply or react (not my own
+  /// preview).
+  ValueChanged<int>? _opener(BuildContext context, Profile p) =>
+      _isPreview || p.photoUrls.isEmpty
+          ? null
+          : (index) => Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) =>
+                  PersonPhotoViewerScreen(profile: p, initialIndex: index)));
 
   @override
   Widget build(BuildContext context) {
@@ -133,7 +143,12 @@ class ProfileScreen extends StatelessWidget {
     final Widget gallery = Stack(
       fit: StackFit.expand,
       children: [
-        PhotoGallery(profile: p, firstIsAvatar: !_isPreview),
+        PhotoGallery(
+            profile: p,
+            firstIsAvatar: !_isPreview,
+            autoPlay: true,
+            showAlbums: !_isPreview,
+            onOpen: _opener(context, p)),
         const IgnorePointer(
             child: DecoratedBox(
           decoration: BoxDecoration(
@@ -372,6 +387,7 @@ class ProfileScreen extends StatelessWidget {
                       child: _WideGallery(
                           profile: p,
                           firstIsAvatar: !_isPreview,
+                          onOpen: _opener(context, p),
                           actions: actions),
                     ),
                     const SizedBox(width: 32),
@@ -912,9 +928,11 @@ class _WideGallery extends StatefulWidget {
   const _WideGallery(
       {required this.profile,
       required this.firstIsAvatar,
-      required this.actions});
+      required this.actions,
+      this.onOpen});
 
   final Profile profile;
+  final ValueChanged<int>? onOpen;
   final bool firstIsAvatar;
   final List<Widget> actions;
 
@@ -972,7 +990,10 @@ class _WideGalleryState extends State<_WideGallery> {
                     profile: widget.profile,
                     firstIsAvatar: widget.firstIsAvatar,
                     controller: _pages,
-                    onPageChanged: (i) => setState(() => _page = i)),
+                    onPageChanged: (i) => setState(() => _page = i),
+                    autoPlay: true,
+                    showAlbums: widget.firstIsAvatar,
+                    onOpen: widget.onOpen),
                 // only a top shade, for the buttons
                 const IgnorePointer(
                   child: DecoratedBox(

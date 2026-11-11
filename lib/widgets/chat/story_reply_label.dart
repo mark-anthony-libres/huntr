@@ -6,16 +6,21 @@ import '../../theme.dart';
 /// Over a story reply's bubble, on its side of the chat: "You replied to
 /// Sam's story" / "Replied to your story", or "reacted" when it's just an
 /// emoji (a quick reaction), and under that the story while it's still up
-/// (tap: watch it), or "Story unavailable" once it's gone. Other messages
-/// are shown as they are.
+/// (tap: watch it), or "Story unavailable" once it's gone. A photo reply
+/// the same, with the profile photo ("Photo unavailable" once it's off
+/// their profile). Other messages are shown as they are.
 class StoryReplyLabel extends StatelessWidget {
   const StoryReplyLabel(
       {super.key,
       required this.fromMe,
       required this.otherName,
-      required this.reaction});
+      required this.reaction,
+      this.photo = false});
 
   final bool fromMe;
+
+  /// A reply to a profile photo, not a story.
+  final bool photo;
 
   /// The other person's name (empty: "their").
   final String otherName;
@@ -27,7 +32,8 @@ class StoryReplyLabel extends StatelessWidget {
   /// story reply. [onOpenStory] plays that story.
   static Widget over(ChatMessage message, Widget bubble,
           {required String otherName, VoidCallback? onOpenStory}) =>
-      message.type != ChatMessageType.storyReply
+      message.type != ChatMessageType.storyReply &&
+              message.type != ChatMessageType.photoReply
           ? bubble
           : Column(
               crossAxisAlignment: message.fromMe
@@ -38,8 +44,11 @@ class StoryReplyLabel extends StatelessWidget {
                 StoryReplyLabel(
                     fromMe: message.fromMe,
                     otherName: otherName,
-                    reaction: isReaction(message.body)),
-                if (message.storyId != null)
+                    reaction: isReaction(message.body),
+                    photo: message.type == ChatMessageType.photoReply),
+                if (message.type == ChatMessageType.photoReply)
+                  PhotoReplyPreview(message: message)
+                else if (message.storyId != null)
                   StoryReplyPreview(message: message, onOpen: onOpenStory),
                 bubble,
               ],
@@ -53,16 +62,18 @@ class StoryReplyLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     final verb = reaction ? 'reacted to' : 'replied to';
     final whose = otherName.trim().isEmpty ? 'their' : "${otherName.trim()}'s";
+    final what = photo ? 'photo' : 'story';
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 6, 12, 2),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(Icons.auto_stories_outlined, size: 14, color: HuntrColors.orange),
+        Icon(photo ? Icons.photo_outlined : Icons.auto_stories_outlined,
+            size: 14, color: HuntrColors.orange),
         const SizedBox(width: 4),
         Flexible(
           child: Text(
             fromMe
-                ? 'You $verb $whose story'
-                : '${reaction ? 'Reacted' : 'Replied'} to your story',
+                ? 'You $verb $whose $what'
+                : '${reaction ? 'Reacted' : 'Replied'} to your $what',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(color: HuntrColors.muted, fontSize: 12),
@@ -142,6 +153,58 @@ class StoryReplyPreview extends StatelessWidget {
               ),
             ]),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The profile photo a reply answered: a small copy while it's still on
+/// their profile; "Photo unavailable" once it's gone.
+class PhotoReplyPreview extends StatelessWidget {
+  const PhotoReplyPreview({super.key, required this.message});
+
+  final ChatMessage message;
+
+  @override
+  Widget build(BuildContext context) {
+    final url = message.photoThumbnailUrl;
+    if (!message.photoAvailable) {
+      return Padding(
+        key: Key('photoReplyGone-${message.id}'),
+        padding: const EdgeInsets.fromLTRB(4, 4, 4, 6),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: HuntrColors.border),
+          ),
+          child: const Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(Icons.hide_image_outlined, size: 15, color: HuntrColors.muted),
+            SizedBox(width: 6),
+            Text('Photo unavailable',
+                style: TextStyle(color: HuntrColors.muted, fontSize: 12.5)),
+          ]),
+        ),
+      );
+    }
+    return Padding(
+      key: Key('photoReplyPreview-${message.id}'),
+      padding: const EdgeInsets.fromLTRB(4, 4, 4, 6),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          width: 96,
+          height: 120,
+          color: HuntrColors.surfaceHigh,
+          child: url == null
+              ? null
+              : Image.network(url,
+                  fit: BoxFit.cover,
+                  // a plain <img> on web: no CORS needed for the bucket
+                  webHtmlElementStrategy: WebHtmlElementStrategy.fallback,
+                  errorBuilder: (context, error, stack) =>
+                      const SizedBox.shrink()),
         ),
       ),
     );

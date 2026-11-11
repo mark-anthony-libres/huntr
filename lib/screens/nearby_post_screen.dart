@@ -6,6 +6,7 @@ import '../services/services_scope.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/me/section_states.dart';
+import '../widgets/emoticons.dart';
 import '../widgets/nearby/nearby_post_card.dart';
 import 'nearby_compose_screen.dart' show editNearbyThread;
 
@@ -85,7 +86,7 @@ class _NearbyPostScreenState extends State<NearbyPostScreen> {
   Future<void> _send() async {
     final service = _service;
     final token = _token;
-    final body = _input.text.trim();
+    final body = replaceEmoticons(_input.text.trim());
     if (service == null || token == null || body.isEmpty || _sending) return;
     setState(() => _sending = true);
     try {
@@ -376,6 +377,7 @@ class _NearbyPostScreenState extends State<NearbyPostScreen> {
                             maxLines: 4,
                             maxLength: NearbyService.maxLength,
                             textCapitalization: TextCapitalization.sentences,
+                            inputFormatters: const [EmoticonFormatter()],
                             decoration: InputDecoration(
                               hintText: _replyTo == null
                                   ? 'Add a comment…'

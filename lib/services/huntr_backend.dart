@@ -1372,6 +1372,10 @@ enum ChatMessageType {
   /// A reply or reaction to a story ([ChatMessage.body] is what was said).
   storyReply,
 
+  /// A reply or reaction to a profile photo ([ChatMessage.body] is what was
+  /// said; [ChatMessage.photoId] the photo).
+  photoReply,
+
   /// Its sender is interested in my album (they said so after viewing it
   /// in a trade): "❤️ Sam is interested in your album!".
   albumInterest,
@@ -1383,6 +1387,7 @@ enum ChatMessageType {
   static ChatMessageType parse(String? value) => switch (value) {
         'gif' => gif,
         'story_reply' => storyReply,
+        'photo_reply' => photoReply,
         'tap' => tap,
         'reveal' => reveal,
         'reveal_request' => revealRequest,
@@ -1428,6 +1433,9 @@ class ChatMessage {
     this.storyId,
     this.storyAvailable = false,
     this.storyThumbnailUrl,
+    this.photoId,
+    this.photoAvailable = false,
+    this.photoThumbnailUrl,
     this.edited = false,
     this.unsent = false,
     this.editableUntil,
@@ -1485,6 +1493,13 @@ class ChatMessage {
             false,
         storyThumbnailUrl: (json['story_reply']
             as Map<String, dynamic>?)?['thumbnail_url'] as String?,
+        photoId:
+            (json['photo_reply'] as Map<String, dynamic>?)?['photo_id'] as int?,
+        photoAvailable: (json['photo_reply']
+                as Map<String, dynamic>?)?['available'] as bool? ??
+            false,
+        photoThumbnailUrl: (json['photo_reply']
+            as Map<String, dynamic>?)?['thumbnail_url'] as String?,
         edited: json['edited'] as bool? ?? false,
         unsent: json['unsent'] as bool? ?? false,
         editableUntil: json['editable_until'] == null
@@ -1522,6 +1537,7 @@ class ChatMessage {
       !unsent &&
       (type == ChatMessageType.text ||
           type == ChatMessageType.storyReply ||
+          type == ChatMessageType.photoReply ||
           type == ChatMessageType.gif ||
           type == ChatMessageType.image ||
           type == ChatMessageType.video);
@@ -1531,7 +1547,8 @@ class ChatMessage {
       ? null
       : switch (type) {
           ChatMessageType.text ||
-          ChatMessageType.storyReply =>
+          ChatMessageType.storyReply ||
+          ChatMessageType.photoReply =>
             body.isEmpty ? null : body,
           _ => null,
         };
@@ -1543,6 +1560,13 @@ class ChatMessage {
   /// deleted), and then its thumbnail (none on a live event: fetched after).
   final bool storyAvailable;
   final String? storyThumbnailUrl;
+
+  /// A photo reply: the profile photo it answered, whether that photo is
+  /// still on their profile, and then its small copy (none on a live event:
+  /// fetched after).
+  final int? photoId;
+  final bool photoAvailable;
+  final String? photoThumbnailUrl;
 
   final ChatMessageType type;
 
@@ -1643,6 +1667,9 @@ class ChatMessage {
           storyId: storyId,
           storyAvailable: storyAvailable,
           storyThumbnailUrl: storyThumbnailUrl,
+          photoId: photoId,
+          photoAvailable: photoAvailable,
+          photoThumbnailUrl: photoThumbnailUrl,
           reactions: reactions ?? this.reactions,
           replyTo: replyTo ?? this.replyTo,
           edited: edited,
@@ -1673,6 +1700,7 @@ class ChatMessage {
           fromMe ? '👋 You tapped them' : '👋 They tapped you',
         ChatMessageType.gif => gif?.isSticker == true ? 'Sticker' : '🎞️ GIF',
         ChatMessageType.storyReply => '↩ Story reply: $body',
+        ChatMessageType.photoReply => '↩ Photo reply: $body',
         ChatMessageType.albumInterest =>
           fromMe ? 'You said you’re interested' : 'Interested in your album',
         ChatMessageType.sticker => '${sticker?.name ?? 'Sticker'} sticker',
@@ -1807,7 +1835,8 @@ class ReplyPreview {
           : switch (message.type) {
               // a story reply's body is what was said
               ChatMessageType.text ||
-              ChatMessageType.storyReply =>
+              ChatMessageType.storyReply ||
+              ChatMessageType.photoReply =>
                 message.body,
               ChatMessageType.albumTrade =>
                 message.trade?.offeredAlbum?.name ?? '',
@@ -1840,7 +1869,7 @@ class ReplyPreview {
         ChatMessageType.revealRequest => 'Asked to see your profile',
         ChatMessageType.tap => '👋 Tap',
         ChatMessageType.gif => '🎞️ GIF',
-        ChatMessageType.storyReply => '↩ $body',
+        ChatMessageType.storyReply || ChatMessageType.photoReply => '↩ $body',
         ChatMessageType.albumInterest => 'Interested in an album',
         ChatMessageType.sticker => body.isEmpty ? 'Sticker' : '$body sticker',
       };
@@ -3274,6 +3303,24 @@ Future<ChatMessage> replyToStory(
     _sendAuthorized(
       client,
       (httpClient) => httpClient.post(_stories(backendUrl, '/$storyId/reply'),
+          headers: _json(token),
+          body: jsonEncode({'body': body, 'client_id': clientId})),
+      ChatMessage.fromJson,
+    );
+
+/// POST .../photos/{id}/reply: a reply or reaction to their profile photo;
+/// it goes to our direct chat.
+Future<ChatMessage> replyToPhoto(
+        {required String backendUrl,
+        required String token,
+        required int photoId,
+        required String body,
+        required String clientId,
+        http.Client? client}) =>
+    _sendAuthorized(
+      client,
+      (httpClient) => httpClient.post(
+          _endpoint(backendUrl, '/photos/$photoId/reply'),
           headers: _json(token),
           body: jsonEncode({'body': body, 'client_id': clientId})),
       ChatMessage.fromJson,

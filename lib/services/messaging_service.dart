@@ -97,6 +97,16 @@ class MessagingService {
       backend.startConversation(
           backendUrl: await _url(), token: token, userId: userId);
 
+  /// A reply or reaction to their profile photo, in our direct chat.
+  Future<ChatMessage> replyToPhoto(String token, int photoId,
+          {required String body, required String clientId}) async =>
+      backend.replyToPhoto(
+          backendUrl: await _url(),
+          token: token,
+          photoId: photoId,
+          body: body,
+          clientId: clientId);
+
   /// Message on a Threads author's anonymous profile: our chat where both
   /// of us stay anonymous.
   Future<MessageTarget> messageThreadsAuthor(String token, int postId,

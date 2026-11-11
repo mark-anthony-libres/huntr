@@ -314,6 +314,8 @@ class Profile {
     this.verified = false,
     this.photos = const [],
     this.photoUrls = const [],
+    this.photoIds = const [],
+    this.albumCount = 0,
     this.albums = const [],
     this.backendId,
     this.distanceHidden = false,
@@ -400,6 +402,8 @@ class Profile {
       photoUrls: json['photo_urls'] != null
           ? (json['photo_urls'] as List<dynamic>).cast<String>()
           : [if (json['photo_url'] != null) json['photo_url'] as String],
+      photoIds: (json['photo_ids'] as List<dynamic>? ?? const []).cast<int>(),
+      albumCount: json['album_count'] as int? ?? 0,
       blockedByMe: (json['blocked'] as Map<String, dynamic>?)?['by_me'] == true,
       blockedMe: (json['blocked'] as Map<String, dynamic>?)?['me'] == true,
       stats: ProfileStats.fromJson(json),
@@ -480,6 +484,8 @@ class Profile {
         verified: verified,
         photos: photos,
         photoUrls: photoUrls,
+        photoIds: photoIds,
+        albumCount: albumCount,
         albums: albums,
         backendId: backendId,
         distanceHidden: distanceHidden,
@@ -551,6 +557,15 @@ class Profile {
 
   /// Real photos, by link (my own profile); used instead of [photos].
   final List<String> photoUrls;
+
+  /// Their photos' ids, in [photoUrls]' order (only when the profile was
+  /// opened): to reply to one. Empty: no replies.
+  final List<int> photoIds;
+
+  /// How many albums (with something in them) they have to trade (only
+  /// when the profile was opened); [albums] when those are known instead.
+  final int albumCount;
+  int get albumsToTrade => albumCount > 0 ? albumCount : albums.length;
 
   /// Public profile pictures, shown on the profile. The first one is the main picture.
   final List<AlbumPhoto> photos;
@@ -699,7 +714,6 @@ enum ExploreSort {
   final String label;
   final IconData icon;
 }
-
 
 class ExploreFilters {
   const ExploreFilters({

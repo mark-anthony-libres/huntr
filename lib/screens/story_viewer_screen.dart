@@ -13,6 +13,7 @@ import '../state/app_state.dart';
 import '../state/messaging_state.dart';
 import '../theme.dart';
 import '../widgets/avatar.dart';
+import '../widgets/reply_bar.dart';
 import '../widgets/stories/reaction_burst.dart';
 import '../widgets/stories/story_round_button.dart';
 import '../widgets/verified_badge.dart';
@@ -733,69 +734,12 @@ class _StoryViewerScreenState extends State<StoryViewerScreen> {
                           label: Text('Seen by ${story.viewCount ?? 0}'),
                         ),
                       ]))
-                : Row(children: [
-                    Expanded(
-                      child: TextField(
-                        key: const Key('storyReply'),
-                        controller: _reply,
-                        focusNode: _replyFocus,
-                        textInputAction: TextInputAction.send,
-                        onSubmitted: _send,
-                        style: const TextStyle(color: Colors.white),
-                        decoration: InputDecoration(
-                          hintText: 'Send a message…',
-                          hintStyle: const TextStyle(color: Colors.white60),
-                          filled: true,
-                          fillColor: Colors.transparent,
-                          contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 18, vertical: 12),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(999),
-                            borderSide: const BorderSide(color: Colors.white38),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(999),
-                            borderSide: BorderSide(color: HuntrColors.orange),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    // typing: a send button (Enter sends too); otherwise the
-                    // quick reactions
-                    ValueListenableBuilder<TextEditingValue>(
-                      valueListenable: _reply,
-                      builder: (context, value, _) => value.text.trim().isEmpty
-                          ? Row(mainAxisSize: MainAxisSize.min, children: [
-                              for (final emoji in _reactions)
-                                Padding(
-                                  padding: const EdgeInsets.only(left: 6),
-                                  child: IconButton(
-                                    key: Key('storyReact-$emoji'),
-                                    tooltip: 'React $emoji',
-                                    style: IconButton.styleFrom(
-                                        minimumSize: const Size(48, 48)),
-                                    onPressed: () => _send(emoji),
-                                    icon: Text(emoji,
-                                        style: const TextStyle(fontSize: 30)),
-                                  ),
-                                ),
-                            ])
-                          : Padding(
-                              padding: const EdgeInsets.only(left: 4),
-                              child: IconButton.filled(
-                                key: const Key('storySend'),
-                                tooltip: 'Send',
-                                style: IconButton.styleFrom(
-                                    backgroundColor: HuntrColors.orange,
-                                    foregroundColor: Colors.black,
-                                    minimumSize: const Size(48, 48)),
-                                onPressed: () => _send(_reply.text),
-                                icon: const Icon(Icons.send_rounded),
-                              ),
-                            ),
-                    ),
-                  ]),
+                : ReplyBar(
+                    controller: _reply,
+                    focusNode: _replyFocus,
+                    reactions: _reactions,
+                    onSend: _send,
+                    keyPrefix: 'story'),
           ),
         ]),
       ),

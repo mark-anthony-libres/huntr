@@ -46,6 +46,7 @@ import 'story_viewer_screen.dart';
 import 'anonymous_profile_screen.dart';
 import '../widgets/chat/anonymous_chat.dart';
 import '../widgets/page_title.dart';
+import '../widgets/emoticons.dart';
 import '../widgets/chat/album_interest.dart';
 import '../flows/my_albums.dart';
 
@@ -430,8 +431,10 @@ class _ChatScreenState extends State<ChatScreen> {
     super.dispose();
   }
 
-  void _send(Profile p, String text) {
-    if (text.trim().isEmpty) return;
+  void _send(Profile p, String typed) {
+    if (typed.trim().isEmpty) return;
+    // ":)" left at the end becomes 🙂 too
+    final text = replaceEmoticons(typed);
     final id = _conversationId;
     if (id != null) {
       _messaging?.send(id, p, text);
@@ -740,6 +743,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   minLines: 1,
                   maxLines: 5,
                   textCapitalization: TextCapitalization.sentences,
+                  inputFormatters: const [EmoticonFormatter()],
                   decoration: InputDecoration(hintText: 'Message ${p.name}…'),
                   onSubmitted: (v) => _send(p, v),
                 ),
@@ -1324,7 +1328,8 @@ class _ChatScreenState extends State<ChatScreen> {
                                     : switch (m.type) {
                                         // a story reply is a text with "Replied to your story" over it
                                         ChatMessageType.text ||
-                                        ChatMessageType.storyReply =>
+                                        ChatMessageType.storyReply ||
+                                        ChatMessageType.photoReply =>
                                           Reactable(
                                             message: m,
                                             enabled: interactive,
@@ -1835,7 +1840,7 @@ class _EditMessageDialogState extends State<_EditMessageDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final text = _controller.text.trim();
+    final text = replaceEmoticons(_controller.text.trim());
     final canSave = text.isNotEmpty && text != widget.text.trim();
     void save() {
       if (canSave) Navigator.of(context).pop(text);
@@ -1853,6 +1858,7 @@ class _EditMessageDialogState extends State<_EditMessageDialog> {
           maxLines: 6,
           maxLength: 1000,
           textCapitalization: TextCapitalization.sentences,
+          inputFormatters: const [EmoticonFormatter()],
           onChanged: (_) => setState(() {}),
           onSubmitted: (_) => save(),
         ),

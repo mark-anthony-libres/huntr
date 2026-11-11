@@ -860,6 +860,15 @@ class MessagingState extends ChangeNotifier {
     return target == null ? null : _opened(target).conversationId;
   }
 
+  /// A reply or reaction (an emoji) to their profile photo: a message in
+  /// our direct chat (which then shows in Chats). Throws what the backend
+  /// says (a block, the photo gone).
+  Future<void> replyToPhoto(int photoId, String body) async {
+    final sent = await _call((t) => service.replyToPhoto(t, photoId,
+        body: body, clientId: newClientId()));
+    if (sent != null) unawaited(refresh());
+  }
+
   /// Message on a Threads author's anonymous profile (of the post, or of
   /// [commentId] on it): our chat where both of us stay anonymous. Throws
   /// what the backend says (a block, an unmatch).

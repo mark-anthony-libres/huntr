@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import 'package:visibility_detector/visibility_detector.dart';
 
+import '../photos/zoomable.dart';
 import '../../flows/chat_attachments.dart' show ChatMediaPicker;
 import '../../services/huntr_backend.dart';
 import '../../services/nearby_service.dart';
@@ -235,8 +236,9 @@ class NearbyMediaGrid extends StatelessWidget {
   }
 }
 
-/// Photos and videos full size, swiped one to the next: photos zoom,
-/// videos play with sound (a tap pauses) - one playing in the feed carries
+/// Photos and videos full size, swiped one to the next: both zoom (pinch,
+/// or a double tap; zoomed in, a swipe moves the picture), videos play
+/// with sound (a tap shows the controls) - one playing in the feed carries
 /// on from where it got to, with the same player (nothing loaded again).
 class NearbyMediaViewer extends StatefulWidget {
   const NearbyMediaViewer({super.key, required this.media, this.start = 0});
@@ -251,6 +253,9 @@ class NearbyMediaViewer extends StatefulWidget {
 class _NearbyMediaViewerState extends State<NearbyMediaViewer> {
   late final PageController _pages = PageController(initialPage: widget.start);
   late int _index = widget.start;
+  bool _zoomed = false;
+
+  void _zoom(bool zoomed) => setState(() => _zoomed = zoomed);
 
   @override
   void dispose() {
@@ -272,7 +277,12 @@ class _NearbyMediaViewerState extends State<NearbyMediaViewer> {
         child: PageView.builder(
           controller: _pages,
           itemCount: count,
-          onPageChanged: (i) => setState(() => _index = i),
+          // zoomed in: a swipe moves the picture, not to the next one
+          physics: _zoomed ? const NeverScrollableScrollPhysics() : null,
+          onPageChanged: (i) => setState(() {
+            _index = i;
+            _zoomed = false;
+          }),
           itemBuilder: (context, i) {
             final media = widget.media[i];
             if (media.url == null) {
@@ -284,9 +294,9 @@ class _NearbyMediaViewerState extends State<NearbyMediaViewer> {
             }
             return media.isVideo
                 // only the one on screen plays
-                ? _Video(media: media, active: i == _index)
-                : InteractiveViewer(
-                    maxScale: 5,
+                ? _Video(media: media, active: i == _index, onZoomed: _zoom)
+                : Zoomable(
+                    onZoomed: _zoom,
                     child: Center(
                         child: _picture(media.url!,
                             fit: BoxFit.contain,
@@ -300,10 +310,11 @@ class _NearbyMediaViewerState extends State<NearbyMediaViewer> {
 }
 
 class _Video extends StatefulWidget {
-  const _Video({required this.media, required this.active});
+  const _Video({required this.media, required this.active, this.onZoomed});
 
   final NearbyMedia media;
   final bool active;
+  final ValueChanged<bool>? onZoomed;
 
   @override
   State<_Video> createState() => _VideoState();
@@ -450,11 +461,14 @@ class _VideoState extends State<_Video> {
       behavior: HitTestBehavior.opaque,
       onTap: _toggleControls,
       child: Stack(fit: StackFit.expand, children: [
-        Center(
-          child: AspectRatio(
-              aspectRatio: v.aspectRatio,
-              // taps go to the controls, not to the video's page element
-              child: IgnorePointer(child: VideoPlayer(_player))),
+        Zoomable(
+          onZoomed: widget.onZoomed,
+          child: Center(
+            child: AspectRatio(
+                aspectRatio: v.aspectRatio,
+                // taps go to the controls, not to the video's page element
+                child: IgnorePointer(child: VideoPlayer(_player))),
+          ),
         ),
         IgnorePointer(
           ignoring: !_controls,
