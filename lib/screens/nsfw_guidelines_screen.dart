@@ -41,11 +41,11 @@ class NsfwGuidelinesScreen extends StatelessWidget {
                   _Point(
                     icon: Icons.tune_rounded,
                     title: 'Your setting',
-                    text: "Don't show NSFW content is a switch in Settings, "
-                        'on by default. On: NSFW photos and videos in Threads '
-                        'stay blurred until you tap them, and albums show a '
-                        'warning before they open. Off: everything appears '
-                        'as it is. You can change it any time.',
+                    text: 'Show NSFW warning is in Settings, Yes by default. '
+                        'Yes: NSFW photos and videos in Threads stay blurred '
+                        'until you tap them, and albums show a warning before '
+                        'they open. No: everything appears as it is. You can '
+                        'change it any time.',
                   ),
                   _divider,
                   const _Point(
@@ -59,8 +59,8 @@ class NsfwGuidelinesScreen extends StatelessWidget {
                   const _Point(
                     icon: Icons.photo_library_outlined,
                     title: 'Private albums',
-                    text: 'Private albums may contain NSFW content. With the '
-                        'setting on, albums show a warning first and open only when you '
+                    text: 'Private albums may contain NSFW content. With Show '
+                        'NSFW warning on Yes, albums show a warning first and open only when you '
                         'choose View album. Sending and trading never ask.',
                   ),
                   _divider,

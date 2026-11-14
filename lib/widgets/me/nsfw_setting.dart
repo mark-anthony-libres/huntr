@@ -4,10 +4,12 @@ import '../../screens/nsfw_guidelines_screen.dart';
 import '../../services/huntr_backend.dart';
 import '../../services/services_scope.dart';
 import '../../state/app_state.dart';
+import '../../theme.dart';
 import 'settings_group.dart';
 
-/// "Don't show NSFW content": a switch, on by default, and What is
-/// NSFW? under it. Saved on the backend; the choice moves at once and back
+/// "Show NSFW warning": Yes (the default) or No, and What is NSFW? under
+/// it. Yes blurs NSFW photos and videos in Threads and warns before albums
+/// open ([AppState.hideNsfw]). Saved on the backend; the choice moves at once and back
 /// if the save fails.
 class NsfwSetting extends StatefulWidget {
   const NsfwSetting({super.key});
@@ -37,8 +39,8 @@ class _NsfwSettingState extends State<NsfwSetting> {
         ..showSnackBar(SnackBar(
             key: const Key('nsfwSaved'),
             content: Text(saved.hideNsfw
-                ? 'Saved. NSFW photos and videos stay blurred until you tap them.'
-                : 'Saved. NSFW content is shown as it is.')));
+                ? 'Saved. NSFW content shows a warning first.'
+                : 'Saved. NSFW content is shown without a warning.')));
     } on SessionRejectedException {
       app.setHideNsfw(previous);
       app.endSession();
@@ -59,13 +61,9 @@ class _NsfwSettingState extends State<NsfwSetting> {
     return SettingsGroup(children: [
       SettingsRow(
         icon: Icons.visibility_off_outlined,
-        title: "Don't show NSFW content",
-        subtitle: 'Blur adult content in Threads and warn before albums open',
-        trailing: Switch(
-          key: const Key('nsfwSwitch'),
-          value: hide,
-          onChanged: _saving ? null : _save,
-        ),
+        title: 'Show NSFW warning',
+        subtitle: 'Blur adult posts and warn before albums',
+        trailing: _YesNo(value: hide, onChanged: _saving ? null : _save),
       ),
       SettingsRow(
         key: const Key('openNsfwGuidelines'),
@@ -76,5 +74,58 @@ class _NsfwSettingState extends State<NsfwSetting> {
             builder: (_) => const NsfwGuidelinesScreen())),
       ),
     ]);
+  }
+}
+
+/// Two small buttons, Yes and No, the chosen one filled with the accent.
+class _YesNo extends StatelessWidget {
+  const _YesNo({required this.value, required this.onChanged});
+
+  final bool value;
+  final ValueChanged<bool>? onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget option(String label, bool choice) {
+      final on = value == choice;
+      return Material(
+        color: on ? HuntrColors.orange : Colors.transparent,
+        borderRadius: BorderRadius.circular(999),
+        child: InkWell(
+          key: Key(choice ? 'nsfwWarningYes' : 'nsfwWarningNo'),
+          borderRadius: BorderRadius.circular(999),
+          onTap: onChanged == null || on ? null : () => onChanged!(choice),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minWidth: 48, minHeight: 34),
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Text(label,
+                    style: TextStyle(
+                        color: on ? Colors.black : Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700)),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Semantics(
+      label: 'Show NSFW warning: ${value ? 'Yes' : 'No'}',
+      child: Container(
+        padding: const EdgeInsets.all(3),
+        decoration: BoxDecoration(
+          color: HuntrColors.surfaceHigh,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: HuntrColors.border),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          option('Yes', true),
+          option('No', false),
+        ]),
+      ),
+    );
   }
 }
