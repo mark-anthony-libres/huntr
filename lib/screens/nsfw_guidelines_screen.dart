@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../theme.dart';
 
-/// What is NSFW?: what counts, and how HUNTR handles it. Information only
-/// (opened from Settings, under Don't show NSFW content); nothing to accept.
+/// What is NSFW?: what counts, how to turn the warning on or off, and how
+/// HUNTR handles it. Information only (opened from Settings, under Show NSFW
+/// warning, and from onboarding); nothing to accept.
 class NsfwGuidelinesScreen extends StatelessWidget {
   const NsfwGuidelinesScreen({super.key});
 
@@ -33,6 +34,15 @@ class NsfwGuidelinesScreen extends StatelessWidget {
                   _Bullet('Explicit adult content'),
                   _Bullet('Sexually suggestive videos'),
                   _Bullet('Other content that may be inappropriate in public'),
+                ]),
+                const SizedBox(height: 28),
+                const _Heading('How to turn it on or off'),
+                const SizedBox(height: 12),
+                const _Card(children: [
+                  Padding(
+                    padding: EdgeInsets.all(16),
+                    child: NsfwWarningSteps(),
+                  ),
                 ]),
                 const SizedBox(height: 28),
                 const _Heading('How it works on HUNTR'),
@@ -80,6 +90,45 @@ class NsfwGuidelinesScreen extends StatelessWidget {
 
   static const _divider =
       Divider(height: 1, thickness: 1, color: HuntrColors.border);
+}
+
+/// How to turn Show NSFW warning on or off, step by step (on What is NSFW?
+/// and in onboarding).
+class NsfwWarningSteps extends StatelessWidget {
+  const NsfwWarningSteps({super.key});
+
+  static const _steps = [
+    'Tap Me, then the Settings gear at the top.',
+    'Under Content, find Show NSFW warning.',
+    'Tap Yes to turn the warning on, or No to turn it off.',
+  ];
+
+  @override
+  Widget build(BuildContext context) => Column(
+        key: const Key('nsfwWarningSteps'),
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (var i = 0; i < _steps.length; i++)
+            Padding(
+              padding: EdgeInsets.only(top: i == 0 ? 0 : 12),
+              child: Row(children: [
+                CircleAvatar(
+                  radius: 13,
+                  backgroundColor: HuntrColors.orange,
+                  child: Text('${i + 1}',
+                      style: const TextStyle(
+                          color: Colors.black,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800)),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                    child: Text(_steps[i],
+                        style: const TextStyle(fontSize: 15, height: 1.4))),
+              ]),
+            ),
+        ],
+      );
 }
 
 class _Heading extends StatelessWidget {

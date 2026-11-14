@@ -11,6 +11,7 @@ class PillChip extends StatelessWidget {
     required this.label,
     required this.selected,
     required this.onSelected,
+    this.dropdown = false,
   });
 
   final IconData? icon;
@@ -21,13 +22,22 @@ class PillChip extends StatelessWidget {
   final bool selected;
   final ValueChanged<bool> onSelected;
 
+  /// A small arrow after the label: tapping opens a menu.
+  final bool dropdown;
+
   @override
   Widget build(BuildContext context) {
     final color = selected ? Colors.white : HuntrColors.muted;
     return FilterChip(
       avatar:
           leading ?? (icon == null ? null : Icon(icon, size: 18, color: color)),
-      label: Text(label),
+      label: dropdown
+          ? Row(mainAxisSize: MainAxisSize.min, children: [
+              Text(label),
+              const SizedBox(width: 2),
+              Icon(Icons.keyboard_arrow_down_rounded, size: 20, color: color),
+            ])
+          : Text(label),
       labelStyle: TextStyle(
           fontFamily: huntrFontFamily,
           color: selected ? Colors.white : const Color(0xFFD5D8E0),

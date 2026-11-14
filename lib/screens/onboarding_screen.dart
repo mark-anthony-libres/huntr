@@ -7,6 +7,7 @@ import '../services/services_scope.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/onboarding/choice_card.dart';
+import 'nsfw_guidelines_screen.dart';
 import '../widgets/me/profile_photos_section.dart';
 import '../widgets/onboarding/nearby_radar.dart';
 
@@ -41,6 +42,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   int _age = 24;
   bool _confirmedAdult = false;
   final Set<LookingFor> _looking = {LookingFor.chat, LookingFor.friends};
+
+  /// Show NSFW warning: Yes by default.
+  bool _hideNsfw = true;
   GeoPoint? _location;
   bool _locating = false;
   bool _saving = false;
@@ -54,6 +58,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         _Step.about,
         if (_withPhotos) _Step.photos,
         _Step.lookingFor,
+        _Step.nsfw,
         _Step.location,
       ];
 
@@ -77,6 +82,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         _Step.about => _confirmedAdult,
         _Step.photos => AppScope.of(context).profilePhotos.isNotEmpty,
         _Step.lookingFor => _looking.isNotEmpty,
+        _Step.nsfw => true,
         _Step.location => _location != null && !_saving,
       };
 
@@ -113,6 +119,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         age: _age,
         location: _location!,
         lookingFor: _looking,
+        hideNsfw: _hideNsfw,
       ));
     } catch (e) {
       if (mounted) {
@@ -321,7 +328,77 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         ],
                       ),
 
-                      // 5. location
+                      // 5. Show NSFW warning: Yes or No, what each does,
+                      // and how to change it later
+                      ListView(
+                        key: const Key('onboardNsfw'),
+                        padding: const EdgeInsets.all(28),
+                        children: [
+                          const SizedBox(height: 24),
+                          Text('Show NSFW warning?',
+                              style: text.headlineSmall
+                                  ?.copyWith(fontWeight: FontWeight.w800)),
+                          const SizedBox(height: 6),
+                          const Text(
+                              'NSFW means Not Safe For Work: nudity, sexual or '
+                              'other adult content you may not want to see '
+                              'in public.',
+                              style: TextStyle(color: HuntrColors.muted)),
+                          const SizedBox(height: 20),
+                          ChoiceCard(
+                            key: const Key('onboardNsfwYes'),
+                            icon: Icons.visibility_off_outlined,
+                            label: 'Yes, show a warning',
+                            selected: _hideNsfw,
+                            onTap: () => setState(() => _hideNsfw = true),
+                          ),
+                          const Padding(
+                            padding: EdgeInsets.fromLTRB(4, 6, 4, 14),
+                            child: Text(
+                                'NSFW photos and videos in Threads stay blurred '
+                                'until you tap them, and albums ask before they '
+                                'open.',
+                                style: TextStyle(
+                                    color: HuntrColors.muted, fontSize: 13.5)),
+                          ),
+                          ChoiceCard(
+                            key: const Key('onboardNsfwNo'),
+                            icon: Icons.visibility_outlined,
+                            label: 'No, show everything',
+                            selected: !_hideNsfw,
+                            onTap: () => setState(() => _hideNsfw = false),
+                          ),
+                          const Padding(
+                            padding: EdgeInsets.fromLTRB(4, 6, 4, 24),
+                            child: Text(
+                                'NSFW content appears as it is, with no blur '
+                                'and no warning.',
+                                style: TextStyle(
+                                    color: HuntrColors.muted, fontSize: 13.5)),
+                          ),
+                          Text('To change it later',
+                              style: text.titleSmall
+                                  ?.copyWith(fontWeight: FontWeight.w700)),
+                          const SizedBox(height: 12),
+                          const NsfwWarningSteps(),
+                          const SizedBox(height: 8),
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: TextButton(
+                              key: const Key('onboardWhatIsNsfw'),
+                              style: TextButton.styleFrom(
+                                  padding: EdgeInsets.zero),
+                              onPressed: () => Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                      builder: (_) =>
+                                          const NsfwGuidelinesScreen())),
+                              child: const Text('What is NSFW?'),
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      // 6. location
                       ListView(
                         padding: const EdgeInsets.all(28),
                         children: [
@@ -412,7 +489,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 }
 
-enum _Step { welcome, about, photos, lookingFor, location }
+enum _Step { welcome, about, photos, lookingFor, nsfw, location }
 
 /// A small promise under the welcome (free, adults only, your choice).
 class _Promise extends StatelessWidget {

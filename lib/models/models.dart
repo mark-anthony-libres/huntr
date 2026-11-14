@@ -67,6 +67,7 @@ class OnboardingAnswers {
     required this.age,
     required this.location,
     required this.lookingFor,
+    this.hideNsfw = true,
   });
 
   /// Optional; empty means no display name.
@@ -74,6 +75,9 @@ class OnboardingAnswers {
   final int age;
   final GeoPoint location;
   final Set<LookingFor> lookingFor;
+
+  /// Show NSFW warning: Yes (true, the default) or No.
+  final bool hideNsfw;
 }
 
 /// What the user submits from Edit profile. [lookingFor] is the complete

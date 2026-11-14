@@ -219,11 +219,29 @@ class _SessionGateState extends State<SessionGate> {
         lookingFor: answers.lookingFor,
         location: answers.location,
       );
+      app.setHideNsfw(answers.hideNsfw);
       return;
     }
     try {
-      final saved = await profiles.saveOnboarding(app.sessionToken!, answers);
-      if (mounted) _applyProfile(app, saved);
+      final token = app.sessionToken!;
+      final saved = await profiles.saveOnboarding(token, answers);
+      // Show NSFW warning is a privacy setting, saved on its own (Yes is
+      // already the default); if that fails it stays on Yes, and Settings
+      // can change it
+      var hideNsfw = true;
+      if (!answers.hideNsfw) {
+        try {
+          hideNsfw =
+              (await profiles.updatePrivacy(token, hideNsfw: false)).hideNsfw;
+        } on SessionRejectedException {
+          rethrow;
+        } catch (error) {
+          debugPrint('Show NSFW warning not saved: $error');
+        }
+      }
+      if (!mounted) return;
+      app.setHideNsfw(hideNsfw);
+      _applyProfile(app, saved);
     } on SessionRejectedException catch (e) {
       await _endSession(e.message);
     }

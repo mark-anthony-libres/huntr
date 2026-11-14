@@ -400,18 +400,6 @@ class AppState extends ChangeNotifier {
   /// Choices kept on this device between launches (none in tests).
   final DevicePreferences? devicePreferences;
 
-  /// "Find your vibe" on Explore. Hidden by swiping it away, tapping Hide, or
-  /// the switch in Settings; remembered on this device ([devicePreferences]).
-  bool _showVibeBanner = true;
-  bool get showVibeBanner => _showVibeBanner;
-  set showVibeBanner(bool show) {
-    if (_showVibeBanner == show) return;
-    _showVibeBanner = show;
-    notifyListeners();
-    unawaited(devicePreferences?.saveShowVibeBanner(show).catchError(
-        (Object error) => debugPrint('Vibe banner choice not saved: $error')));
-  }
-
   /// The theme the app wears ([HuntrColors.palette]); the app's root
   /// listens to redraw everything when it changes. Remembered on this device.
   final appearance = ValueNotifier<HuntrPalette>(HuntrColors.palette);
@@ -480,11 +468,6 @@ class AppState extends ChangeNotifier {
   /// What this device remembers, when the app starts.
   Future<void> loadDevicePreferences() async {
     try {
-      final show = await devicePreferences?.readShowVibeBanner();
-      if (show != null && show != _showVibeBanner) {
-        _showVibeBanner = show;
-        notifyListeners();
-      }
       final reactions = await devicePreferences?.readQuickReactions();
       if (reactions != null &&
           !_sameList(

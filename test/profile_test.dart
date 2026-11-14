@@ -29,6 +29,21 @@ class _FakeProfiles extends ProfileService {
   final Future<MyProfile> Function() fetch;
   OnboardingAnswers? saved;
   final List<GeoPoint> locationUpdates = [];
+  bool? savedHideNsfw;
+
+  @override
+  Future<PrivacySettings> updatePrivacy(String token,
+      {bool? showOnline,
+      bool? showDistance,
+      bool? showOnMap,
+      bool? notifyTaps,
+      bool? notifyMessages,
+      bool? notifyStoryReplies,
+      String? notificationSound,
+      bool? hideNsfw}) async {
+    savedHideNsfw = hideNsfw;
+    return PrivacySettings(hideNsfw: hideNsfw ?? true);
+  }
 
   @override
   Future<ProfileConfig> fetchConfig(String token) async => const ProfileConfig(
@@ -136,12 +151,20 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(next);
     await tester.pumpAndSettle();
+    // Show NSFW warning: No
+    await tester.tap(find.byKey(const Key('onboardNsfwNo')));
+    await tester.pump();
+    await tester.tap(next);
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('onboardLocation')));
     await tester.pumpAndSettle();
     await tester.tap(next);
     await tester.pumpAndSettle();
 
     expect(profiles.saved?.displayName, 'Marky');
+    expect(profiles.saved?.hideNsfw, isFalse);
+    expect(profiles.savedHideNsfw, isFalse);
+    expect(state.hideNsfw, isFalse);
     expect(profiles.saved?.location, _here);
     expect(state.onboarded, isTrue);
     expect(find.text('Explore'), findsWidgets);

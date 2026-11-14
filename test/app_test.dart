@@ -68,6 +68,12 @@ void main() {
     await tester.tap(next);
     await tester.pumpAndSettle();
 
+    // Show NSFW warning: Yes unless changed, with the steps to change it
+    expect(find.byKey(const Key('onboardNsfw')), findsOneWidget);
+    expect(find.byKey(const Key('nsfwWarningSteps')), findsOneWidget);
+    await tester.tap(next);
+    await tester.pumpAndSettle();
+
     // location step: can't finish until the location is found
     expect(tester.widget<FilledButton>(next).onPressed, isNull);
     await tester.tap(find.byKey(const Key('onboardLocation')));
@@ -79,6 +85,7 @@ void main() {
     expect(find.text('Explore'), findsWidgets);
     expect(state.myName, isEmpty);
     expect(state.myLocation?.latitude, 14.6);
+    expect(state.hideNsfw, isTrue);
   });
 
   testWidgets('sign-in buttons disclose provider behavior and social privacy',

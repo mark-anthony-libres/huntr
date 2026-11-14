@@ -14,28 +14,45 @@ class _PhotoGalleryState extends State<PhotoGallery> {
   /// [PhotoGallery.autoPlay]: the next photo every few seconds, until the
   /// gallery is touched (then it's theirs to move).
   Timer? _carousel;
+  bool _touched = false;
   static const _carouselEvery = Duration(seconds: 4);
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final count = widget.profile.photoUrls.length;
-    // not when the device asks for less motion
-    if (widget.autoPlay &&
-        count > 1 &&
-        _carousel == null &&
-        !MediaQuery.disableAnimationsOf(context)) {
-      _carousel = Timer.periodic(_carouselEvery, (_) {
-        if (!_pages.hasClients) return;
-        final next = (_page + 1) % count;
-        _pages.animateToPage(next,
-            duration: Duration(milliseconds: next == 0 ? 450 : 350),
-            curve: Curves.easeInOut);
-      });
+    _startCarousel();
+  }
+
+  @override
+  void didUpdateWidget(PhotoGallery old) {
+    super.didUpdateWidget(old);
+    // a profile from Explore opens with its main photo; the rest come a
+    // moment later
+    _startCarousel();
+  }
+
+  /// Starts once there's more than one photo (not after a touch, nor when
+  /// the device asks for less motion).
+  void _startCarousel() {
+    if (!widget.autoPlay ||
+        _touched ||
+        _carousel != null ||
+        widget.profile.photoUrls.length < 2 ||
+        MediaQuery.disableAnimationsOf(context)) {
+      return;
     }
+    _carousel = Timer.periodic(_carouselEvery, (_) {
+      final count = widget.profile.photoUrls.length;
+      if (!_pages.hasClients || count < 2) return;
+      final next = (_page + 1) % count;
+      _pages.animateToPage(next,
+          duration: Duration(milliseconds: next == 0 ? 450 : 350),
+          curve: Curves.easeInOut);
+    });
   }
 
   void _stopCarousel() {
+    _touched = true;
     _carousel?.cancel();
   }
 

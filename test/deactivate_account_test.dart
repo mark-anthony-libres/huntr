@@ -68,7 +68,13 @@ Future<AppState> _openMe(
   await tester.pumpAndSettle();
   await tester.scrollUntilVisible(
       find.byKey(const Key('deactivateAccount')), 300,
-      scrollable: find.byType(Scrollable).first);
+      scrollable: find
+          .descendant(
+              of: find.byKey(const Key('settingsList')),
+              matching: find.byType(Scrollable))
+          .first);
+  await tester.ensureVisible(find.byKey(const Key('deactivateAccount')));
+  await tester.pumpAndSettle();
   await tester.tap(find.byKey(const Key('deactivateAccount')));
   await tester.pumpAndSettle();
   return state;

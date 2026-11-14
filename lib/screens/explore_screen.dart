@@ -10,11 +10,11 @@ import '../widgets/pill_chip.dart';
 import '../widgets/install_banner.dart';
 import '../widgets/profile_tile.dart';
 import '../widgets/stories/story_tray.dart';
-import '../widgets/explore/vibe_banner.dart';
 import 'profile_pager.dart';
 import '../widgets/explore/empty_explore.dart';
 import '../widgets/explore/explore_map.dart';
 import '../widgets/explore/filter_sheet.dart';
+import '../widgets/explore/looking_for_dropdown.dart';
 import '../widgets/me/section_states.dart';
 
 class ExploreScreen extends StatefulWidget {
@@ -274,20 +274,11 @@ class _ExploreScreenState extends State<ExploreScreen> {
             onSelected: (v) => app.filters = f.copyWith(hasPlace: v),
           ),
           const SizedBox(width: 8),
-          // every "looking for" choice, as on profiles
-          for (final l in LookingFor.values) ...[
-            PillChip(
-              icon: l.icon,
-              label: l.label,
-              selected: f.lookingFor.contains(l),
-              onSelected: (v) {
-                final next = {...f.lookingFor};
-                v ? next.add(l) : next.remove(l);
-                app.filters = f.copyWith(lookingFor: next);
-              },
-            ),
-            const SizedBox(width: 8),
-          ],
+          LookingForDropdown(
+            chosen: f.lookingFor,
+            onChanged: (next) => app.filters = f.copyWith(lookingFor: next),
+          ),
+          const SizedBox(width: 8),
           if (!f.isDefault)
             ActionChip(
               avatar: const Icon(Icons.close, size: 18),
@@ -411,23 +402,6 @@ class _ExploreScreenState extends State<ExploreScreen> {
 
                       // ---- quick filters ----
                       SliverToBoxAdapter(child: quickFilters),
-
-                      // ---- people who want what I want ----
-                      if (!waiting && f.isDefault && app.showVibeBanner)
-                        SliverToBoxAdapter(
-                          child: VibeBanner(
-                            people: [
-                              for (final p in people)
-                                if (p.lookingFor
-                                    .intersection(app.myLookingFor)
-                                    .isNotEmpty)
-                                  p,
-                            ],
-                            onTap: () => app.filters =
-                                f.copyWith(lookingFor: {...app.myLookingFor}),
-                            onHide: () => app.showVibeBanner = false,
-                          ),
-                        ),
 
                       // ---- favorites row ----
                       if (favorites.isNotEmpty && f.isDefault) ...[

@@ -70,8 +70,7 @@ void main() {
     expect(find.byKey(const Key('onboardWelcome')), findsOneWidget);
   });
 
-  testWidgets('declining deletes the account and signs out',
-      (tester) async {
+  testWidgets('declining deletes the account and signs out', (tester) async {
     final agreements = _FakeAgreements();
     final state = AppState()..startSession('token');
     await _open(tester, state, agreements: agreements);
@@ -232,7 +231,11 @@ void main() {
     await tester.tap(find.byKey(const Key('openSettings')));
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(find.byKey(const Key('openAgreement')), 300,
-        scrollable: find.byType(Scrollable).first);
+        scrollable: find
+            .descendant(
+                of: find.byKey(const Key('settingsList')),
+                matching: find.byType(Scrollable))
+            .first);
     await tester.tap(find.byKey(const Key('openAgreement')));
     await tester.pumpAndSettle();
     expect(find.text('Huntr Terms'), findsOneWidget);
