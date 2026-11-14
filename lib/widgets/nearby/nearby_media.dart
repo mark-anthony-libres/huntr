@@ -11,6 +11,9 @@ import '../../services/nearby_service.dart';
 import '../../services/nearby_uploads.dart';
 import '../../services/services_scope.dart';
 import '../../state/app_state.dart';
+import '../nsfw_warning.dart';
+import 'blurred_picture_io.dart'
+    if (dart.library.js_interop) 'blurred_picture_web.dart';
 
 /// "0:42", "1:05:09".
 String mediaDurationLabel(Duration d) {
@@ -146,10 +149,18 @@ class _Frame extends StatelessWidget {
 /// An official post's photos and videos as a grid: one in its own shape;
 /// two side by side; three as one tall and two; four or more as a 2 x 2
 /// with "+N" on the last. A tap opens them full size.
+///
+/// [covered] (an NSFW post, for someone who doesn't want to see NSFW
+/// content): only the first one's still, blurred, under the sensitive-content
+/// warning with View Image or Play Video, which calls [onReveal]; nothing
+/// plays.
 class NearbyMediaGrid extends StatelessWidget {
-  const NearbyMediaGrid({super.key, required this.media});
+  const NearbyMediaGrid(
+      {super.key, required this.media, this.covered = false, this.onReveal});
 
   final List<NearbyMedia> media;
+  final bool covered;
+  final VoidCallback? onReveal;
 
   /// Full screen (a video carries on there, with the same player).
   void _open(BuildContext context, List<NearbyMedia> media, int index) =>
@@ -159,6 +170,7 @@ class NearbyMediaGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (covered && media.isNotEmpty) return _cover();
     final uploads = ServicesScope.nearbyUploadsOf(context);
     // a member's one that isn't ready can be removed from here: then it
     // leaves at once
@@ -171,6 +183,29 @@ class NearbyMediaGrid extends StatelessWidget {
         for (final m in media)
           if (!uploads.removed(m.id)) m
       ]),
+    );
+  }
+
+  Widget _cover() {
+    final first = media.first;
+    return _Frame(
+      aspectRatio:
+          media.length == 1 ? first.aspectRatio.clamp(0.75, 3.0) : 16 / 10,
+      child: ClipRRect(
+        key: const Key('nsfwCover'),
+        borderRadius: BorderRadius.circular(16),
+        child: SensitiveContentCover(
+          compact: true,
+          background: first.previewUrl == null
+              ? null
+              : blurredPicture(first.previewUrl!),
+          message: 'This post may contain adult or sexually explicit content.',
+          actionLabel: first.isVideo ? 'Play Video' : 'View Image',
+          actionIcon:
+              first.isVideo ? Icons.play_arrow_rounded : Icons.image_outlined,
+          onView: onReveal,
+        ),
+      ),
     );
   }
 

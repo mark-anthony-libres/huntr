@@ -200,7 +200,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                                         fontWeight: FontWeight.w700)),
                                 const SizedBox(height: 14),
                                 const Text(
-                                  'See who\'s nearby, check out their profiles, '
+                                  'See who\'s nearby, check out profiles, '
                                   'and say hello if someone catches your '
                                   'attention. You never know who you might meet.',
                                   textAlign: TextAlign.center,

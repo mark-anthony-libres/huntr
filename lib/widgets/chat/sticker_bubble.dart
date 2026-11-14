@@ -108,7 +108,7 @@ Future<bool> confirmStickerUndo(BuildContext context,
                   const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
           const SizedBox(height: 6),
           const Text(
-              'It leaves the chat and stops counting on their profile. '
+              'It leaves the chat and stops counting on the profile. '
               'You can send it again later.',
               textAlign: TextAlign.center,
               style: TextStyle(color: HuntrColors.muted, height: 1.4)),

@@ -5,7 +5,9 @@ import 'package:video_player/video_player.dart';
 
 import '../models/models.dart';
 import '../services/huntr_backend.dart';
+import '../state/app_state.dart';
 import '../state/messaging_state.dart';
+import '../widgets/nsfw_warning.dart';
 import '../widgets/photos/viewer_controls.dart';
 
 /// The other person's album of a completed trade, opened. Like chat media:
@@ -13,6 +15,10 @@ import '../widgets/photos/viewer_controls.dart';
 /// my countdown is paused while I view (nothing closes or stops here), and
 /// leaving ends the session - the countdown then starts - and drops what
 /// it showed. Nothing is saved on the device.
+///
+/// With Don't show NSFW content (mine) on Yes, a sensitive-content warning
+/// comes first: nothing is fetched and no session starts until View album;
+/// Cancel (or Back) leaves with nothing started.
 class TradedAlbumViewerScreen extends StatefulWidget {
   const TradedAlbumViewerScreen({super.key, required this.message});
 
@@ -32,10 +38,20 @@ class _TradedAlbumViewerScreenState extends State<TradedAlbumViewerScreen> {
   Timer? _heartbeat;
   MessagingState? _messaging;
 
+  /// Past the sensitive-content warning (at once with Show it).
+  late bool _revealed = !(AppScope.maybeRead(context)?.hideNsfw ?? false);
+
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _open());
+    if (_revealed) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _open());
+    }
+  }
+
+  void _reveal() {
+    setState(() => _revealed = true);
+    _open();
   }
 
   Future<void> _open() async {
@@ -99,7 +115,7 @@ class _TradedAlbumViewerScreenState extends State<TradedAlbumViewerScreen> {
       appBar: AppBar(
         backgroundColor: Colors.black,
         title: Text(access == null
-            ? 'Their album'
+            ? 'Album'
             : items.isEmpty
                 ? '“${access.name}”'
                 : '“${access.name}” · ${_index + 1} of ${items.length}'),
@@ -109,7 +125,13 @@ class _TradedAlbumViewerScreenState extends State<TradedAlbumViewerScreen> {
         ],
       ),
       body: SafeArea(
-        child: _expired
+        child: !_revealed
+            ? SensitiveContentCover.album(
+                coverUrl: widget.message.trade?.theirAlbum?.previews
+                    .firstOrNull?.url,
+                onView: _reveal,
+                onCancel: () => Navigator.of(context).pop())
+            : _expired
             ? _Note(
                 key: const Key('albumExpired'),
                 icon: Icons.timer_off_outlined,

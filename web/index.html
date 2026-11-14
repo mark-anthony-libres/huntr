@@ -64,8 +64,11 @@
   <meta name="apple-mobile-web-app-title" content="HUNTR">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
-  <!-- Favicon -->
-  <link rel="icon" type="image/png" href="favicon.png"/>
+  <!-- Favicon: Google shows it in search results only at a multiple of
+       48 px (favicon.png is 96 x 96); /favicon.ico for browsers and
+       crawlers that ask for it there -->
+  <link rel="icon" type="image/png" sizes="96x96" href="favicon.png"/>
+  <link rel="icon" href="favicon.ico" sizes="48x48"/>
   <link rel="icon" type="image/png" sizes="192x192" href="icons/Icon-192.png">
 
   <title>HUNTR – Gay App to Meet Guys Near You | Chat & Dating</title>

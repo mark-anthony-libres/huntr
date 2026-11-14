@@ -61,7 +61,7 @@ class StoryReplyLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final verb = reaction ? 'reacted to' : 'replied to';
-    final whose = otherName.trim().isEmpty ? 'their' : "${otherName.trim()}'s";
+    final whose = otherName.trim().isEmpty ? 'a' : "${otherName.trim()}'s";
     final what = photo ? 'photo' : 'story';
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 6, 12, 2),

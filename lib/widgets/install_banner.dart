@@ -201,7 +201,7 @@ class _InstallBannerState extends State<InstallBanner> {
   }
 }
 
-/// On an iPhone or iPad no button can install it: the two steps.
+/// On an iPhone or iPad no button can install it: the steps.
 class _IosSteps extends StatelessWidget {
   const _IosSteps();
 
@@ -217,15 +217,24 @@ class _IosSteps extends StatelessWidget {
                     style:
                         TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
                 SizedBox(height: 16),
+                // newer Safari keeps Share under ⋯ (older ones show it in
+                // the bar)
                 _Step(
                     number: 1,
-                    icon: Icons.ios_share_rounded,
-                    text: 'Tap Share in the browser bar.'),
+                    icon: Icons.more_horiz_rounded,
+                    text: 'Tap ⋯ at the bottom right, then Share. (Older '
+                        'iPhones: tap Share in the browser bar.)'),
                 SizedBox(height: 12),
                 _Step(
                     number: 2,
                     icon: Icons.add_box_outlined,
-                    text: 'Choose "Add to Home Screen", then Add.'),
+                    text: 'Choose "Add to Home Screen". Not in the list? '
+                        'Tap View More.'),
+                SizedBox(height: 12),
+                _Step(
+                    number: 3,
+                    icon: Icons.check_circle_outline_rounded,
+                    text: 'Keep "Open as Web App" on, then tap Add.'),
                 SizedBox(height: 16),
                 Text('HUNTR then opens full screen, like any app.',
                     style: TextStyle(color: HuntrColors.muted)),

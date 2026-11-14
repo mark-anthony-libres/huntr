@@ -257,7 +257,7 @@ class _WaitingFor extends StatelessWidget {
         Flexible(
           child: Text(
               name == 'They'
-                  ? 'Waiting for their location…'
+                  ? 'Waiting for location…'
                   : 'Waiting for $name’s location…',
               maxLines: 2,
               style:

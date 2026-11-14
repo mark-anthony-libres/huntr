@@ -299,7 +299,7 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
                           hint: '${config.minAge}–${config.maxAge}',
                           helper:
                               'You must be ${config.minAge} or older. This helps '
-                              'others find people in their preferred age range.',
+                              'others find people in a preferred age range.',
                           error: _fieldErrors['age'],
                           prefixIcon: Icon(Icons.calendar_today_outlined,
                               color: HuntrColors.orange, size: 20),

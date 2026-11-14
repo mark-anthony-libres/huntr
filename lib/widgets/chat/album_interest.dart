@@ -62,7 +62,7 @@ class _AlbumInterestPromptState extends State<AlbumInterestPrompt> {
             style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
         const SizedBox(height: 6),
         const Text(
-            'You’ve had a look at their album. Want to let them know you’re '
+            'You’ve had a look at the album. Want to let them know you’re '
             'interested?',
             textAlign: TextAlign.center,
             style: TextStyle(color: HuntrColors.muted, height: 1.4)),

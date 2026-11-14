@@ -111,6 +111,7 @@ class _TagSheetState extends State<_TagSheet> {
   static const _icons = {
     'looking_for': Icons.favorite_rounded,
     'meet_preference': Icons.location_on_rounded,
+    'content': Icons.eighteen_up_rating_outlined,
   };
 
   @override

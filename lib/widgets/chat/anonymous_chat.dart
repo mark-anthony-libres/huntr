@@ -382,7 +382,7 @@ class AnonymousIntro extends StatelessWidget {
             Text(
               anonymous.mutual
                   ? 'You’re both anonymous. ${to.isEmpty ? 'They' : to} '
-                      'only see ${anonymous.shownAs}, and you only see their '
+                      'only see ${anonymous.shownAs}, and you only see an '
                       'anonymous name. Either of you can ask to show both '
                       'profiles.'
                   : 'You’re anonymous. ${to.isEmpty ? 'They' : to} only see '
@@ -479,7 +479,7 @@ class RevealedCard extends StatelessWidget {
                 ? 'Profiles shown'
                 : fromMe
                     ? 'Profile shown'
-                    : '$name showed their profile',
+                    : '$name showed you who they are',
             textAlign: TextAlign.center,
             style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
           ),
@@ -628,7 +628,7 @@ class RevealRequestCard extends StatelessWidget {
                       ? 'You asked to swap profiles'
                       : 'They want to swap profiles'
                   : fromMe
-                      ? 'You asked to see their profile'
+                      ? 'You asked to see the profile'
                       : 'They asked to see your profile',
               style: const TextStyle(fontWeight: FontWeight.w700),
             ),

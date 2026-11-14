@@ -355,7 +355,11 @@ Future<void> _openChat(WidgetTester tester, MessagingState messaging,
   addTearDown(tester.view.reset);
   await messaging.refresh();
   await tester.pumpWidget(AppScope(
-    state: AppState(sampleAlbums: false)..startSession('token'),
+    // Don't show NSFW content: Show it, so albums open without the
+    // sensitive-content warning (the default; these are about the trades)
+    state: AppState(sampleAlbums: false)
+      ..startSession('token')
+      ..setHideNsfw(false),
     child: MessagingScope(
       state: messaging,
       child: ServicesScope(

@@ -57,10 +57,12 @@ Future<GeoPoint> _locateInBrowser() async {
   }
 }
 
-/// Where to turn location on for this computer (the browser can only give
-/// a location the computer lets it have), then what to do.
-String computerLocationHelp() =>
-    '${_whereToTurnItOn()} Using Brave? Chrome or Edge can find it more easily.';
+/// Where to turn location on for this device (the browser can only give a
+/// location the device lets it have), then what to do. On an iPhone every
+/// browser is Safari underneath, so no other browser is suggested there.
+String computerLocationHelp() => defaultTargetPlatform == TargetPlatform.iOS
+    ? _whereToTurnItOn()
+    : '${_whereToTurnItOn()} Using Brave? Chrome or Edge can find it more easily.';
 
 String _whereToTurnItOn() => switch (defaultTargetPlatform) {
       TargetPlatform.windows =>
@@ -70,6 +72,16 @@ String _whereToTurnItOn() => switch (defaultTargetPlatform) {
       TargetPlatform.macOS =>
         'On a Mac, open System Settings › Privacy & Security › Location '
             'Services, turn it on and allow your browser, then try again.',
+      // the site's own Allow isn't enough: the phone also decides, per
+      // browser ("Safari Websites" is Never for some)
+      TargetPlatform.iOS =>
+        'On iPhone, open Settings › Privacy & Security › Location Services, '
+            'turn it on, then tap Safari Websites (or the browser you use) '
+            'and choose While Using the App, then try again.',
+      TargetPlatform.android =>
+        'On Android, turn on Location in quick settings, and allow it for '
+            'your browser in Settings › Apps › your browser › Permissions, '
+            'then try again.',
       _ => 'Check that location is on for this device and allowed for your '
           'browser, then try again.',
     };

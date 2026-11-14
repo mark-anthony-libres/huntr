@@ -10,7 +10,7 @@ Future<void> acceptWithAlbum(BuildContext context, Profile p) async {
     context,
     title: 'Accept ${p.name}\'s request',
     subtitle:
-        'Pick an album to send to ${p.name}. Their chosen album is sent to you, and the chat opens.',
+        'Pick an album to send to ${p.name}. You get the album ${p.name} chose, and the chat opens.',
     actionLabel: 'Accept & share',
     actionIcon: Icons.check_rounded,
   );

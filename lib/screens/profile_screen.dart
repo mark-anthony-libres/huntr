@@ -246,7 +246,7 @@ class ProfileScreen extends StatelessWidget {
                             : '${p.name} wants to chat: "${request!.note}"') +
                         (p.albumById(request?.albumId) == null
                             ? ''
-                            : '\nAccept to receive their "${p.albumById(request?.albumId)!.name}" album.'),
+                            : '\nAccept to receive the "${p.albumById(request?.albumId)!.name}" album.'),
                   ),
                 ),
               ]),
@@ -672,7 +672,7 @@ class _TapButtonState extends State<_TapButton> {
       await taps.send(userId);
       // a big wave: it went
       if (mounted) ReactionBurst.show(context, '👋', wave: true);
-      message = 'Tap sent. ${widget.profile.name} will see it in their Taps.';
+      message = 'Tap sent. ${widget.profile.name} will see it in Taps.';
     } on SessionRejectedException {
       return app.endSession();
     } on BackendException catch (e) {

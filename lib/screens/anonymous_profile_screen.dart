@@ -358,7 +358,7 @@ class _HowItWorks extends StatelessWidget {
             mutual
                 ? 'You both stay anonymous. Names, photos and profiles stay '
                     'private.'
-                : 'Their name, photos and profile stay private.'),
+                : 'Name, photos and profile stay private.'),
         row(
             Icons.chat_bubble_outline_rounded,
             'Just text',
@@ -371,7 +371,7 @@ class _HowItWorks extends StatelessWidget {
                 'Either of you can ask to show both profiles. Nothing is '
                     'shown unless you both agree.')
             : row(Icons.how_to_reg_outlined, 'Curious who it is?',
-                'You can ask to see their profile. It’s up to them to share it.'),
+                'You can ask to see the profile. Sharing it is up to them.'),
       ]),
     );
   }
@@ -431,7 +431,7 @@ class _RevealAction extends StatelessWidget {
       RevealStatus.pending when profile.mutual && !asked => (
           Icons.visibility_outlined,
           'They want to swap profiles',
-          'Answer their request in the chat. Nothing is shown unless you '
+          'Answer the request in the chat. Nothing is shown unless you '
               'agree.'
         ),
       RevealStatus.pending when profile.mutual => (
@@ -452,7 +452,7 @@ class _RevealAction extends StatelessWidget {
       RevealStatus.accepted => (
           Icons.check_circle_outline_rounded,
           'Profile shown',
-          'They showed you their profile.'
+          'You can see the profile now.'
         ),
       RevealStatus.declined => (
           Icons.lock_outline_rounded,

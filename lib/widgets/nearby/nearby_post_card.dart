@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../services/huntr_backend.dart';
 import '../../services/nearby_service.dart';
+import '../../state/app_state.dart';
 import '../../theme.dart';
 import '../../screens/anonymous_profile_screen.dart' show ThreadsAuthorScreen;
 import '../../screens/chats_screen.dart' show timeLabel;
@@ -228,6 +229,7 @@ class NearbyPostCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final app = AppScope.maybeOf(context);
     final distance = post.distanceM;
     final official = post.official;
     // HUNTR's own posts: no anonymous profile to open, nothing to report
@@ -342,7 +344,14 @@ class NearbyPostCard extends StatelessWidget {
                               right: 12, top: post.body.isEmpty ? 2 : 10),
                           child: NearbyMediaGrid(
                               key: Key('nearbyMediaGrid-${post.id}'),
-                              media: post.media),
+                              media: post.media,
+                              // NSFW, for someone who'd rather not see it
+                              // (not my own): blurred until they choose
+                              covered: post.nsfw &&
+                                  !post.mine &&
+                                  (app?.hideNsfw ?? false) &&
+                                  !(app?.revealedNsfw(post.id) ?? false),
+                              onReveal: () => app?.revealNsfw(post.id)),
                         ),
                       // its tags, right under the text (all of them on the
                       // post itself)

@@ -165,7 +165,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(service.calls, contains('send 7'));
       expect(find.byType(BottomSheet), findsNothing);
-      expect(find.text('Tap sent. Sam will see it in their Taps.'),
+      expect(find.text('Tap sent. Sam will see it in Taps.'),
           findsOneWidget);
     });
 

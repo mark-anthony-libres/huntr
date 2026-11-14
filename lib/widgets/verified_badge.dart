@@ -150,7 +150,7 @@ Future<void> showVerifiedInfo(BuildContext context, {String? name}) {
                   'pretending to be someone else.'),
           const _Point(
               icon: Icons.lock_outline_rounded,
-              text: 'Their documents stay private: nobody on HUNTR sees '
+              text: 'Documents stay private: nobody on HUNTR sees '
                   'them.'),
           const _Point(
               icon: Icons.handshake_outlined,

@@ -1,21 +1,36 @@
 import 'package:flutter/material.dart';
 
 import '../models/models.dart';
+import '../state/app_state.dart';
+import '../widgets/nsfw_warning.dart';
 import '../widgets/photo.dart';
 import '../widgets/album/photo_viewer.dart';
 
-/// A shared album: a grid, and a full-screen swipeable viewer on tap.
-class AlbumScreen extends StatelessWidget {
+/// A shared album: a grid, and a full-screen swipeable viewer on tap. With
+/// Don't show NSFW content on Yes, a sensitive-content warning first (the
+/// grid is built only after View album).
+class AlbumScreen extends StatefulWidget {
   const AlbumScreen({super.key, required this.title, required this.photos});
 
   final String title;
   final List<AlbumPhoto> photos;
 
   @override
+  State<AlbumScreen> createState() => _AlbumScreenState();
+}
+
+class _AlbumScreenState extends State<AlbumScreen> {
+  late bool _revealed = !(AppScope.maybeRead(context)?.hideNsfw ?? false);
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(title)),
-      body: AlbumGrid(title: title, photos: photos),
+      appBar: AppBar(title: Text(widget.title)),
+      body: _revealed
+          ? AlbumGrid(title: widget.title, photos: widget.photos)
+          : SensitiveContentCover.album(
+              onView: () => setState(() => _revealed = true),
+              onCancel: () => Navigator.of(context).pop()),
     );
   }
 }

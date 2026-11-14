@@ -506,7 +506,7 @@ void main() {
         expect(find.text('Profile shown'), findsOneWidget);
         expect(find.textContaining('now knows'), findsOneWidget);
       } else {
-        expect(find.text('TurboPig showed their profile'),
+        expect(find.text('TurboPig showed you who they are'),
             findsOneWidget);
         expect(find.byKey(const Key('revealedViewProfile')), findsOneWidget);
       }
@@ -514,7 +514,7 @@ void main() {
           fake.history.single.preview,
           fromMe
               ? 'You showed your profile'
-              : 'TurboPig showed their profile');
+              : 'TurboPig showed you who they are');
     });
   }
 
@@ -646,7 +646,7 @@ void main() {
       expect(find.byKey(const Key('revealRequestCard')), findsOneWidget);
       expect(
           find.text(fromMe
-              ? 'You asked to see their profile'
+              ? 'You asked to see the profile'
               : 'They asked to see your profile'),
           findsOneWidget);
     });

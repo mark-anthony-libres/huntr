@@ -129,6 +129,7 @@ class _SessionGateState extends State<SessionGate> {
       app.myStats = profile.stats;
       app.setHasPlace(profile.hasPlace);
       app.anonymousMessaging = profile.privacy.anonymousMessaging;
+      app.setHideNsfw(profile.privacy.hideNsfw);
       app.anonymousName = profile.anonymousName;
       app.updateNotifications(
           taps: profile.privacy.notifyTaps,

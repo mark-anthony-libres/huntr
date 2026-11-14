@@ -41,7 +41,8 @@ class _FakeProfiles extends ProfileService {
       bool? notifyTaps,
       bool? notifyMessages,
       bool? notifyStoryReplies,
-      String? notificationSound}) async {
+      String? notificationSound,
+      bool? hideNsfw}) async {
     saves.add((showOnline: showOnline, showDistance: showDistance));
     if (failSaveWith != null) throw failSaveWith!;
     stored = PrivacySettings(

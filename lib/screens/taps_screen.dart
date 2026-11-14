@@ -412,7 +412,7 @@ class _TapDetailScreenState extends State<TapDetailScreen> {
                                 style: const TextStyle(
                                     fontSize: 18, fontWeight: FontWeight.w800)),
                             const SizedBox(height: 2),
-                            const Text('Tap to see their profile',
+                            const Text('Tap to see the profile',
                                 style: TextStyle(color: HuntrColors.muted)),
                           ],
                         ),

@@ -1185,7 +1185,7 @@ class _ChatScreenState extends State<ChatScreen> {
                           Flexible(
                               child: Text(anonymous.mutual
                                   ? 'Ask to show both profiles'
-                                  : 'Ask to see their profile')),
+                                  : 'Ask to see the profile')),
                         ]),
                       ),
                     const PopupMenuItem(

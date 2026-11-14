@@ -172,7 +172,8 @@ class PrivacySettings {
       this.notifyTaps = true,
       this.notifyMessages = true,
       this.notifyStoryReplies = true,
-      this.notificationSound = 'default'});
+      this.notificationSound = 'default',
+      this.hideNsfw = true});
 
   factory PrivacySettings.fromJson(Map<String, dynamic> json) =>
       PrivacySettings(
@@ -185,6 +186,7 @@ class PrivacySettings {
         notifyMessages: json['notify_messages'] as bool? ?? true,
         notifyStoryReplies: json['notify_story_replies'] as bool? ?? true,
         notificationSound: json['notification_sound'] as String? ?? 'default',
+        hideNsfw: json['hide_nsfw'] as bool? ?? true,
       );
 
   final bool showOnline;
@@ -203,6 +205,10 @@ class PrivacySettings {
 
   /// The sound they make (NotificationSound.wire).
   final String notificationSound;
+
+  /// "Don't show NSFW content" (Settings): yes covers NSFW photos and videos
+  /// in Threads and asks before private albums; no shows them as they are.
+  final bool hideNsfw;
 }
 
 /// The signed-in Huntr account returned by the backend.
@@ -907,6 +913,7 @@ Future<PrivacySettings> updateMyPrivacy({
   bool? notifyMessages,
   bool? notifyStoryReplies,
   String? notificationSound,
+  bool? hideNsfw,
   http.Client? client,
 }) =>
     _sendAuthorized(
@@ -924,6 +931,7 @@ Future<PrivacySettings> updateMyPrivacy({
             'notify_story_replies': notifyStoryReplies,
           if (notificationSound != null)
             'notification_sound': notificationSound,
+          if (hideNsfw != null) 'hide_nsfw': hideNsfw,
         }),
       ),
       PrivacySettings.fromJson,
@@ -1692,9 +1700,9 @@ class ChatMessage {
         ChatMessageType.location => '📍 Location',
         ChatMessageType.liveLocation => '📍 Live location',
         ChatMessageType.reveal =>
-          fromMe ? 'You showed your profile' : '$body showed their profile',
+          fromMe ? 'You showed your profile' : '$body showed you who they are',
         ChatMessageType.revealRequest => fromMe
-            ? 'You asked to see their profile'
+            ? 'You asked to see the profile'
             : 'Asked to see your profile',
         ChatMessageType.tap =>
           fromMe ? '👋 You tapped them' : '👋 They tapped you',
@@ -4313,6 +4321,9 @@ class AnonymousName {
 
 /// A tag a Threads post can have, like "Hookup" (Looking for) or "Outdoor"
 /// (Meet preference).
+/// The tag (Content) an author puts on a post with adult content.
+const nsfwTagSlug = 'nsfw';
+
 class NearbyTag {
   const NearbyTag(
       {required this.id,
@@ -4413,8 +4424,12 @@ class NearbyPost {
   /// How far it reaches (mine only).
   final int? radiusM;
 
-  /// Its tags: Looking for first, then Meet preference.
+  /// Its tags: Looking for first, then Meet preference, then Content.
   final List<NearbyTag> tags;
+
+  /// Tagged NSFW by its author: its photos and videos are covered for
+  /// people who don't want to see NSFW content ([PrivacySettings.hideNsfw]).
+  bool get nsfw => tags.any((t) => t.slug == nsfwTagSlug);
 
   /// HUNTR's own post: for everyone, wherever they are (no distance).
   final bool official;

@@ -74,6 +74,8 @@ class AppState extends ChangeNotifier {
     myUserId = null;
     myStats = const ProfileStats();
     anonymousMessaging = true;
+    hideNsfw = true;
+    _revealedNsfw.clear();
     notifications = (taps: true, messages: true, storyReplies: true);
     _notificationSound = NotificationSound.phoneDefault;
     _anonymousName = null;
@@ -145,6 +147,26 @@ class AppState extends ChangeNotifier {
   void setAnonymousMessaging(bool enabled) {
     anonymousMessaging = enabled;
     notifyListeners();
+  }
+
+  /// "Don't show NSFW content" (Settings), as saved on the backend: yes
+  /// (the default) covers NSFW-tagged photos and videos in Threads and asks
+  /// before a private album is opened, sent or traded; no shows them as
+  /// they are and asks nothing.
+  bool hideNsfw = true;
+
+  void setHideNsfw(bool hide) {
+    if (hideNsfw == hide) return;
+    hideNsfw = hide;
+    notifyListeners();
+  }
+
+  /// The NSFW posts whose photos and videos I chose to see (until I sign
+  /// out or the app closes).
+  final _revealedNsfw = <int>{};
+  bool revealedNsfw(int postId) => _revealedNsfw.contains(postId);
+  void revealNsfw(int postId) {
+    if (_revealedNsfw.add(postId)) notifyListeners();
   }
 
   /// My stats: height, weight, body type, position, ..., Show Age, and
@@ -835,6 +857,10 @@ class AppScope extends InheritedNotifier<AppState> {
 
   static AppState read(BuildContext context) =>
       context.getInheritedWidgetOfExactType<AppScope>()!.notifier!;
+
+  /// [of], or null where there's no app state (some tests).
+  static AppState? maybeOf(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<AppScope>()?.notifier;
 
   /// [read], or null where there's no app state (some tests).
   static AppState? maybeRead(BuildContext context) =>
