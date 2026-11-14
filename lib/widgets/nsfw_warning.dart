@@ -90,62 +90,72 @@ class SensitiveContentCover extends StatelessWidget {
           ),
         ),
       ),
-      Center(
-        child: SingleChildScrollView(
-          padding: EdgeInsets.all(compact ? 14 : 24),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 360),
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Container(
-                width: circle,
-                height: circle,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.black.withValues(alpha: 0.5),
-                  border: Border.all(color: Colors.white24),
-                ),
-                child: Icon(Icons.visibility_off_outlined,
-                    color: Colors.white, size: icon),
-              ),
-              SizedBox(height: compact ? 10 : 18),
-              Text('Sensitive content',
-                  style: TextStyle(
-                      color: Colors.white,
-                      fontSize: compact ? 16.5 : 20,
-                      fontWeight: FontWeight.w700)),
-              SizedBox(height: compact ? 4 : 8),
-              Text(
-                message,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: compact ? 13.5 : 15,
-                    height: 1.4),
-              ),
-              SizedBox(height: compact ? 14 : 24),
-              if (compact)
-                view
-              else
-                SizedBox(width: double.infinity, child: view),
-              if (onCancel != null) ...[
-                const SizedBox(height: 8),
-                SizedBox(
-                  width: double.infinity,
-                  child: TextButton(
-                    key: const Key('sensitiveCancel'),
-                    style: TextButton.styleFrom(
-                        foregroundColor: Colors.white,
-                        minimumSize: const Size.fromHeight(48)),
-                    onPressed: onCancel,
-                    child:
-                        const Text('Cancel', style: TextStyle(fontSize: 16)),
+      // a short box (a wide picture on a small screen): the icon goes
+      // first, then the text, so the button always shows
+      LayoutBuilder(builder: (context, box) {
+        final roomy = !compact || box.maxHeight >= 260;
+        final text = !compact || box.maxHeight >= 200;
+        return Center(
+          child: SingleChildScrollView(
+            padding: EdgeInsets.all(compact ? 14 : 24),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 360),
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                if (roomy) ...[
+                  Container(
+                    width: circle,
+                    height: circle,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.black.withValues(alpha: 0.5),
+                      border: Border.all(color: Colors.white24),
+                    ),
+                    child: Icon(Icons.visibility_off_outlined,
+                        color: Colors.white, size: icon),
                   ),
-                ),
-              ],
-            ]),
+                  SizedBox(height: compact ? 10 : 18),
+                ],
+                Text('Sensitive content',
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontSize: compact ? 16.5 : 20,
+                        fontWeight: FontWeight.w700)),
+                if (text) ...[
+                  SizedBox(height: compact ? 4 : 8),
+                  Text(
+                    message,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: compact ? 13.5 : 15,
+                        height: 1.4),
+                  ),
+                ],
+                SizedBox(height: compact ? (text ? 14 : 10) : 24),
+                if (compact)
+                  view
+                else
+                  SizedBox(width: double.infinity, child: view),
+                if (onCancel != null) ...[
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    child: TextButton(
+                      key: const Key('sensitiveCancel'),
+                      style: TextButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          minimumSize: const Size.fromHeight(48)),
+                      onPressed: onCancel,
+                      child:
+                          const Text('Cancel', style: TextStyle(fontSize: 16)),
+                    ),
+                  ),
+                ],
+              ]),
+            ),
           ),
-        ),
-      ),
+        );
+      }),
     ]);
   }
 }

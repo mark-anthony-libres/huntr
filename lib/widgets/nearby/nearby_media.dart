@@ -189,8 +189,9 @@ class NearbyMediaGrid extends StatelessWidget {
   Widget _cover() {
     final first = media.first;
     return _Frame(
+      // never thinner than 16:10, so the warning has room
       aspectRatio:
-          media.length == 1 ? first.aspectRatio.clamp(0.75, 3.0) : 16 / 10,
+          media.length == 1 ? first.aspectRatio.clamp(0.75, 1.6) : 16 / 10,
       child: ClipRRect(
         key: const Key('nsfwCover'),
         borderRadius: BorderRadius.circular(16),
