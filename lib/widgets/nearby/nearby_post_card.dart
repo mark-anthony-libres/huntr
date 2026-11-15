@@ -346,9 +346,8 @@ class NearbyPostCard extends StatelessWidget {
                               key: Key('nearbyMediaGrid-${post.id}'),
                               media: post.media,
                               // NSFW, for someone who'd rather not see it
-                              // (not my own): blurred until they choose
+                              // (my own posts too): blurred until they choose
                               covered: post.nsfw &&
-                                  !post.mine &&
                                   (app?.hideNsfw ?? false) &&
                                   !(app?.revealedNsfw(post.id) ?? false),
                               onReveal: () => app?.revealNsfw(post.id)),
