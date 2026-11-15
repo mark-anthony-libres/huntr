@@ -904,40 +904,42 @@ class _MapLocationsInfo extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('How locations work on the map',
+              const Text('How your location works on the map',
                   style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
               const SizedBox(height: 16),
               const _InfoPoint(
-                  icon: Icons.blur_on_rounded,
-                  title: 'Nobody is shown where they really are',
-                  text: "To protect everyone's privacy, each person is placed "
-                      'at a spot inside an area about 500 m across, around '
-                      'where they are, never at their exact location. The spot '
-                      'stays the same and only changes when they move to '
-                      'another area, so a pin never points to a home or a '
-                      'street.'),
+                icon: Icons.blur_on_rounded,
+                title: 'Your exact location stays private',
+                text: 'To protect your privacy, we show you at an approximate '
+                    'spot within an area about 500 m across, not your exact '
+                    'location. Your spot stays the same until you move to '
+                    'another area, so nobody can use the map to find your '
+                    'home or street.',
+              ),
               const _InfoPoint(
                 icon: Icons.people_alt_outlined,
-                title: 'Closer or farther than it looks',
-                text: 'Two people near each other can look farther apart, or '
-                    'closer, than they are. Use the distance on their profile '
-                    'as a rough guide.',
-              ),
-              _InfoPoint(
-                icon: Icons.workspaces_outline,
-                title: 'Groups and photos',
-                text: 'Zoomed out, people close together are shown as a '
-                    'number; tap it to see them. Zoom in to see their photos. '
-                    'Your own spot is the glowing dot, and only you see it.',
-                iconColor: HuntrColors.orange,
+                title: 'Distance is only an estimate',
+                text: 'People nearby may appear closer or farther away than '
+                    'they really are. The distance shown on profiles is a '
+                    'helpful guide, not an exact measurement.',
               ),
               const _InfoPoint(
-                  icon: Icons.visibility_off_outlined,
-                  title: 'Who appears, and hiding yourself',
-                  text: 'Only people who share their distance and have Show me '
-                      'on the map turned on. To hide yourself from the map, go '
-                      'to Settings, then Privacy, and turn off Show me on the '
-                      'map. You still appear in the Explore list.'),
+                icon: Icons.workspaces_outline,
+                title: 'Find people around you',
+                text: "When zoomed out, nearby people may appear together as "
+                    "a number. Tap the number to see who's there. Zoom in to "
+                    'see their photos. Your own location appears as a '
+                    'glowing dot that only you can see.',
+              ),
+              const _InfoPoint(
+                icon: Icons.visibility_off_outlined,
+                title: "You're in control of who sees you",
+                text: 'Only people who share their distance and have Show me '
+                    'on the map enabled will appear on the map.\n\nWant to '
+                    'hide yourself? Go to Settings → Privacy and turn off '
+                    "Show me on the map. You'll still be visible in the "
+                    'Explore list.',
+              ),
             ],
           ),
         ),
@@ -946,21 +948,17 @@ class _MapLocationsInfo extends StatelessWidget {
 
 class _InfoPoint extends StatelessWidget {
   const _InfoPoint(
-      {required this.icon,
-      required this.title,
-      required this.text,
-      this.iconColor});
+      {required this.icon, required this.title, required this.text});
 
   final IconData icon;
   final String title;
   final String text;
-  final Color? iconColor;
 
   @override
   Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.only(bottom: 18),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Icon(icon, color: iconColor ?? HuntrColors.orange, size: 24),
+          Icon(icon, color: HuntrColors.orange, size: 24),
           const SizedBox(width: 14),
           Expanded(
             child:

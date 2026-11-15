@@ -35,7 +35,9 @@ class ProfileArt extends StatelessWidget {
     if (profile.backendId != null && profile.photoUrls.isNotEmpty) {
       return ClipRRect(
         borderRadius: BorderRadius.circular(radius),
-        child: NetworkPhoto(profile.photoUrls.first),
+        // shimmers while it loads; can't be loaded: as if they had none
+        child: NetworkPhoto(profile.photoUrls.first,
+            broken: DefaultPortrait(alignment: alignment, hue: profile.hue)),
       );
     }
     // no photo: the default picture, a dark head-and-shoulders silhouette
