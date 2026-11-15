@@ -188,14 +188,20 @@ ThemeData buildHuntrTheme() {
     ),
     chipTheme: base.chipTheme.copyWith(
       backgroundColor: HuntrColors.surface,
-      selectedColor: HuntrColors.active.withValues(alpha: 0.22),
-      // a blue outline when selected
+      // selected: filled with the theme's accent, dark text (like the
+      // Direct / Anonymous tabs)
+      selectedColor: HuntrColors.orange,
+      checkmarkColor: Colors.black,
       side: WidgetStateBorderSide.resolveWith((states) => BorderSide(
           color: states.contains(WidgetState.selected)
-              ? HuntrColors.active
+              ? HuntrColors.orange
               : HuntrColors.border)),
       shape: const StadiumBorder(),
-      labelStyle: base.textTheme.labelLarge,
+      labelStyle: base.textTheme.labelLarge?.copyWith(
+          color: WidgetStateColor.resolveWith((states) =>
+              states.contains(WidgetState.selected)
+                  ? Colors.black
+                  : Colors.white)),
     ),
     switchTheme: SwitchThemeData(
       thumbColor: WidgetStateProperty.resolveWith((states) =>
@@ -237,6 +243,11 @@ ThemeData buildHuntrTheme() {
             fontSize: 16),
       ),
     ),
-    snackBarTheme: const SnackBarThemeData(behavior: SnackBarBehavior.floating),
+    // every alert: a close button, and it can be swiped away sideways
+    snackBarTheme: const SnackBarThemeData(
+      behavior: SnackBarBehavior.floating,
+      showCloseIcon: true,
+      dismissDirection: DismissDirection.horizontal,
+    ),
   );
 }

@@ -190,6 +190,15 @@ class MessagingService {
           query: query,
           offset: offset);
 
+  /// Pins my direct conversation at the top of my Chats, or unpins it.
+  Future<void> setPinned(String token, int conversationId,
+          {required bool pinned}) async =>
+      backend.setConversationPinned(
+          backendUrl: await _url(),
+          token: token,
+          conversationId: conversationId,
+          pinned: pinned);
+
   Future<void> markRead(String token, int conversationId) async =>
       backend.markConversationRead(
           backendUrl: await _url(),

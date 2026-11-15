@@ -26,9 +26,17 @@ const mapEnabled = bool.fromEnvironment('MAP_ENABLED');
 /// - neither (development): OpenStreetMap's map, made dark in the app's
 ///   accent. Its rules don't
 ///   allow it for a live app, so set one of the above for production.
+///
+/// MAP_FALLBACK_URL (+ MAP_FALLBACK_ATTRIBUTION): another provider, used
+/// when the first one's images keep failing (e.g. its monthly quota is used
+/// up). Without one, or when it fails too, the map says it can't be shown
+/// (people are still on it, and in the list).
 class MapTiles {
   const MapTiles(
-      {required this.url, required this.attributions, this.night = false});
+      {required this.url,
+      required this.attributions,
+      this.night = false,
+      this.fallback});
 
   /// '' for no map images (e.g. tests).
   final String url;
@@ -38,22 +46,42 @@ class MapTiles {
   /// streets' names and water in the accent.
   final bool night;
 
+  /// Where the images come from when these keep failing.
+  final MapTiles? fallback;
+
+  /// These, then each fallback in turn.
+  List<MapTiles> get inOrder => [this, ...?fallback?.inOrder];
+
   static const _mapTilerKey = String.fromEnvironment('MAPTILER_KEY');
   static const _customUrl = String.fromEnvironment('MAP_TILE_URL');
   static const _customCredit = String.fromEnvironment('MAP_TILE_ATTRIBUTION');
+  static const _fallbackUrl = String.fromEnvironment('MAP_FALLBACK_URL');
+  static const _fallbackCredit =
+      String.fromEnvironment('MAP_FALLBACK_ATTRIBUTION');
+
+  static MapTiles? get _configuredFallback => _fallbackUrl.isEmpty
+      ? null
+      : MapTiles(url: _fallbackUrl, attributions: [
+          if (_fallbackCredit.isNotEmpty) _fallbackCredit,
+          'OpenStreetMap contributors',
+        ]);
 
   static MapTiles get configured {
     if (_customUrl.isNotEmpty) {
-      return MapTiles(url: _customUrl, attributions: [
-        if (_customCredit.isNotEmpty) _customCredit,
-        'OpenStreetMap contributors',
-      ]);
+      return MapTiles(
+          url: _customUrl,
+          attributions: [
+            if (_customCredit.isNotEmpty) _customCredit,
+            'OpenStreetMap contributors',
+          ],
+          fallback: _configuredFallback);
     }
     if (_mapTilerKey.isNotEmpty) {
-      return const MapTiles(
+      return MapTiles(
           url: 'https://api.maptiler.com/maps/dataviz-dark/{z}/{x}/{y}{r}.png'
               '?key=$_mapTilerKey',
-          attributions: ['MapTiler', 'OpenStreetMap contributors']);
+          attributions: const ['MapTiler', 'OpenStreetMap contributors'],
+          fallback: _configuredFallback);
     }
     return const MapTiles(
         url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
@@ -304,6 +332,33 @@ class _ExploreMapState extends State<ExploreMap> {
             .toDouble());
   }
 
+  /// Which of the map's image sources is used ([MapTiles.inOrder]); past
+  /// the last one, none (they all kept failing).
+  int _source = 0;
+
+  /// When map images failed lately (since the source last changed).
+  final List<DateTime> _tileFailures = [];
+
+  /// This many failed images within [_failureWindow]: the next source.
+  static const _failuresToSwitch = 6;
+  static const _failureWindow = Duration(seconds: 20);
+
+  /// An image from source [from] failed (late ones from an earlier source
+  /// don't count against the next).
+  void _tileFailed(int from) {
+    if (from != _source) return;
+    final now = DateTime.now();
+    _tileFailures
+      ..add(now)
+      ..removeWhere((at) => now.difference(at) > _failureWindow);
+    if (_tileFailures.length < _failuresToSwitch) return;
+    _tileFailures.clear();
+    // (failures are told while the map draws)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _source == from) setState(() => _source = from + 1);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final app = AppScope.of(context);
@@ -313,7 +368,11 @@ class _ExploreMapState extends State<ExploreMap> {
         if (app.showsInExplore(p.profile)) p
     ];
     final me = _me;
-    final tiles = widget.tiles ?? MapTiles.configured;
+    final sources = (widget.tiles ?? MapTiles.configured).inOrder;
+    final source = _source;
+    final tiles = source < sources.length ? sources[source] : null;
+    // none of them works: the map says so (people are still on it)
+    final noMap = tiles == null && sources.first.url.isNotEmpty;
     return Stack(children: [
       FlutterMap(
         key: const Key('exploreMap'),
@@ -341,7 +400,7 @@ class _ExploreMapState extends State<ExploreMap> {
           onPositionChanged: (camera, _) => _moved(camera),
         ),
         children: [
-          if (tiles.url.isNotEmpty)
+          if (tiles != null && tiles.url.isNotEmpty)
             // drawn on its own: what changes on top (markers) never makes
             // the map images draw again; and one colour filter for all of
             // them, not one per image
@@ -349,7 +408,11 @@ class _ExploreMapState extends State<ExploreMap> {
               child: _nightIf(
                 tiles.night,
                 TileLayer(
+                  // a new layer per source (nothing of the last one kept)
+                  key: ValueKey('tiles-$_source'),
                   urlTemplate: tiles.url,
+                  errorTileCallback: (tile, error, stack) =>
+                      _tileFailed(source),
                   // sharp images on sharp screens, where the provider has
                   // them (never by loading 4x the images)
                   retinaMode: tiles.url.contains('{r}') &&
@@ -374,7 +437,7 @@ class _ExploreMapState extends State<ExploreMap> {
             onOpen: widget.onOpen,
             onGroup: _openGroup,
           ),
-          if (tiles.attributions.isNotEmpty)
+          if (tiles != null && tiles.attributions.isNotEmpty)
             RichAttributionWidget(
               alignment: AttributionAlignment.bottomLeft,
               attributions: [
@@ -407,13 +470,23 @@ class _ExploreMapState extends State<ExploreMap> {
           alignment: Alignment.centerLeft,
           child: _Note(
             key: const Key('mapNote'),
-            icon:
-                _error != null ? Icons.wifi_off_rounded : Icons.blur_on_rounded,
+            // the usual note: tap to learn how locations are shown
+            onTap: _error == null && !noMap
+                ? () => showMapLocationsInfo(context)
+                : null,
+            icon: _error != null
+                ? Icons.wifi_off_rounded
+                : noMap
+                    ? Icons.map_outlined
+                    : Icons.blur_on_rounded,
             text: _error ??
-                (_more
-                    ? 'Showing the nearest ${shown.length}. Zoom in for more.'
-                    : 'Locations are approximate'),
-            error: _error != null,
+                (noMap
+                    ? "The map can't be shown right now. People are still on "
+                        'it, or use the list.'
+                    : _more
+                        ? 'Showing the nearest ${shown.length}. Zoom in for more.'
+                        : 'Locations are approximate'),
+            error: _error != null || noMap,
           ),
         ),
       ),
@@ -758,14 +831,31 @@ class _Fade extends StatelessWidget {
 
 class _Note extends StatelessWidget {
   const _Note(
-      {super.key, required this.icon, required this.text, this.error = false});
+      {super.key,
+      required this.icon,
+      required this.text,
+      this.error = false,
+      this.onTap});
 
   final IconData icon;
   final String text;
   final bool error;
 
+  /// Tapped: more about it (with a small info mark).
+  final VoidCallback? onTap;
+
   @override
-  Widget build(BuildContext context) => Container(
+  Widget build(BuildContext context) {
+    final note = _box();
+    if (onTap == null) return note;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+          borderRadius: BorderRadius.circular(999), onTap: onTap, child: note),
+    );
+  }
+
+  Widget _box() => Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
         decoration: BoxDecoration(
           color: Colors.black.withValues(alpha: 0.65),
@@ -784,6 +874,105 @@ class _Note extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(color: Colors.white, fontSize: 12.5)),
+          ),
+          if (onTap != null) ...[
+            const SizedBox(width: 6),
+            const Icon(Icons.info_outline_rounded,
+                size: 15, color: Colors.white70),
+          ],
+        ]),
+      );
+}
+
+/// "Locations are approximate", tapped: how the map shows people.
+Future<void> showMapLocationsInfo(BuildContext context) =>
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (context) => const _MapLocationsInfo(),
+    );
+
+class _MapLocationsInfo extends StatelessWidget {
+  const _MapLocationsInfo();
+
+  @override
+  Widget build(BuildContext context) => SafeArea(
+        child: SingleChildScrollView(
+          key: const Key('mapLocationsInfo'),
+          padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('How locations work on the map',
+                  style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 16),
+              const _InfoPoint(
+                  icon: Icons.blur_on_rounded,
+                  title: 'Nobody is shown where they really are',
+                  text: "To protect everyone's privacy, each person is placed "
+                      'at a spot inside an area about 500 m across, around '
+                      'where they are, never at their exact location. The spot '
+                      'stays the same and only changes when they move to '
+                      'another area, so a pin never points to a home or a '
+                      'street.'),
+              const _InfoPoint(
+                icon: Icons.people_alt_outlined,
+                title: 'Closer or farther than it looks',
+                text: 'Two people near each other can look farther apart, or '
+                    'closer, than they are. Use the distance on their profile '
+                    'as a rough guide.',
+              ),
+              _InfoPoint(
+                icon: Icons.workspaces_outline,
+                title: 'Groups and photos',
+                text: 'Zoomed out, people close together are shown as a '
+                    'number; tap it to see them. Zoom in to see their photos. '
+                    'Your own spot is the glowing dot, and only you see it.',
+                iconColor: HuntrColors.orange,
+              ),
+              const _InfoPoint(
+                  icon: Icons.visibility_off_outlined,
+                  title: 'Who appears, and hiding yourself',
+                  text: 'Only people who share their distance and have Show me '
+                      'on the map turned on. To hide yourself from the map, go '
+                      'to Settings, then Privacy, and turn off Show me on the '
+                      'map. You still appear in the Explore list.'),
+            ],
+          ),
+        ),
+      );
+}
+
+class _InfoPoint extends StatelessWidget {
+  const _InfoPoint(
+      {required this.icon,
+      required this.title,
+      required this.text,
+      this.iconColor});
+
+  final IconData icon;
+  final String title;
+  final String text;
+  final Color? iconColor;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(bottom: 18),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Icon(icon, color: iconColor ?? HuntrColors.orange, size: 24),
+          const SizedBox(width: 14),
+          Expanded(
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(title,
+                  style: const TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 4),
+              Text(text,
+                  style: const TextStyle(
+                      color: HuntrColors.muted, fontSize: 14, height: 1.45)),
+            ]),
           ),
         ]),
       );

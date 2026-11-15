@@ -1701,9 +1701,8 @@ class ChatMessage {
         ChatMessageType.liveLocation => '📍 Live location',
         ChatMessageType.reveal =>
           fromMe ? 'You showed your profile' : '$body showed you who they are',
-        ChatMessageType.revealRequest => fromMe
-            ? 'You asked to see the profile'
-            : 'Asked to see your profile',
+        ChatMessageType.revealRequest =>
+          fromMe ? 'You asked to see the profile' : 'Asked to see your profile',
         ChatMessageType.tap =>
           fromMe ? '👋 You tapped them' : '👋 They tapped you',
         ChatMessageType.gif => gif?.isSticker == true ? 'Sticker' : '🎞️ GIF',
@@ -2322,6 +2321,7 @@ class ConversationSummary {
     this.reveal,
     this.canSend = true,
     this.unmatched = false,
+    this.pinned = false,
   });
 
   factory ConversationSummary.fromJson(Map<String, dynamic> json) {
@@ -2344,10 +2344,14 @@ class ConversationSummary {
           : RevealRequest.fromJson(json['reveal'] as Map<String, dynamic>),
       canSend: json['can_send'] as bool? ?? true,
       unmatched: json['unmatched'] as bool? ?? false,
+      pinned: json['pinned'] as bool? ?? false,
     );
   }
 
   final int id;
+
+  /// I pinned it: at the top of my Chats (on every device).
+  final bool pinned;
 
   /// The other person: a real user, or (when they're anonymous to me) only
   /// their anonymous name and avatar.
@@ -2371,7 +2375,8 @@ class ConversationSummary {
           {ChatMessage? lastMessage,
           int? unreadCount,
           RevealRequest? reveal,
-          bool? canSend}) =>
+          bool? canSend,
+          bool? pinned}) =>
       ConversationSummary(
           id: id,
           other: other,
@@ -2380,7 +2385,8 @@ class ConversationSummary {
           anonymous: anonymous,
           reveal: reveal ?? this.reveal,
           canSend: canSend ?? this.canSend,
-          unmatched: unmatched);
+          unmatched: unmatched,
+          pinned: pinned ?? this.pinned);
 }
 
 /// Who is anonymous in an anonymous conversation, and as what.
@@ -3055,6 +3061,93 @@ Future<void> markConversationRead(
       (httpClient) => httpClient.post(
           _endpoint(backendUrl, '/conversations/$conversationId/read'),
           headers: _authorization(token)),
+      (_) {},
+    );
+
+/// PUT (or, unpinning, DELETE) {backendUrl}/conversations/{id}/pin: my
+/// direct conversation at the top of my Chats.
+Future<void> setConversationPinned(
+        {required String backendUrl,
+        required String token,
+        required int conversationId,
+        required bool pinned,
+        http.Client? client}) =>
+    _sendAuthorized(
+      client,
+      (httpClient) {
+        final url = _endpoint(backendUrl, '/conversations/$conversationId/pin');
+        final headers = _authorization(token);
+        return pinned
+            ? httpClient.put(url, headers: headers)
+            : httpClient.delete(url, headers: headers);
+      },
+      (_) {},
+    );
+
+/// GET {backendUrl}/profile/notes/{userId}: my private note about them
+/// (null when there's none).
+Future<String?> fetchPersonNote(
+        {required String backendUrl,
+        required String token,
+        required int userId,
+        http.Client? client}) =>
+    _sendAuthorized(
+      client,
+      (httpClient) => httpClient.get(
+          _endpoint(backendUrl, '/profile/notes/$userId'),
+          headers: _authorization(token)),
+      (data) => data['body'] as String?,
+    );
+
+/// PUT {backendUrl}/profile/notes/{userId}: saves my note about them (an
+/// empty one removes it); what's kept (null: none).
+Future<String?> savePersonNote(
+        {required String backendUrl,
+        required String token,
+        required int userId,
+        required String body,
+        http.Client? client}) =>
+    _sendAuthorized(
+      client,
+      (httpClient) => httpClient.put(
+          _endpoint(backendUrl, '/profile/notes/$userId'),
+          headers: {
+            ..._authorization(token),
+            'Content-Type': 'application/json'
+          },
+          body: jsonEncode({'body': body})),
+      (data) => data['body'] as String?,
+    );
+
+/// GET {backendUrl}/profile/favorites: whom I starred (user ids).
+Future<List<int>> fetchMyFavorites(
+        {required String backendUrl,
+        required String token,
+        http.Client? client}) =>
+    _sendAuthorizedJson(
+      client,
+      (httpClient) => httpClient.get(
+          _endpoint(backendUrl, '/profile/favorites'),
+          headers: _authorization(token)),
+      (body) => (body['data'] as List<dynamic>).cast<int>(),
+    );
+
+/// PUT (or, unstarring, DELETE) {backendUrl}/profile/favorites/{userId}.
+Future<void> setMyFavorite(
+        {required String backendUrl,
+        required String token,
+        required int userId,
+        required bool favorite,
+        http.Client? client}) =>
+    _sendAuthorized(
+      client,
+      (httpClient) {
+        final url = _endpoint(backendUrl, '/profile/favorites/$userId');
+        final headers = _authorization(token);
+        return favorite
+            ? httpClient.put(url, headers: headers)
+            : httpClient.delete(url, headers: headers);
+      },
       (_) {},
     );
 
@@ -3868,13 +3961,17 @@ Future<NearbyPage> fetchNearby(
         {required String backendUrl,
         required String token,
         int offset = 0,
-        bool newest = false,
+        ExploreFilters filters = const ExploreFilters(),
         http.Client? client}) =>
     _sendAuthorized(
       client,
       (httpClient) => httpClient.get(
-          _endpoint(backendUrl,
-              '/explore/nearby?offset=$offset${newest ? '&sort=newest' : ''}'),
+          _endpoint(
+              backendUrl,
+              '/explore/nearby?${Uri(queryParameters: {
+                    'offset': '$offset',
+                    ...filters.backendQuery
+                  }).query}'),
           headers: _authorization(token)),
       NearbyPage.fromJson,
     );

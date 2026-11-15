@@ -25,6 +25,7 @@ import '../widgets/profile/gradient_button.dart';
 import '../widgets/profile/status_pill.dart';
 import '../widgets/profile/profile_meta.dart';
 import '../widgets/profile/profile_section.dart';
+import '../widgets/notes/person_note.dart';
 import '../widgets/profile/looking_for_pill.dart';
 import '../widgets/profile/photo_gallery.dart';
 import '../flows/accept_with_album.dart';
@@ -116,7 +117,7 @@ class ProfileScreen extends StatelessWidget {
                 icon: Icon(
                     fav ? Icons.star_rounded : Icons.star_outline_rounded,
                     color: fav ? HuntrColors.orange : null),
-                onPressed: () => app.toggleFavorite(p.id),
+                onPressed: () => toggleFavoriteSaved(context, p),
               ),
             ),
             _CircleButton(
@@ -261,6 +262,10 @@ class ProfileScreen extends StatelessWidget {
                   child: Text(p.bio,
                       style: const TextStyle(
                           fontSize: 17, height: 1.5, color: Colors.white))),
+            // my private note about them (only I see it)
+            if (!_isPreview && canHaveNote(p))
+              PersonNoteSection(
+                  key: ValueKey('note-${p.backendId}'), profile: p),
             // their stats, in the units I chose (unset ones aren't shown)
             if (p.stats.lines(app.myStats.units) case final lines
                 when lines.isNotEmpty)
@@ -1102,4 +1107,29 @@ class _MoreThumb extends StatelessWidget {
                   fontWeight: FontWeight.w700)),
         ),
       );
+}
+
+/// Stars (or unstars) someone, at once and on the account; back as it was
+/// if it couldn't be saved.
+Future<void> toggleFavoriteSaved(BuildContext context, Profile p) async {
+  final app = AppScope.read(context);
+  final favorite = !app.isFavorite(p.id);
+  app.setFavorite(p.id, favorite);
+  final profiles = ServicesScope.profilesOf(context);
+  final token = app.sessionToken;
+  final userId = p.backendId;
+  if (profiles == null || token == null || userId == null) return;
+  final messenger = ScaffoldMessenger.of(context);
+  try {
+    await profiles.setFavorite(token, userId, favorite: favorite);
+  } on SessionRejectedException {
+    app.setFavorite(p.id, !favorite);
+    app.endSession();
+  } catch (error) {
+    app.setFavorite(p.id, !favorite);
+    messenger.showSnackBar(SnackBar(
+        content: Text(error is BackendException
+            ? error.message
+            : 'Your favorites could not be saved. Please try again.')));
+  }
 }

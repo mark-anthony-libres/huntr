@@ -9,6 +9,8 @@ import '../services/huntr_backend.dart';
 import '../services/services_scope.dart';
 import '../state/app_state.dart';
 import '../state/messaging_state.dart';
+import '../widgets/chats/conversation_list.dart' show togglePinned;
+import '../widgets/notes/person_note.dart';
 import '../theme.dart';
 import '../widgets/verified_badge.dart';
 import '../widgets/anonymous_avatar.dart';
@@ -1047,8 +1049,39 @@ class _ChatScreenState extends State<ChatScreen> {
             PopupMenuButton<String>(
               key: const Key('chatMenu'),
               tooltip: 'More',
-              onSelected: (_) => _block(p),
+              onSelected: (action) {
+                final id = widget.conversationId;
+                final messaging = MessagingScope.of(context);
+                if (action == 'note') {
+                  showPersonNote(context, p);
+                } else if (action == 'pin' && id != null && messaging != null) {
+                  togglePinned(context, messaging, id,
+                      !(messaging.summary(id)?.pinned ?? false));
+                } else if (action == 'block') {
+                  _block(p);
+                }
+              },
               itemBuilder: (_) => [
+                PopupMenuItem(
+                    key: const Key('chatMenuNote'),
+                    value: 'note',
+                    child: ListTile(
+                        leading: const Icon(Icons.sticky_note_2_outlined),
+                        title: Text(
+                            AppScope.read(context).noteAbout(p.backendId!) ==
+                                    null
+                                ? 'Add note'
+                                : 'Note'))),
+                if (widget.conversationId case final id?)
+                  if (MessagingScope.of(context)?.summary(id) case final c?)
+                    PopupMenuItem(
+                        key: const Key('chatMenuPin'),
+                        value: 'pin',
+                        child: ListTile(
+                            leading: Icon(c.pinned
+                                ? Icons.push_pin_outlined
+                                : Icons.push_pin_rounded),
+                            title: Text(c.pinned ? 'Unpin chat' : 'Pin chat'))),
                 if (BlockScope.of(context) != null)
                   const PopupMenuItem(
                       value: 'block',
@@ -1110,6 +1143,11 @@ class _ChatScreenState extends State<ChatScreen> {
                                   const SizedBox(width: 4),
                                   VerifiedBadge(size: 16, name: p.name),
                                 ],
+                                // my private note about them (direct chats)
+                                if (anonymous == null &&
+                                    !blocked &&
+                                    canHaveNote(p))
+                                  NoteIcon(profile: p),
                               ]),
                               // where I'm anonymous: whom they see
                               if (anonymous != null && anonymous.iAmAnonymous)

@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../screens/chat_screen.dart';
 import '../../screens/chats_screen.dart' show timeLabel;
 import '../../services/huntr_backend.dart';
+import '../../state/app_state.dart';
 import '../../state/messaging_state.dart';
 import '../../theme.dart';
 import '../load_more_row.dart';
@@ -27,9 +30,21 @@ class ConversationList extends StatefulWidget {
   State<ConversationList> createState() => _ConversationListState();
 }
 
+/// Chats' filters: All, Online (connected or active in the last 30
+/// minutes), Favorites, Unread. The Anonymous tab has All and Unread.
+enum _ChatFilter { all, online, favorites, unread }
+
 class _ConversationListState extends State<ConversationList> {
   String _query = '';
-  bool _unreadOnly = false;
+  _ChatFilter _filter = _ChatFilter.all;
+  bool get _unreadOnly => _filter == _ChatFilter.unread;
+
+  /// A filter chosen: the list loads again (who's online, unread counts),
+  /// then shows only those.
+  void _choose(_ChatFilter filter) {
+    if (filter != _filter) unawaited(widget.messaging.refresh());
+    setState(() => _filter = filter);
+  }
 
   /// The Anonymous tab is shown (otherwise Direct).
   bool _anonymous = false;
@@ -58,13 +73,28 @@ class _ConversationListState extends State<ConversationList> {
       key: ValueKey('more-$_anonymous-${all?.length}'),
       onVisible: () => messaging.loadMore(anonymous: _anonymous),
     );
-    final list = (all ?? const []).where((c) {
-      if (_unreadOnly && c.unreadCount == 0) return false;
+    final app = AppScope.of(context);
+    final matching = (all ?? const []).where((c) {
+      switch (_filter) {
+        case _ChatFilter.all:
+          break;
+        case _ChatFilter.online:
+          if (!c.other.onlineNowAt(now)) return false;
+        case _ChatFilter.favorites:
+          if (!app.isFavorite(c.other.id)) return false;
+        case _ChatFilter.unread:
+          if (c.unreadCount == 0) return false;
+      }
       if (_query.isEmpty) return true;
       final q = _query.toLowerCase();
       return c.other.name.toLowerCase().contains(q) ||
           (c.lastMessage?.body.toLowerCase().contains(q) ?? false);
-    }).toList();
+    });
+    // pinned ones first, wherever they are in what's loaded
+    final list = [
+      ...matching.where((c) => c.pinned),
+      ...matching.where((c) => !c.pinned),
+    ];
 
     // Wide screens: the list on the left, the open chat on the right.
     final width = MediaQuery.sizeOf(context).width;
@@ -120,7 +150,7 @@ class _ConversationListState extends State<ConversationList> {
                   anonymousUnread: messaging.anonymousUnread,
                   onChanged: (anonymous) => setState(() {
                     _anonymous = anonymous;
-                    _unreadOnly = false;
+                    _filter = _ChatFilter.all;
                   }),
                 ),
               ),
@@ -128,21 +158,27 @@ class _ConversationListState extends State<ConversationList> {
             SliverPadding(
               padding: pad(0, 12),
               sliver: SliverToBoxAdapter(
-                child: Wrap(spacing: 8, children: [
-                  ChoiceChip(
-                    label: const Text('All'),
-                    selected: !_unreadOnly,
-                    showCheckmark: false,
-                    onSelected: (_) => setState(() => _unreadOnly = false),
-                  ),
-                  ChoiceChip(
-                    key: const Key('unreadChats'),
-                    label: Text(
-                        'Unread${unreadTotal > 0 ? ' ($unreadTotal)' : ''}'),
-                    selected: _unreadOnly,
-                    showCheckmark: false,
-                    onSelected: (_) => setState(() => _unreadOnly = true),
-                  ),
+                child: Wrap(spacing: 8, runSpacing: 8, children: [
+                  for (final filter in _ChatFilter.values)
+                    // someone anonymous can't be a favourite
+                    if (!_anonymous ||
+                        filter == _ChatFilter.all ||
+                        filter == _ChatFilter.unread)
+                      ChoiceChip(
+                        key: Key(filter == _ChatFilter.unread
+                            ? 'unreadChats'
+                            : 'chatFilter-${filter.name}'),
+                        label: Text(switch (filter) {
+                          _ChatFilter.all => 'All',
+                          _ChatFilter.online => 'Online',
+                          _ChatFilter.favorites => 'Favorites',
+                          _ChatFilter.unread =>
+                            'Unread${unreadTotal > 0 ? ' ($unreadTotal)' : ''}',
+                        }),
+                        selected: _filter == filter,
+                        showCheckmark: false,
+                        onSelected: (_) => _choose(filter),
+                      ),
                 ]),
               ),
             ),
@@ -200,9 +236,17 @@ class _ConversationListState extends State<ConversationList> {
                           color: HuntrColors.muted),
                       const SizedBox(height: 10),
                       Text(
-                          _unreadOnly && _query.isEmpty
-                              ? "You're all caught up"
-                              : 'No chats match',
+                          key: const Key('chatsNoMatch'),
+                          _query.isNotEmpty
+                              ? 'No chats match'
+                              : switch (_filter) {
+                                  _ChatFilter.unread => "You're all caught up",
+                                  _ChatFilter.online =>
+                                    'Nobody you chat with is online',
+                                  _ChatFilter.favorites =>
+                                    'No chats with your favorites',
+                                  _ChatFilter.all => 'No chats match',
+                                },
                           style: const TextStyle(color: HuntrColors.muted)),
                     ]),
                   ),
@@ -263,16 +307,24 @@ Future<void> _peek(BuildContext context, MessagingState messaging,
   final opened = await showDialog<bool>(
     context: context,
     barrierColor: Colors.black.withValues(alpha: 0.7),
-    builder: (context) => _Peek(conversation: c, messages: messages),
+    builder: (context) => _Peek(
+        conversation: c,
+        messages: messages,
+        onPin: c.anonymous != null
+            ? null
+            : () => togglePinned(context, messaging, c.id, !c.pinned)),
   );
   if (opened == true && context.mounted) open(c);
 }
 
 class _Peek extends StatelessWidget {
-  const _Peek({required this.conversation, required this.messages});
+  const _Peek({required this.conversation, required this.messages, this.onPin});
 
   final ConversationSummary conversation;
   final Future<List<ChatMessage>?> messages;
+
+  /// Pin or unpin it (direct chats).
+  final VoidCallback? onPin;
 
   /// How many of the latest are shown.
   static const _shown = 12;
@@ -350,6 +402,20 @@ class _Peek extends StatelessWidget {
                 child: Text('Not marked as read',
                     style: TextStyle(color: HuntrColors.muted, fontSize: 13)),
               ),
+              if (onPin case final pin?)
+                TextButton.icon(
+                  key: const Key('chatPeekPin'),
+                  onPressed: () {
+                    Navigator.of(context).pop(false);
+                    pin();
+                  },
+                  icon: Icon(
+                      conversation.pinned
+                          ? Icons.push_pin_outlined
+                          : Icons.push_pin_rounded,
+                      size: 18),
+                  label: Text(conversation.pinned ? 'Unpin' : 'Pin'),
+                ),
               TextButton(
                 key: const Key('chatPeekOpen'),
                 onPressed: () => Navigator.of(context).pop(true),
@@ -620,6 +686,15 @@ class _ConversationRow extends StatelessWidget {
                         ]),
                       ),
                       const SizedBox(width: 8),
+                      if (c.pinned)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 4),
+                          // in the theme's accent
+                          child: Icon(Icons.push_pin_rounded,
+                              key: Key('pinned-${c.id}'),
+                              size: 19,
+                              color: HuntrColors.orange),
+                        ),
                       if (last != null)
                         Text(timeLabel(last.sentAt, now),
                             style: text.labelSmall?.copyWith(
@@ -694,5 +769,27 @@ class _ConversationRow extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// Pins (or unpins) a direct chat, telling how it went; back as it was if
+/// it couldn't be saved.
+Future<void> togglePinned(BuildContext context, MessagingState messaging,
+    int conversationId, bool pinned) async {
+  final messenger = ScaffoldMessenger.of(context);
+  try {
+    await messaging.setPinned(conversationId, pinned);
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+          key: const Key('pinSaved'),
+          content: Text(pinned ? 'Chat pinned' : 'Chat unpinned')));
+  } catch (error) {
+    messenger.showSnackBar(SnackBar(
+        content: Text(error is BackendException
+            ? error.message
+            : pinned
+                ? "The chat couldn't be pinned. Please try again."
+                : "The chat couldn't be unpinned. Please try again.")));
   }
 }

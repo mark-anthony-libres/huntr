@@ -51,6 +51,33 @@ class ProfileService {
         hasPlace: hasPlace,
       );
 
+  /// My private note about someone (null: none).
+  Future<String?> fetchNote(String token, int userId) async => fetchPersonNote(
+      backendUrl: await GoogleOAuthConfig.loadBackendUrl(),
+      token: token,
+      userId: userId);
+
+  /// Saves my note about someone (empty: removed); what's kept.
+  Future<String?> saveNote(String token, int userId, String body) async =>
+      savePersonNote(
+          backendUrl: await GoogleOAuthConfig.loadBackendUrl(),
+          token: token,
+          userId: userId,
+          body: body);
+
+  /// Whom I starred (user ids), kept on the account.
+  Future<List<int>> fetchFavorites(String token) async => fetchMyFavorites(
+      backendUrl: await GoogleOAuthConfig.loadBackendUrl(), token: token);
+
+  /// Stars someone, or unstars them.
+  Future<void> setFavorite(String token, int userId,
+          {required bool favorite}) async =>
+      setMyFavorite(
+          backendUrl: await GoogleOAuthConfig.loadBackendUrl(),
+          token: token,
+          userId: userId,
+          favorite: favorite);
+
   /// Saves whichever privacy settings are given.
   Future<PrivacySettings> updatePrivacy(String token,
           {bool? showOnline,

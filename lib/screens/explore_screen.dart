@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../models/models.dart';
@@ -37,7 +39,16 @@ class _ExploreScreenState extends State<ExploreScreen> {
   bool _mapView = false;
 
   /// The order the list was loaded in; another one (Filters) loads it again.
-  ExploreSort? _loadedSort;
+  /// The filters (and order) the list was loaded with, as the backend gets
+  /// them: when they change, the list loads again from the top.
+  String? _loadedFilters;
+
+  /// Typing in search: the list loads once typing pauses.
+  Timer? _typing;
+  static const _typingPause = Duration(milliseconds: 400);
+
+  static String _filtersKey(ExploreFilters f) =>
+      Uri(queryParameters: f.backendQuery).query;
 
   /// A fresh first page of Explore: the stories tray starts over too.
   int _trayGeneration = 0;
@@ -57,17 +68,18 @@ class _ExploreScreenState extends State<ExploreScreen> {
     final token = app.sessionToken;
     final offset = more ? app.nearbyNextOffset : 0;
     if (explore == null || token == null || offset == null || _loading) return;
-    final sort = app.filters.sort;
-    _loadedSort = sort;
+    final filters = app.filters;
+    final key = _filtersKey(filters);
+    _loadedFilters = key;
     setState(() {
       _loading = true;
       _loadError = null;
     });
     try {
-      final page = await explore.fetchNearby(token,
-          offset: offset, newest: sort == ExploreSort.newest);
-      // the order changed while this page was on its way: it's not wanted
-      if (sort != app.filters.sort) return;
+      final page =
+          await explore.fetchNearby(token, offset: offset, filters: filters);
+      // the filters changed while this page was on its way: it's not wanted
+      if (key != _filtersKey(app.filters)) return;
       app.setNearby(page.people, nextOffset: page.nextOffset, append: more);
       if (!more && mounted) setState(() => _trayGeneration++);
     } on SessionRejectedException {
@@ -80,8 +92,8 @@ class _ExploreScreenState extends State<ExploreScreen> {
       }
     } finally {
       if (mounted) setState(() => _loading = false);
-      // the order changed while loading: now the list in the new order
-      if (mounted && sort != app.filters.sort) _loadNearby();
+      // the filters changed while loading: now the list with the new ones
+      if (mounted && key != _filtersKey(app.filters)) _loadNearby();
     }
   }
 
@@ -93,6 +105,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
 
   @override
   void dispose() {
+    _typing?.cancel();
     _search.dispose();
     super.dispose();
   }
@@ -133,10 +146,15 @@ class _ExploreScreenState extends State<ExploreScreen> {
   Widget build(BuildContext context) {
     final app = AppScope.of(context);
     final f = app.filters;
-    // a new order from Filters: the list again from the top, in that order
-    if (_started && _loadedSort != null && f.sort != _loadedSort) {
-      _loadedSort = f.sort;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
+    // new filters (or order): the list again from the top, from the
+    // backend; for search, once typing pauses
+    final key = _filtersKey(f);
+    if (_started && _loadedFilters != null && key != _loadedFilters) {
+      final typed = Uri.splitQueryString(key)['q'] !=
+          Uri.splitQueryString(_loadedFilters!)['q'];
+      _loadedFilters = key;
+      _typing?.cancel();
+      _typing = Timer(typed ? _typingPause : Duration.zero, () {
         if (mounted) _loadNearby();
       });
     }
@@ -272,6 +290,14 @@ class _ExploreScreenState extends State<ExploreScreen> {
             label: 'Has a place',
             selected: f.hasPlace,
             onSelected: (v) => app.filters = f.copyWith(hasPlace: v),
+          ),
+          const SizedBox(width: 8),
+          PillChip(
+            key: const Key('favoritesChip'),
+            icon: Icons.star_rounded,
+            label: 'Favorites',
+            selected: f.favoritesOnly,
+            onSelected: (v) => app.filters = f.copyWith(favoritesOnly: v),
           ),
           const SizedBox(width: 8),
           LookingForDropdown(

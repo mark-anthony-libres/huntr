@@ -161,12 +161,6 @@ class _TapsScreenState extends State<TapsScreen> {
                               label: Text(label),
                               selected: taps!.byCount == byCount,
                               showCheckmark: false,
-                              selectedColor:
-                                  HuntrColors.orange.withValues(alpha: 0.18),
-                              side: BorderSide(
-                                  color: taps.byCount == byCount
-                                      ? HuntrColors.orange
-                                      : HuntrColors.border),
                               onSelected: (_) => taps.sortByCount(byCount),
                             ),
                           ),

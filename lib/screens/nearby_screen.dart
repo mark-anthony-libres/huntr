@@ -337,12 +337,6 @@ class _NearbyScreenState extends State<NearbyScreen> {
                           label: Text(label),
                           selected: _latest == latest,
                           showCheckmark: false,
-                          selectedColor:
-                              HuntrColors.orange.withValues(alpha: 0.18),
-                          side: BorderSide(
-                              color: _latest == latest
-                                  ? HuntrColors.orange
-                                  : HuntrColors.border),
                           onSelected: (_) => _sort(latest),
                         ),
                         const SizedBox(width: 8),

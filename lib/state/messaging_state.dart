@@ -864,8 +864,8 @@ class MessagingState extends ChangeNotifier {
   /// our direct chat (which then shows in Chats). Throws what the backend
   /// says (a block, the photo gone).
   Future<void> replyToPhoto(int photoId, String body) async {
-    final sent = await _call((t) => service.replyToPhoto(t, photoId,
-        body: body, clientId: newClientId()));
+    final sent = await _call((t) =>
+        service.replyToPhoto(t, photoId, body: body, clientId: newClientId()));
     if (sent != null) unawaited(refresh());
   }
 
@@ -1630,6 +1630,25 @@ class MessagingState extends ChangeNotifier {
       await _call((t) => service.markRead(t, conversationId));
     } catch (error) {
       debugPrint('Marking conversation $conversationId read failed: $error');
+    }
+  }
+
+  /// Pins my direct conversation at the top of my Chats (on every
+  /// device), or unpins it: shown at once, and back as it was if it
+  /// couldn't be saved (then thrown).
+  Future<void> setPinned(int conversationId, bool pinned) async {
+    final current = summary(conversationId);
+    if (current == null || current.pinned == pinned) return;
+    _replaceSummary(current.copyWith(pinned: pinned));
+    if (pinned) _moveToTop(conversationId);
+    notifyListeners();
+    try {
+      await _call((t) => service.setPinned(t, conversationId, pinned: pinned));
+    } catch (_) {
+      final now = summary(conversationId);
+      if (now != null) _replaceSummary(now.copyWith(pinned: !pinned));
+      notifyListeners();
+      rethrow;
     }
   }
 

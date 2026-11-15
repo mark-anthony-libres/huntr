@@ -33,6 +33,9 @@ class AppState extends ChangeNotifier {
   final Duration acceptDelay;
   final List<Profile> _profiles;
   final Set<String> _favorites = {};
+
+  /// My private notes about people (by user id; null: none), as loaded.
+  final Map<int, String?> _notes = {};
   final Set<String> _blocked = {};
   final Map<String, Conversation> _conversations = {};
   final _rnd = Random(3);
@@ -71,6 +74,8 @@ class AppState extends ChangeNotifier {
     nearby = null;
     nearbyNextOffset = null;
     _seenElsewhere.clear();
+    _favorites.clear();
+    _notes.clear();
     myUserId = null;
     myStats = const ProfileStats();
     anonymousMessaging = true;
@@ -544,7 +549,9 @@ class AppState extends ChangeNotifier {
 
   /// Explore shows them (list or map): not blocked, and matching my filters.
   bool showsInExplore(Profile p) =>
-      !_blocked.contains(p.id) && _filters.matches(p);
+      !_blocked.contains(p.id) &&
+      (!_filters.favoritesOnly || _favorites.contains(p.id)) &&
+      _filters.matches(p);
 
   List<Profile> get favoriteProfiles => _profiles
       .where((p) => _favorites.contains(p.id) && !_blocked.contains(p.id))
@@ -562,8 +569,33 @@ class AppState extends ChangeNotifier {
 
   bool isFavorite(String id) => _favorites.contains(id);
 
-  void toggleFavorite(String id) {
-    _favorites.contains(id) ? _favorites.remove(id) : _favorites.add(id);
+  /// Whether my note about them was loaded (or saved) yet.
+  bool noteKnown(int userId) => _notes.containsKey(userId);
+
+  /// My private note about them; null when there's none (or not loaded).
+  String? noteAbout(int userId) => _notes[userId];
+
+  void setNote(int userId, String? note) {
+    final value = note == null || note.trim().isEmpty ? null : note;
+    if (_notes.containsKey(userId) && _notes[userId] == value) return;
+    _notes[userId] = value;
+    notifyListeners();
+  }
+
+  void toggleFavorite(String id) => setFavorite(id, !isFavorite(id));
+
+  void setFavorite(String id, bool favorite) {
+    if (favorite == isFavorite(id)) return;
+    favorite ? _favorites.add(id) : _favorites.remove(id);
+    notifyListeners();
+  }
+
+  /// My favourites as saved on the account (by user id), in place of the
+  /// ones here.
+  void setFavorites(Iterable<int> userIds) {
+    _favorites
+      ..clear()
+      ..addAll([for (final id in userIds) 'user-$id']);
     notifyListeners();
   }
 

@@ -130,6 +130,12 @@ class _SessionGateState extends State<SessionGate> {
       app.setHasPlace(profile.hasPlace);
       app.anonymousMessaging = profile.privacy.anonymousMessaging;
       app.setHideNsfw(profile.privacy.hideNsfw);
+      // my favourites, kept on the account (the rest doesn't wait for them)
+      unawaited(profiles.fetchFavorites(token).then((ids) {
+        if (mounted) app.setFavorites(ids);
+      },
+          onError: (Object error) =>
+              debugPrint('Favorites not loaded: $error')));
       app.anonymousName = profile.anonymousName;
       app.updateNotifications(
           taps: profile.privacy.notifyTaps,

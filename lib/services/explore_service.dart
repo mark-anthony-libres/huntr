@@ -29,13 +29,15 @@ class ExploreService {
           token: token,
           offset: offset);
 
+  /// A page of people nearby, with Explore's [filters] (the order too).
   Future<NearbyPage> fetchNearby(String token,
-          {int offset = 0, bool newest = false}) async =>
+          {int offset = 0,
+          ExploreFilters filters = const ExploreFilters()}) async =>
       backend.fetchNearby(
           backendUrl: await GoogleOAuthConfig.loadBackendUrl(),
           token: token,
           offset: offset,
-          newest: newest);
+          filters: filters);
 
   /// The stickers on someone's profile (or mine), with counts.
   Future<List<StickerCount>> fetchStickers(String token, int userId) async =>

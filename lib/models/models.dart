@@ -427,6 +427,13 @@ class Profile {
   /// isn't known (only chats send it).
   final DateTime? activeUntil;
 
+  /// Online now (Explore's and Chats' filter): connected, or last seen
+  /// within [ExploreFilters.onlineWindow] of [now].
+  bool onlineNowAt(DateTime now) =>
+      online ||
+      (lastActiveKnown &&
+          now.difference(lastActive) <= ExploreFilters.onlineWindow);
+
   /// Active within the window at [now] (still at its very end).
   bool recentlyActiveAt(DateTime now) {
     final until = activeUntil;
@@ -720,6 +727,13 @@ enum ExploreSort {
 }
 
 class ExploreFilters {
+  /// The age slider's ends: its top end means "and older".
+  static const minAge = 18.0;
+  static const maxAge = 60.0;
+
+  /// Online now: connected, or last seen this recently (as on the backend).
+  static const onlineWindow = Duration(minutes: 30);
+
   const ExploreFilters({
     this.sort = ExploreSort.nearest,
     this.onlineOnly = false,
@@ -728,12 +742,17 @@ class ExploreFilters {
     this.lookingFor = const {},
     this.query = '',
     this.hasPlace = false,
+    this.favoritesOnly = false,
   });
 
   final ExploreSort sort;
 
   /// Only people who have a place.
   final bool hasPlace;
+
+  /// Only people I starred (matched by [AppState.showsInExplore], which
+  /// knows them).
+  final bool favoritesOnly;
   final bool onlineOnly;
   final double? maxDistanceKm;
   final RangeValues ageRange;
@@ -744,11 +763,12 @@ class ExploreFilters {
       sort == ExploreSort.nearest &&
       !onlineOnly &&
       maxDistanceKm == null &&
-      ageRange.start <= 18 &&
-      ageRange.end >= 60 &&
+      ageRange.start <= minAge &&
+      ageRange.end >= maxAge &&
       lookingFor.isEmpty &&
       query.isEmpty &&
-      !hasPlace;
+      !hasPlace &&
+      !favoritesOnly;
 
   ExploreFilters copyWith({
     ExploreSort? sort,
@@ -759,6 +779,7 @@ class ExploreFilters {
     Set<LookingFor>? lookingFor,
     String? query,
     bool? hasPlace,
+    bool? favoritesOnly,
   }) {
     return ExploreFilters(
       sort: sort ?? this.sort,
@@ -769,13 +790,30 @@ class ExploreFilters {
       lookingFor: lookingFor ?? this.lookingFor,
       query: query ?? this.query,
       hasPlace: hasPlace ?? this.hasPlace,
+      favoritesOnly: favoritesOnly ?? this.favoritesOnly,
     );
   }
 
-  bool matches(Profile p) {
-    // "Online now": connected right now (the green dot), the same as the
-    // "N online near you" count
-    if (onlineOnly && !p.online) {
+  /// The backend's /explore/nearby parameters for these filters (the
+  /// order too): Explore loads people with them, so every page is filtered.
+  Map<String, Object> get backendQuery => {
+        if (sort == ExploreSort.newest) 'sort': 'newest',
+        if (onlineOnly) 'online': 'true',
+        if (maxDistanceKm case final km?) 'max_km': km.round().toString(),
+        if (ageRange.start > minAge)
+          'min_age': ageRange.start.round().toString(),
+        if (ageRange.end < maxAge) 'max_age': ageRange.end.round().toString(),
+        if (lookingFor.isNotEmpty)
+          'looking_for': [for (final l in lookingFor) l.name]..sort(),
+        if (hasPlace) 'has_place': 'true',
+        if (favoritesOnly) 'favorites': 'true',
+        if (query.trim().isNotEmpty) 'q': query.trim(),
+      };
+
+  bool matches(Profile p, {DateTime? now}) {
+    // "Online now": connected (the green dot), or last seen within
+    // [onlineWindow]
+    if (onlineOnly && !p.onlineNowAt(now ?? DateTime.now())) {
       return false;
     }
     // A hidden distance never counts as near (nor reveals anything).
@@ -783,8 +821,11 @@ class ExploreFilters {
         (p.distanceHidden || p.distanceKm > maxDistanceKm!)) {
       return false;
     }
-    // a hidden age is never filtered on (nor revealed)
-    if (!p.ageHidden && (p.age < ageRange.start || p.age > ageRange.end)) {
+    // a hidden age is never filtered on (nor revealed); the slider's top
+    // end means "and older"
+    if (!p.ageHidden &&
+        (p.age < ageRange.start ||
+            (ageRange.end < maxAge && p.age > ageRange.end))) {
       return false;
     }
     if (lookingFor.isNotEmpty &&
