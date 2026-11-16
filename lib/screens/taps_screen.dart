@@ -67,6 +67,12 @@ class _TapsScreenState extends State<TapsScreen> {
   @override
   Widget build(BuildContext context) {
     final taps = TapScope.of(context);
+    // asked from outside (the bubble beside Taps): the Viewers part
+    if (taps != null && taps.takeViewersRequest()) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _show(viewers: true);
+      });
+    }
     _seeTaps(taps, TabShown.of(context));
     final text = Theme.of(context).textTheme;
     final list = taps?.taps;

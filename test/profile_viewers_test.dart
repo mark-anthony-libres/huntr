@@ -148,7 +148,8 @@ void main() {
     final taps = await _open(tester, service, const TapsScreen());
     taps.handleEvent({'type': 'profile.viewed'});
     await tester.pump();
-    expect(service.viewerLoads, 0, reason: 'not opened yet: nothing to do');
+    // not opened yet: only who it was, for the bubble beside Taps
+    expect(service.viewerLoads, 1);
     await tester.tap(find.byKey(const Key('viewersTab')));
     await tester.pumpAndSettle();
     service.viewers = [_viewer(4, 'Dee', 1, Duration.zero)];

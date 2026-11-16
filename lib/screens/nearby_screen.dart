@@ -10,6 +10,8 @@ import '../theme.dart';
 import '../widgets/load_more_row.dart';
 import '../widgets/me/section_states.dart';
 import '../widgets/nearby/nearby_post_card.dart';
+import '../widgets/anonymous_avatar.dart';
+import 'anonymous_profile_screen.dart' show MyAnonymousProfileScreen;
 import 'nearby_compose_screen.dart';
 import 'nearby_post_screen.dart';
 
@@ -443,23 +445,83 @@ class ThreadsTab extends StatelessWidget {
         child:
             Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
-            child:
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              ShaderMask(
-                shaderCallback: HuntrColors.accentGradient.createShader,
-                child: Text('Threads',
-                    style: text.headlineMedium?.copyWith(
-                        fontWeight: FontWeight.w800, color: Colors.white)),
+            padding: const EdgeInsets.fromLTRB(20, 12, 16, 0),
+            child: Row(children: [
+              Expanded(
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ShaderMask(
+                        shaderCallback: HuntrColors.accentGradient.createShader,
+                        child: Text('Threads',
+                            style: text.headlineMedium?.copyWith(
+                                fontWeight: FontWeight.w800,
+                                color: Colors.white)),
+                      ),
+                      const SizedBox(height: 2),
+                      const Text('Anonymous posts from people around you',
+                          style: TextStyle(color: HuntrColors.muted)),
+                    ]),
               ),
-              const SizedBox(height: 2),
-              const Text('Anonymous posts from people around you',
-                  style: TextStyle(color: HuntrColors.muted)),
+              // notifications: not working yet, only its place
+              IconButton(
+                key: const Key('threadsNotifications'),
+                tooltip: 'Notifications',
+                onPressed: () {},
+                icon: const Icon(Icons.notifications_none_rounded, size: 28),
+              ),
+              Container(
+                  width: 1,
+                  height: 28,
+                  margin: const EdgeInsets.symmetric(horizontal: 8),
+                  color: HuntrColors.border),
+              const _MyAnonymousButton(),
             ]),
           ),
           const SizedBox(height: 6),
           const Expanded(child: NearbyScreen()),
         ]),
+      ),
+    );
+  }
+}
+
+/// Me in Threads: my anonymous animal (never my photo); tapped, my
+/// anonymous profile.
+class _MyAnonymousButton extends StatelessWidget {
+  const _MyAnonymousButton();
+
+  @override
+  Widget build(BuildContext context) {
+    final mine = AppScope.of(context).anonymousName;
+    return Tooltip(
+      message: mine == null ? 'My anonymous profile' : mine.name,
+      child: InkWell(
+        key: const Key('threadsMyAnonymous'),
+        customBorder: const CircleBorder(),
+        onTap: () => Navigator.of(context).push(MaterialPageRoute(
+            builder: (_) => const MyAnonymousProfileScreen())),
+        child: SizedBox(
+          width: 46,
+          height: 46,
+          child: Stack(clipBehavior: Clip.none, children: [
+            AnonymousArt(animal: mine?.avatar ?? 'fox', radius: 23, size: 46),
+            // I'm here (online)
+            Positioned(
+              right: -1,
+              bottom: -1,
+              child: Container(
+                width: 13,
+                height: 13,
+                decoration: BoxDecoration(
+                  color: HuntrColors.online,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: HuntrColors.night, width: 2),
+                ),
+              ),
+            ),
+          ]),
+        ),
       ),
     );
   }

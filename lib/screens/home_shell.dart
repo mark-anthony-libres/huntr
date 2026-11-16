@@ -16,6 +16,7 @@ import 'explore_screen.dart';
 import 'me_screen.dart';
 import 'nearby_screen.dart';
 import 'taps_screen.dart';
+import '../widgets/activity_bubble.dart';
 import '../widgets/huntr_bottom_bar.dart';
 import '../widgets/page_title.dart';
 
@@ -225,7 +226,81 @@ class _HomeShellState extends State<HomeShell> {
       ..onConnected = null
       ..stop(); // signed out (this screen only exists while signed in)
     _events?.cancel();
+    _bubbleTimer?.cancel();
     super.dispose();
+  }
+
+  // ---- the bubble beside Taps: who just tapped me or viewed me ----
+
+  final _tapsAnchor = LayerLink();
+  final _bubble = OverlayPortalController();
+  TapActivity? _bubbleActivity;
+  bool _bubbleVisible = false;
+  int _lastActivity = 0;
+  Timer? _bubbleTimer;
+
+  /// How long it stays.
+  static const _bubbleFor = Duration(seconds: 4);
+
+  /// A new tap or view: shown beside Taps for a moment (not while Taps is
+  /// open; the newest replaces the one before).
+  void _showActivity(TapActivity? activity) {
+    if (activity == null || activity.serial <= _lastActivity) return;
+    _lastActivity = activity.serial;
+    if (_tab == _tapsTab) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(() {
+        _bubbleActivity = activity;
+        _bubbleVisible = true;
+      });
+      _bubble.show();
+      _bubbleTimer?.cancel();
+      _bubbleTimer = Timer(_bubbleFor, _hideActivity);
+    });
+  }
+
+  void _hideActivity() {
+    _bubbleTimer?.cancel();
+    if (!mounted || !_bubble.isShowing) return;
+    setState(() => _bubbleVisible = false);
+    // gone once it has faded
+    _bubbleTimer = Timer(const Duration(milliseconds: 260), () {
+      if (mounted && !_bubbleVisible) _bubble.hide();
+    });
+  }
+
+  /// The bubble, tapped: Taps (its Viewers for a view).
+  void _openActivity() {
+    final activity = _bubbleActivity;
+    _hideActivity();
+    if (activity == null) return;
+    if (activity.viewed) TapScope.read(context)?.openViewers();
+    _showTab(_tapsTab);
+  }
+
+  /// The bubble beside the Taps button: to its right in the sidebar, above
+  /// it on the bottom bar.
+  Widget _activityBubble(BuildContext context, {required bool side}) {
+    final activity = _bubbleActivity;
+    if (activity == null) return const SizedBox.shrink();
+    return Positioned(
+      left: 0,
+      top: 0,
+      child: CompositedTransformFollower(
+        link: _tapsAnchor,
+        showWhenUnlinked: false,
+        targetAnchor: side ? Alignment.centerRight : Alignment.topCenter,
+        followerAnchor: side ? Alignment.centerLeft : Alignment.bottomCenter,
+        offset: side ? const Offset(22, 0) : const Offset(0, -10),
+        // smaller on a phone's bottom bar
+        child: ActivityBubble(
+            activity: activity,
+            visible: _bubbleVisible,
+            onTap: _openActivity,
+            small: !side),
+      ),
+    );
   }
 
   @override
@@ -233,6 +308,7 @@ class _HomeShellState extends State<HomeShell> {
     final messaging = MessagingScope.of(context);
     final unread = messaging?.unreadTotal ?? AppScope.of(context).chatsBadge;
     final taps = TapScope.of(context);
+    _showActivity(taps?.latestActivity);
     final tabs = IndexedStack(
       index: _tab,
       children: [
@@ -263,7 +339,8 @@ class _HomeShellState extends State<HomeShell> {
           selectedIcon: Icons.waving_hand_rounded,
           label: 'Taps',
           // unread taps and new viewers, both under Taps
-          badge: (taps?.unreadCount ?? 0) + (taps?.newViewers ?? 0)),
+          badge: (taps?.unreadCount ?? 0) + (taps?.newViewers ?? 0),
+          anchor: _tapsAnchor),
       HuntrBottomBarItem(
           icon: Icons.chat_bubble_outline,
           selectedIcon: Icons.chat_bubble_rounded,
@@ -276,18 +353,25 @@ class _HomeShellState extends State<HomeShell> {
     ];
     // the website on a wide screen (a computer, a tablet): the tabs down the
     // left; the app, and the website on a phone: along the bottom
-    if (kIsWeb && MediaQuery.sizeOf(context).width >= huntrSideBarMinWidth) {
-      return Scaffold(
-        body: Row(children: [
-          HuntrSideBar(items: items, selectedIndex: _tab, onSelected: _showTab),
-          Expanded(child: tabs),
-        ]),
-      );
-    }
-    return Scaffold(
-      body: tabs,
-      bottomNavigationBar: HuntrBottomBar(
-          items: items, selectedIndex: _tab, onSelected: _showTab),
+    final side =
+        kIsWeb && MediaQuery.sizeOf(context).width >= huntrSideBarMinWidth;
+    final Widget page = side
+        ? Scaffold(
+            body: Row(children: [
+              HuntrSideBar(
+                  items: items, selectedIndex: _tab, onSelected: _showTab),
+              Expanded(child: tabs),
+            ]),
+          )
+        : Scaffold(
+            body: tabs,
+            bottomNavigationBar: HuntrBottomBar(
+                items: items, selectedIndex: _tab, onSelected: _showTab),
+          );
+    return OverlayPortal(
+      controller: _bubble,
+      overlayChildBuilder: (context) => _activityBubble(context, side: side),
+      child: page,
     );
   }
 }

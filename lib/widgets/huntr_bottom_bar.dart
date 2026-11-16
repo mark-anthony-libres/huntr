@@ -7,8 +7,13 @@ class HuntrBottomBarItem {
       {required this.icon,
       required this.label,
       this.selectedIcon,
-      this.badge = 0});
+      this.badge = 0,
+      this.anchor});
   final IconData icon;
+
+  /// Where something can be shown beside this tab's icon (e.g. the bubble
+  /// beside Taps).
+  final LayerLink? anchor;
 
   /// Shown while it's the selected tab (a filled version), when given.
   final IconData? selectedIcon;
@@ -97,13 +102,16 @@ class _BarItem extends StatelessWidget {
                 borderRadius: BorderRadius.circular(13),
               ),
               alignment: Alignment.center,
-              child: Badge(
-                isLabelVisible: item.badge > 0,
-                label: Text('${item.badge}'),
-                child: Icon(
-                    selected ? item.selectedIcon ?? item.icon : item.icon,
-                    color: color,
-                    size: 21),
+              child: _anchored(
+                item.anchor,
+                Badge(
+                  isLabelVisible: item.badge > 0,
+                  label: Text('${item.badge}'),
+                  child: Icon(
+                      selected ? item.selectedIcon ?? item.icon : item.icon,
+                      color: color,
+                      size: 21),
+                ),
               ),
             ),
             const SizedBox(height: 3),
@@ -208,11 +216,14 @@ class _SideItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = selected ? HuntrColors.orange : HuntrColors.muted;
-    final icon = Badge(
-      isLabelVisible: item.badge > 0,
-      label: Text('${item.badge}'),
-      child: Icon(selected ? item.selectedIcon ?? item.icon : item.icon,
-          color: color, size: 24),
+    final icon = _anchored(
+      item.anchor,
+      Badge(
+        isLabelVisible: item.badge > 0,
+        label: Text('${item.badge}'),
+        child: Icon(selected ? item.selectedIcon ?? item.icon : item.icon,
+            color: color, size: 24),
+      ),
     );
     final label = Text(
       item.label,
@@ -254,3 +265,8 @@ class _SideItem extends StatelessWidget {
     );
   }
 }
+
+/// [child], marked as where [anchor]'s followers attach (when there's one).
+Widget _anchored(LayerLink? anchor, Widget child) => anchor == null
+    ? child
+    : CompositedTransformTarget(link: anchor, child: child);

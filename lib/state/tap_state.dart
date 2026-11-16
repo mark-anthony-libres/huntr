@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/widgets.dart';
 
+import '../models/models.dart';
 import '../services/huntr_backend.dart';
 import '../services/tap_service.dart';
 
@@ -14,6 +15,21 @@ import '../services/tap_service.dart';
 /// And the Viewers tab: who viewed my profile in the last 24 hours, loaded
 /// when it's opened, again when someone views it (`profile.viewed`) or a
 /// block or unmatch changes; and recording my own visits to profiles.
+/// Someone just tapped me, or viewed my profile: shown for a moment beside
+/// the Taps button. [person] is null when who it was isn't known (then a
+/// blank portrait).
+class TapActivity {
+  const TapActivity(
+      {required this.serial, required this.viewed, required this.person});
+
+  /// Each new one has a bigger number (to tell it from the last).
+  final int serial;
+
+  /// A profile view (false: a tap).
+  final bool viewed;
+  final Profile? person;
+}
+
 class TapState extends ChangeNotifier {
   TapState(
       {required this.service, required this.token, this.onSessionRejected});
@@ -54,6 +70,70 @@ class TapState extends ChangeNotifier {
 
   /// Taps I haven't opened yet (the Taps tab's badge).
   int get unreadCount => _taps?.where((t) => !t.isRead).length ?? 0;
+
+  // ---- what just happened, for the bubble beside Taps ----
+
+  TapActivity? _activity;
+  int _activitySerial = 0;
+
+  /// The latest tap or view that came in live (null: none yet).
+  TapActivity? get latestActivity => _activity;
+
+  void _announce({required bool viewed, Profile? person}) {
+    _activity =
+        TapActivity(serial: ++_activitySerial, viewed: viewed, person: person);
+    notifyListeners();
+  }
+
+  /// Who just tapped me: the new tap in the reloaded inbox.
+  Future<void> _tapArrived(Object? tapId) async {
+    await refresh();
+    Profile? sender;
+    for (final t in _taps ?? const <ReceivedTap>[]) {
+      if (t.id == tapId) sender = t.sender;
+    }
+    _announce(viewed: false, person: sender);
+  }
+
+  /// Who just viewed me: the latest of my viewers, if that visit is just
+  /// now (otherwise it isn't known who: a blank portrait).
+  Future<void> _viewArrived() async {
+    final current = token();
+    if (current == null) return;
+    Profile? viewer;
+    try {
+      // the opened list was just loaded again; otherwise the first page
+      final latest = _viewers != null
+          ? (await refreshViewers().then((_) => _viewers))?.firstOrNull
+          : (await service.fetchViewers(current)).viewers.firstOrNull;
+      if (latest != null &&
+          DateTime.now().difference(latest.lastViewedAt).abs() <
+              const Duration(minutes: 2)) {
+        viewer = latest.person;
+      }
+    } on SessionRejectedException {
+      onSessionRejected?.call();
+      return;
+    } catch (error) {
+      debugPrint('Latest viewer not loaded: $error');
+    }
+    _announce(viewed: true, person: viewer);
+  }
+
+  /// Asked to open the Viewers part of Taps (e.g. from the bubble); taken
+  /// once by the Taps screen.
+  bool _viewersWanted = false;
+
+  void openViewers() {
+    _viewersWanted = true;
+    notifyListeners();
+  }
+
+  bool takeViewersRequest() {
+    final wanted = _viewersWanted;
+    _viewersWanted = false;
+    return wanted;
+  }
 
   // ---- my profile's viewers ----
 
@@ -180,7 +260,10 @@ class TapState extends ChangeNotifier {
   /// A live event: refreshes the inbox when it concerns taps.
   void handleEvent(Map<String, dynamic> event) {
     switch (event['type']) {
-      case 'tap.new' || 'taps.changed':
+      // a new tap: the inbox, and who it was beside Taps
+      case 'tap.new':
+        unawaited(_tapArrived(event['tap_id']));
+      case 'taps.changed':
         unawaited(refresh());
       case 'block.changed' || 'unmatch.changed':
         unawaited(refresh());
@@ -189,7 +272,8 @@ class TapState extends ChangeNotifier {
       // opened
       case 'profile.viewed':
         unawaited(refreshNewViewers());
-        if (_viewers != null) unawaited(refreshViewers());
+        // (and the list, when it's been opened)
+        unawaited(_viewArrived());
     }
   }
 
@@ -236,6 +320,8 @@ class TapState extends ChangeNotifier {
   }
 
   void clear() {
+    _activity = null;
+    _viewersWanted = false;
     _taps = null;
     _error = null;
     _viewers = null;
