@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 
@@ -46,8 +48,7 @@ Future<GeoPoint> locateDevice() async {
 /// answer), and the error says why it failed.
 Future<GeoPoint> _locateInBrowser() async {
   try {
-    return _point(
-        await Geolocator.getCurrentPosition(locationSettings: _quickFix));
+    return _point(await browserPosition());
   } on PermissionDeniedException {
     throw LocationException(
         'Your browser didn’t give your location. ${computerLocationHelp()}');
@@ -101,14 +102,15 @@ Future<GeoPoint?> locateDevicePrecisely() async {
       return null;
     }
     return _point(await Geolocator.getCurrentPosition(
-        locationSettings: kIsWeb
-            ? WebSettings(
-                accuracy: LocationAccuracy.high,
-                maximumAge: const Duration(minutes: 1),
-                timeLimit: const Duration(seconds: 20))
-            : const LocationSettings(
-                accuracy: LocationAccuracy.high,
-                timeLimit: Duration(seconds: 20))));
+            locationSettings: kIsWeb
+                // (no timeLimit on the web: see [webLocationSettings])
+                ? WebSettings(
+                    accuracy: LocationAccuracy.high,
+                    maximumAge: const Duration(minutes: 1))
+                : const LocationSettings(
+                    accuracy: LocationAccuracy.high,
+                    timeLimit: Duration(seconds: 20)))
+        .timeout(const Duration(seconds: 25)));
   } catch (_) {
     return null;
   }
@@ -118,23 +120,33 @@ Future<GeoPoint?> locateDevicePrecisely() async {
 const _maxPositionAge = Duration(minutes: 10);
 
 /// "Nearby" needs roughly the right neighbourhood, not GPS precision, so ask
-/// for a coarse fix: it comes back much faster, especially on computers,
-/// which estimate location from Wi-Fi or IP instead of GPS.
-final LocationSettings _quickFix = kIsWeb
-    ? webLocationSettings
-    : LocationSettings(
-        accuracy: LocationAccuracy.low,
-        timeLimit: Duration(seconds: 12),
-      );
+/// for a coarse fix: it comes back much faster (a phone's; a browser's is
+/// [webLocationSettings]).
+const LocationSettings _quickFix = LocationSettings(
+  accuracy: LocationAccuracy.low,
+  timeLimit: Duration(seconds: 12),
+);
 
-/// A browser's quick, rough position.
+/// A browser's quick, rough position. No time limit here: the web plugin
+/// passes it in microseconds where the browser expects milliseconds (20 s
+/// became 5.5 hours); [browserPosition] gives up in time instead.
 final webLocationSettings = WebSettings(
   accuracy: LocationAccuracy.low,
   // Lets the browser answer at once with a position it already has.
   maximumAge: _maxPositionAge,
-  // the first time includes the user answering the browser's question
-  timeLimit: const Duration(seconds: 20),
 );
+
+/// How long a browser gets to give a position, the first time including the
+/// user answering its question. Without it a request the browser never
+/// answers (a question left open or closed without an answer, a position
+/// that never comes) would wait for ever.
+const browserPositionWait = Duration(seconds: 30);
+
+/// The browser's quick, rough position (asking for it is what asks for the
+/// permission); a [TimeoutException] after [browserPositionWait].
+Future<Position> browserPosition() =>
+    Geolocator.getCurrentPosition(locationSettings: webLocationSettings)
+        .timeout(browserPositionWait);
 
 /// The phone's last known position, if recent. Not available on web, where
 /// the browser's own cache ([WebSettings.maximumAge]) does the same job.

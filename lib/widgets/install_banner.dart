@@ -3,16 +3,16 @@ import 'package:flutter/material.dart';
 import '../services/app_install/app_install.dart';
 import '../theme.dart';
 
-/// "Get the HUNTR app" at the top of Explore on the website: one tap to
+/// "Get the HUNTR app" over Explore on the website, once a visit: one tap to
 /// install the site where the browser allows it (Android phones included:
-/// the Android app's download isn't offered here), or the two steps on an
+/// the Android app's download isn't offered here), or the steps on an
 /// iPhone. Not shown in the apps, once installed, or for 14 days after "Not
-/// now".
-class InstallBanner extends StatefulWidget {
-  const InstallBanner({super.key});
+/// now". Takes no room itself.
+class InstallInvite extends StatefulWidget {
+  const InstallInvite({super.key});
 
   @override
-  State<InstallBanner> createState() => _InstallBannerState();
+  State<InstallInvite> createState() => _InstallInviteState();
 }
 
 /// The website can be installed as an app here (and isn't yet): with the
@@ -83,119 +83,134 @@ class _InstallWebsiteButtonState extends State<InstallWebsiteButton> {
   }
 }
 
-class _InstallBannerState extends State<InstallBanner> {
-  bool _dismissed = AppInstall.dismissedRecently;
+class _InstallInviteState extends State<InstallInvite> {
+  /// Asked already this visit (Explore can be opened again).
+  static bool _asked = false;
 
   @override
   void initState() {
     super.initState();
-    // the browser may offer installing (or finish it) a moment later
+    // the browser may offer installing a moment later
     AppInstall.onChange(() {
-      if (mounted) setState(() {});
+      if (mounted) _maybeAsk();
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _maybeAsk();
     });
   }
 
-  bool get _visible => !_dismissed && canInstallWebsite;
-
-  void _notNow() {
-    AppInstall.dismiss();
-    setState(() => _dismissed = true);
-  }
-
-  Future<void> _install() async {
-    final installed = await installWebsite(context);
-    if (mounted) setState(() => _dismissed = installed || _dismissed);
+  void _maybeAsk() {
+    if (_asked || AppInstall.dismissedRecently || !canInstallWebsite) return;
+    // only over Explore itself, not over a screen opened on top
+    if (ModalRoute.of(context)?.isCurrent == false) return;
+    _asked = true;
+    showDialog<void>(
+      context: context,
+      builder: (_) => const _InstallDialog(),
+    ).then((_) {
+      // closed without installing (Not now, outside, back): not again soon
+      if (!AppInstall.isInstalled) AppInstall.dismiss();
+    });
   }
 
   @override
+  Widget build(BuildContext context) => const SizedBox.shrink();
+}
+
+/// The invitation: the logo, why, and Install (the browser's dialog) or, on
+/// an iPhone, the steps right there.
+class _InstallDialog extends StatelessWidget {
+  const _InstallDialog();
+
+  @override
   Widget build(BuildContext context) {
-    if (!_visible) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-      child: Container(
-        key: const Key('installBanner'),
-        padding: const EdgeInsets.fromLTRB(14, 12, 6, 12),
-        decoration: BoxDecoration(
-          gradient: HuntrColors.glowGradient,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: HuntrColors.orange.withValues(alpha: 0.6)),
-        ),
-        // phones: the button on its own row under the text (beside it,
-        // the text gets squeezed); wider screens: all on one row
-        child: LayoutBuilder(builder: (context, box) {
-          final narrow = box.maxWidth < 520;
-          final logo = ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: Image.asset('assets/huntr_logo.png',
-                width: 44,
-                height: 44,
-                errorBuilder: (_, __, ___) => const SizedBox(
-                    width: 44,
-                    height: 44,
-                    child: Icon(Icons.download_rounded))),
-          );
-          final text = Expanded(
-            child: Padding(
-              padding: EdgeInsets.only(top: narrow ? 4 : 0),
-              child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Get the HUNTR app',
-                        style: TextStyle(
-                            fontWeight: FontWeight.w800, fontSize: 15)),
-                    const SizedBox(height: 2),
-                    const Text(
-                        'Full screen, quicker to open, right on your home screen.',
-                        style: TextStyle(
-                            color: Colors.white70,
-                            fontSize: 12.5,
-                            height: 1.35)),
-                  ]),
-            ),
-          );
-          final button = FilledButton.icon(
-            key: const Key('installApp'),
-            style: FilledButton.styleFrom(
-              backgroundColor: Colors.white,
-              foregroundColor: Colors.black,
-              minimumSize: const Size(0, 40),
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-            ),
-            onPressed: _install,
-            icon: const Icon(Icons.download_rounded, size: 18),
-            label: Text(AppInstall.canPrompt ? 'Install' : 'How?'),
-          );
-          final close = IconButton(
-            key: const Key('installNotNow'),
-            tooltip: 'Not now',
-            visualDensity: VisualDensity.compact,
-            icon: const Icon(Icons.close_rounded, color: Colors.white70),
-            onPressed: _notNow,
-          );
-          if (!narrow) {
-            return Row(children: [
-              logo,
-              const SizedBox(width: 12),
-              text,
-              const SizedBox(width: 8),
-              button,
-              close,
-            ]);
-          }
-          return Column(
+    final steps = !AppInstall.canPrompt;
+    return Dialog(
+      key: const Key('installInvite'),
+      backgroundColor: HuntrColors.surface,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(24),
+        side: BorderSide(color: HuntrColors.orange.withValues(alpha: 0.5)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 400),
+        child: SingleChildScrollView(
+          child: Column(
+              mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  logo,
-                  const SizedBox(width: 12),
-                  text,
-                  close,
-                ]),
-                const SizedBox(height: 10),
+                // the top: the theme's glow behind the logo
+                Container(
+                  padding: const EdgeInsets.fromLTRB(24, 28, 24, 22),
+                  decoration: BoxDecoration(gradient: HuntrColors.glowGradient),
+                  child: Column(children: [
+                    // whole, at its own shape (wider than tall; its
+                    // artwork reaches the edges, so no rounded clip)
+                    Image.asset('assets/huntr_logo.png',
+                        key: const Key('installLogo'),
+                        height: 64,
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, __, ___) => const SizedBox(
+                            height: 64,
+                            child: Icon(Icons.download_rounded, size: 36))),
+                    const SizedBox(height: 16),
+                    const Text('Get the HUNTR app',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                            fontWeight: FontWeight.w800, fontSize: 22)),
+                    const SizedBox(height: 6),
+                    const Text(
+                        'Full screen, quicker to open, right on your home '
+                        'screen.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                            color: Colors.white70, fontSize: 14, height: 1.4)),
+                  ]),
+                ),
                 Padding(
-                    padding: const EdgeInsets.only(right: 8), child: button),
-              ]);
-        }),
+                  padding: const EdgeInsets.fromLTRB(24, 20, 24, 12),
+                  child: steps
+                      ? const _IosStepList()
+                      : FilledButton.icon(
+                          key: const Key('installApp'),
+                          style: FilledButton.styleFrom(
+                              minimumSize: const Size.fromHeight(52)),
+                          onPressed: () async {
+                            final navigator = Navigator.of(context);
+                            await AppInstall.prompt();
+                            navigator.pop();
+                          },
+                          icon: const Icon(Icons.download_rounded),
+                          label: const Text('Install'),
+                        ),
+                ),
+                Padding(
+                  padding: EdgeInsets.fromLTRB(
+                      24, steps ? 8 : 0, 24, steps ? 24 : 16),
+                  // the iPhone's only button: full and in the accent;
+                  // otherwise a quiet Not now under Install
+                  child: steps
+                      ? FilledButton.icon(
+                          key: const Key('installNotNow'),
+                          style: FilledButton.styleFrom(
+                              minimumSize: const Size.fromHeight(52)),
+                          onPressed: () => Navigator.of(context).pop(),
+                          icon: const Icon(Icons.check_rounded),
+                          label: const Text('Got it'),
+                        )
+                      : TextButton(
+                          key: const Key('installNotNow'),
+                          style: TextButton.styleFrom(
+                              foregroundColor: HuntrColors.muted,
+                              minimumSize: const Size.fromHeight(44)),
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: const Text('Not now'),
+                        ),
+                ),
+              ]),
+        ),
       ),
     );
   }
@@ -217,30 +232,43 @@ class _IosSteps extends StatelessWidget {
                     style:
                         TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
                 SizedBox(height: 16),
-                // newer Safari keeps Share under ⋯ (older ones show it in
-                // the bar)
-                _Step(
-                    number: 1,
-                    icon: Icons.more_horiz_rounded,
-                    text: 'Tap ⋯ at the bottom right, then Share. (Older '
-                        'iPhones: tap Share in the browser bar.)'),
-                SizedBox(height: 12),
-                _Step(
-                    number: 2,
-                    icon: Icons.add_box_outlined,
-                    text: 'Choose "Add to Home Screen". Not in the list? '
-                        'Tap View More.'),
-                SizedBox(height: 12),
-                _Step(
-                    number: 3,
-                    icon: Icons.check_circle_outline_rounded,
-                    text: 'Keep "Open as Web App" on, then tap Add.'),
-                SizedBox(height: 16),
-                Text('HUNTR then opens full screen, like any app.',
-                    style: TextStyle(color: HuntrColors.muted)),
+                _IosStepList(),
               ]),
         ),
       );
+}
+
+/// Adding it to the Home Screen on an iPhone, step by step.
+class _IosStepList extends StatelessWidget {
+  const _IosStepList();
+
+  @override
+  Widget build(BuildContext context) => const Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // newer Safari keeps Share under ⋯ (older ones show it in
+            // the bar)
+            _Step(
+                number: 1,
+                icon: Icons.more_horiz_rounded,
+                text: 'Tap ⋯ at the bottom right, then Share. (Older '
+                    'iPhones: tap Share in the browser bar.)'),
+            SizedBox(height: 12),
+            _Step(
+                number: 2,
+                icon: Icons.add_box_outlined,
+                text: 'Choose "Add to Home Screen". Not in the list? '
+                    'Tap View More.'),
+            SizedBox(height: 12),
+            _Step(
+                number: 3,
+                icon: Icons.check_circle_outline_rounded,
+                text: 'Keep "Open as Web App" on, then tap Add.'),
+            SizedBox(height: 16),
+            Text('HUNTR then opens full screen, like any app.',
+                style: TextStyle(color: HuntrColors.muted)),
+          ]);
 }
 
 class _Step extends StatelessWidget {

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show lerpDouble;
 
 import 'package:flutter/material.dart';
 
@@ -23,10 +24,10 @@ class NearbyScreen extends StatefulWidget {
   const NearbyScreen({super.key});
 
   @override
-  State<NearbyScreen> createState() => _NearbyScreenState();
+  State<NearbyScreen> createState() => NearbyScreenState();
 }
 
-class _NearbyScreenState extends State<NearbyScreen> {
+class NearbyScreenState extends State<NearbyScreen> {
   bool _latest = false;
 
   /// Only posts within this of me (null: as far as each post reaches).
@@ -172,6 +173,12 @@ class _NearbyScreenState extends State<NearbyScreen> {
       _posts = null;
     });
     unawaited(_load());
+  }
+
+  /// Write a thread (the + beside the filters, or the floating one once the
+  /// feed is scrolled); not while the location is missing.
+  void compose() {
+    if (!_noLocation) _compose();
   }
 
   Future<void> _compose() async {
@@ -433,53 +440,128 @@ class _NearbyScreenState extends State<NearbyScreen> {
 }
 
 /// The Threads tab: its title (like the other tabs'), then [NearbyScreen].
-class ThreadsTab extends StatelessWidget {
+/// Scrolling the feed makes the header smaller: the description hides and
+/// the title, bell and my animal shrink; back at the top it's full again.
+class ThreadsTab extends StatefulWidget {
   const ThreadsTab({super.key});
+
+  @override
+  State<ThreadsTab> createState() => _ThreadsTabState();
+}
+
+class _ThreadsTabState extends State<ThreadsTab> {
+  bool _compact = false;
+  final _feed = GlobalKey<NearbyScreenState>();
+
+  /// Scrolled this far: smaller. Back above [_expandAt]: full again (the
+  /// gap keeps it from flickering at the edge).
+  static const _compactAt = 24.0;
+  static const _expandAt = 8.0;
+
+  bool _scrolled(ScrollNotification n) {
+    // only the feed itself (not a photo carousel inside a post)
+    if (n.depth != 0 || n.metrics.axis != Axis.vertical) return false;
+    final y = n.metrics.pixels;
+    final compact = _compact ? y > _expandAt : y > _compactAt;
+    if (compact != _compact) setState(() => _compact = compact);
+    return false;
+  }
 
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
+    final full = text.headlineMedium?.fontSize ?? 28;
     return Scaffold(
+      // scrolled (the + beside the filters gone by): a floating + to post
+      floatingActionButton: IgnorePointer(
+        ignoring: !_compact,
+        child: AnimatedScale(
+          scale: _compact ? 1 : 0,
+          duration: const Duration(milliseconds: 220),
+          curve: _compact ? Curves.easeOutBack : Curves.easeIn,
+          child: FloatingActionButton(
+            key: const Key('threadsFloatingCompose'),
+            tooltip: 'New thread',
+            shape: const CircleBorder(),
+            backgroundColor: HuntrColors.orange,
+            foregroundColor: Colors.black,
+            // a light lift, no dark ring around it
+            elevation: 2,
+            highlightElevation: 4,
+            onPressed: () => _feed.currentState?.compose(),
+            child: const Icon(Icons.add_rounded, size: 30),
+          ),
+        ),
+      ),
       body: SafeArea(
         bottom: false,
         child:
             Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 12, 16, 0),
-            child: Row(children: [
-              Expanded(
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      ShaderMask(
-                        shaderCallback: HuntrColors.accentGradient.createShader,
-                        child: Text('Threads',
-                            style: text.headlineMedium?.copyWith(
-                                fontWeight: FontWeight.w800,
-                                color: Colors.white)),
-                      ),
-                      const SizedBox(height: 2),
-                      const Text('Anonymous posts from people around you',
-                          style: TextStyle(color: HuntrColors.muted)),
-                    ]),
-              ),
-              // notifications: not working yet, only its place
-              IconButton(
-                key: const Key('threadsNotifications'),
-                tooltip: 'Notifications',
-                onPressed: () {},
-                icon: const Icon(Icons.notifications_none_rounded, size: 28),
-              ),
-              Container(
-                  width: 1,
-                  height: 28,
-                  margin: const EdgeInsets.symmetric(horizontal: 8),
-                  color: HuntrColors.border),
-              const _MyAnonymousButton(),
-            ]),
+          // 0: full size; 1: compact
+          TweenAnimationBuilder<double>(
+            key: const Key('threadsHeader'),
+            tween: Tween(end: _compact ? 1 : 0),
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOut,
+            builder: (context, t, _) => Padding(
+              padding: EdgeInsets.fromLTRB(20, lerpDouble(12, 6, t)!, 16, 0),
+              child: Row(children: [
+                Expanded(
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        ShaderMask(
+                          shaderCallback:
+                              HuntrColors.accentGradient.createShader,
+                          child: Text('Threads',
+                              style: text.headlineMedium?.copyWith(
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: lerpDouble(full, 22, t),
+                                  color: Colors.white)),
+                        ),
+                        // the description folds away
+                        ClipRect(
+                          child: Align(
+                            alignment: Alignment.topLeft,
+                            heightFactor: 1 - t,
+                            child: Opacity(
+                              opacity: 1 - t,
+                              child: const Padding(
+                                padding: EdgeInsets.only(top: 2),
+                                child: Text(
+                                    'Anonymous posts from people around you',
+                                    key: Key('threadsDescription'),
+                                    style: TextStyle(color: HuntrColors.muted)),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ]),
+                ),
+                // notifications: not working yet, only its place
+                IconButton(
+                  key: const Key('threadsNotifications'),
+                  tooltip: 'Notifications',
+                  onPressed: () {},
+                  icon: Icon(Icons.notifications_none_rounded,
+                      size: lerpDouble(28, 22, t)),
+                ),
+                Container(
+                    width: 1,
+                    height: lerpDouble(28, 20, t),
+                    margin: const EdgeInsets.symmetric(horizontal: 8),
+                    color: HuntrColors.border),
+                _MyAnonymousButton(size: lerpDouble(46, 34, t)!),
+              ]),
+            ),
           ),
           const SizedBox(height: 6),
-          const Expanded(child: NearbyScreen()),
+          Expanded(
+            child: NotificationListener<ScrollNotification>(
+              onNotification: _scrolled,
+              child: NearbyScreen(key: _feed),
+            ),
+          ),
         ]),
       ),
     );
@@ -489,7 +571,10 @@ class ThreadsTab extends StatelessWidget {
 /// Me in Threads: my anonymous animal (never my photo); tapped, my
 /// anonymous profile.
 class _MyAnonymousButton extends StatelessWidget {
-  const _MyAnonymousButton();
+  const _MyAnonymousButton({required this.size});
+
+  /// Across (smaller once the feed is scrolled).
+  final double size;
 
   @override
   Widget build(BuildContext context) {
@@ -502,10 +587,11 @@ class _MyAnonymousButton extends StatelessWidget {
         onTap: () => Navigator.of(context).push(MaterialPageRoute(
             builder: (_) => const MyAnonymousProfileScreen())),
         child: SizedBox(
-          width: 46,
-          height: 46,
+          width: size,
+          height: size,
           child: Stack(clipBehavior: Clip.none, children: [
-            AnonymousArt(animal: mine?.avatar ?? 'fox', radius: 23, size: 46),
+            AnonymousArt(
+                animal: mine?.avatar ?? 'fox', radius: size / 2, size: size),
             // I'm here (online)
             Positioned(
               right: -1,

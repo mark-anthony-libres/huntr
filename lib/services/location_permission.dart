@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 
-import 'location_service.dart' show webLocationSettings;
+import 'location_service.dart' show browserPosition;
 
 /// Whether Huntr may use the device location.
 enum LocationAccessStatus {
@@ -42,7 +42,10 @@ abstract class LocationPermissions {
 }
 
 class GeolocatorPermissions implements LocationPermissions {
-  const GeolocatorPermissions();
+  const GeolocatorPermissions({this.web = kIsWeb});
+
+  /// In a browser (tests set it).
+  final bool web;
 
   static LocationAccessStatus _of(LocationPermission permission) =>
       switch (permission) {
@@ -56,9 +59,20 @@ class GeolocatorPermissions implements LocationPermissions {
           LocationAccessStatus.denied,
       };
 
+  /// What the browser or system says. A browser can say blocked while
+  /// location is allowed (Safari, notably, after a reload or on another
+  /// page): there the position decides. A site that really is blocked is
+  /// refused at once, without a question.
   @override
-  Future<LocationAccessStatus> check() async =>
-      _of(await Geolocator.checkPermission());
+  Future<LocationAccessStatus> check() async {
+    final said = _of(await Geolocator.checkPermission());
+    if (!web || said != LocationAccessStatus.blocked) return said;
+    return _tryPosition ??= _positionStatus(confirmBlock: false)
+        .whenComplete(() => _tryPosition = null);
+  }
+
+  /// One position request at a time (rechecks come every few seconds).
+  static Future<LocationAccessStatus>? _tryPosition;
 
   /// On the web, asking is asking for the position. Not through the plugin's
   /// requestPermission: it counts every failure as blocked for good (so the
@@ -66,28 +80,39 @@ class GeolocatorPermissions implements LocationPermissions {
   /// when the browser doesn't answer.
   @override
   Future<LocationAccessStatus> request() async {
-    if (!kIsWeb) return _of(await Geolocator.requestPermission());
+    if (!web) return _of(await Geolocator.requestPermission());
+    return _positionStatus(confirmBlock: true);
+  }
+
+  /// Whether the browser gives a position: granted; refused: blocked for
+  /// this site (when [confirmBlock], only if the browser also says so,
+  /// otherwise the device doesn't let the browser use location); none in
+  /// time: unavailable.
+  static Future<LocationAccessStatus> _positionStatus(
+      {required bool confirmBlock}) async {
     try {
-      await Geolocator.getCurrentPosition(
-          locationSettings: webLocationSettings);
+      await browserPosition();
       return LocationAccessStatus.granted;
     } on PermissionDeniedException {
-      // blocked for this site; otherwise the computer doesn't let the
-      // browser use location
-      final now = await check();
-      return now == LocationAccessStatus.blocked
-          ? LocationAccessStatus.blocked
-          : LocationAccessStatus.unavailable;
+      if (!confirmBlock) return LocationAccessStatus.blocked;
+      try {
+        final said = _of(await Geolocator.checkPermission());
+        return said == LocationAccessStatus.blocked
+            ? LocationAccessStatus.blocked
+            : LocationAccessStatus.unavailable;
+      } catch (_) {
+        return LocationAccessStatus.unavailable;
+      }
     } catch (_) {
       return LocationAccessStatus.unavailable;
     }
   }
 
   @override
-  bool get canOpenSettings => !kIsWeb;
+  bool get canOpenSettings => !web;
 
   @override
-  bool get grantOutlivesPrompt => kIsWeb;
+  bool get grantOutlivesPrompt => web;
 
   @override
   Future<void> openSettings() => Geolocator.openAppSettings();
@@ -120,9 +145,16 @@ class LocationAccess extends ChangeNotifier {
   /// there) instead of a check that never ends. Once known, a failed recheck
   /// keeps what was known.
   Future<void> refresh() async {
-    if (_busy) return;
     try {
       final status = await permissions.check();
+      // asking now (the browser may never answer it): allowed meanwhile, in
+      // the browser's or the device's settings, lets them in all the same
+      if (_busy) {
+        if (status == LocationAccessStatus.granted) {
+          _set(LocationAccessStatus.granted);
+        }
+        return;
+      }
       // the browser may say it's allowed while the computer still gives no
       // location: only Try again (or a block) changes that
       if (_status == LocationAccessStatus.unavailable &&
@@ -152,9 +184,13 @@ class LocationAccess extends ChangeNotifier {
     notifyListeners();
     try {
       final status = await permissions.request();
+      // allowed while it was asking (a recheck saw it): stays allowed
+      if (_status == LocationAccessStatus.granted &&
+          status != LocationAccessStatus.blocked) {
+        return;
+      }
       justDenied = status != LocationAccessStatus.granted;
       _set(status, notify: false);
-      notifyListeners();
     } catch (error) {
       debugPrint('Location permission not requested: $error');
     } finally {

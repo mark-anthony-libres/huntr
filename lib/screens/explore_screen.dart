@@ -409,8 +409,9 @@ class _ExploreScreenState extends State<ExploreScreen> {
                       // ---- header ----
                       SliverToBoxAdapter(child: header),
 
-                      // ---- the website: get the app (nothing in the apps) ----
-                      const SliverToBoxAdapter(child: InstallBanner()),
+                      // ---- the website: get the app, asked in a dialog
+                      // (nothing in the apps) ----
+                      const SliverToBoxAdapter(child: InstallInvite()),
 
                       // ---- stories: Add Story, Your Story, then people nearby ----
                       if (onBackend && !waiting)

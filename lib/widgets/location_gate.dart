@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../services/location_permission.dart';
@@ -140,9 +141,14 @@ class LocationRequiredScreen extends StatelessWidget {
       message = settings
           ? 'Location access is turned off for Huntr. Open Settings, allow '
               'location for Huntr, then come back.'
-          : 'Location access is blocked for this site. Click the icon at the '
-              'left of the address bar, allow location, then click I’ve '
-              'allowed it.';
+          : defaultTargetPlatform == TargetPlatform.iOS
+              // Safari has no icon there: its aA menu has the site's settings
+              ? 'Location access is blocked for this site. Tap aA in the '
+                  'address bar, then Website Settings › Location › Allow, '
+                  'then tap I’ve allowed it.'
+              : 'Location access is blocked for this site. Click the icon at '
+                  'the left of the address bar, allow location, then click '
+                  'I’ve allowed it.';
     } else if (unavailable) {
       message = 'Your browser couldn’t find your location. '
           '${computerLocationHelp()}';
