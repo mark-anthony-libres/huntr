@@ -27,9 +27,6 @@ class ExploreScreen extends StatefulWidget {
 }
 
 class _ExploreScreenState extends State<ExploreScreen> {
-  final _search = TextEditingController();
-  bool _searching = false;
-
   // ---- people nearby, from the backend ----
   bool _started = false;
   bool _loading = false;
@@ -43,9 +40,9 @@ class _ExploreScreenState extends State<ExploreScreen> {
   /// them: when they change, the list loads again from the top.
   String? _loadedFilters;
 
-  /// Typing in search: the list loads once typing pauses.
-  Timer? _typing;
-  static const _typingPause = Duration(milliseconds: 400);
+  /// The list loading again after the filters changed (once, after this
+  /// build).
+  Timer? _reload;
 
   static String _filtersKey(ExploreFilters f) =>
       Uri(queryParameters: f.backendQuery).query;
@@ -105,8 +102,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
 
   @override
   void dispose() {
-    _typing?.cancel();
-    _search.dispose();
+    _reload?.cancel();
     super.dispose();
   }
 
@@ -147,14 +143,12 @@ class _ExploreScreenState extends State<ExploreScreen> {
     final app = AppScope.of(context);
     final f = app.filters;
     // new filters (or order): the list again from the top, from the
-    // backend; for search, once typing pauses
+    // backend
     final key = _filtersKey(f);
     if (_started && _loadedFilters != null && key != _loadedFilters) {
-      final typed = Uri.splitQueryString(key)['q'] !=
-          Uri.splitQueryString(_loadedFilters!)['q'];
       _loadedFilters = key;
-      _typing?.cancel();
-      _typing = Timer(typed ? _typingPause : Duration.zero, () {
+      _reload?.cancel();
+      _reload = Timer(Duration.zero, () {
         if (mounted) _loadNearby();
       });
     }
@@ -189,67 +183,33 @@ class _ExploreScreenState extends State<ExploreScreen> {
 
     final Widget header = Padding(
       padding: const EdgeInsets.fromLTRB(20, 12, 12, 4),
-      child: _searching
-          ? Row(
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: TextField(
-                    key: const Key('exploreSearch'),
-                    controller: _search,
-                    autofocus: true,
-                    textInputAction: TextInputAction.search,
-                    decoration: const InputDecoration(
-                      hintText: 'Search names, bios, interests',
-                      prefixIcon: Icon(Icons.search),
-                    ),
-                    onChanged: (v) => app.filters = f.copyWith(query: v),
-                  ),
-                ),
-                TextButton(
-                  onPressed: () {
-                    _search.clear();
-                    app.filters = app.filters.copyWith(query: '');
-                    setState(() => _searching = false);
-                  },
-                  child: const Text('Cancel'),
-                ),
-              ],
-            )
-          : Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      ShaderMask(
-                        shaderCallback: HuntrColors.accentGradient.createShader,
-                        child: Text('Explore',
-                            style: text.headlineLarge?.copyWith(
-                                fontWeight: FontWeight.w800,
-                                color: Colors.white)),
-                      ),
-                    ],
-                  ),
-                ),
-                IconButton.outlined(
-                  tooltip: 'Search',
-                  style: _roundButton,
-                  icon: const Icon(Icons.search),
-                  onPressed: () => setState(() => _searching = true),
-                ),
-                const SizedBox(width: 6),
-                IconButton.outlined(
-                  tooltip: 'All filters',
-                  style: _roundButton,
-                  icon: Badge(
-                    isLabelVisible: !f.isDefault,
-                    smallSize: 8,
-                    child: const Icon(Icons.tune),
-                  ),
-                  onPressed: () => _showFilters(context),
+                ShaderMask(
+                  shaderCallback: HuntrColors.accentGradient.createShader,
+                  child: Text('Explore',
+                      style: text.headlineLarge?.copyWith(
+                          fontWeight: FontWeight.w800, color: Colors.white)),
                 ),
               ],
             ),
+          ),
+          IconButton.outlined(
+            tooltip: 'All filters',
+            style: _roundButton,
+            icon: Badge(
+              isLabelVisible: !f.isDefault,
+              smallSize: 8,
+              child: const Icon(Icons.tune),
+            ),
+            onPressed: () => _showFilters(context),
+          ),
+        ],
+      ),
     );
     final Widget quickFilters = SizedBox(
       height: 60,
@@ -289,10 +249,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
             ActionChip(
               avatar: const Icon(Icons.close, size: 18),
               label: const Text('Clear'),
-              onPressed: () {
-                _search.clear();
-                app.filters = const ExploreFilters();
-              },
+              onPressed: () => app.filters = const ExploreFilters(),
             ),
         ],
       ),
@@ -475,10 +432,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
                           hasScrollBody: false,
                           child: EmptyExplore(
                             filtered: !f.isDefault,
-                            onClear: () {
-                              _search.clear();
-                              app.filters = const ExploreFilters();
-                            },
+                            onClear: () => app.filters = const ExploreFilters(),
                             onRefresh: onBackend ? _loadNearby : null,
                           ),
                         )
