@@ -228,26 +228,6 @@ class _ExploreScreenState extends State<ExploreScreen> {
                                 fontWeight: FontWeight.w800,
                                 color: Colors.white)),
                       ),
-                      const SizedBox(height: 2),
-                      Row(children: [
-                        Icon(Icons.near_me_rounded,
-                            size: 16, color: HuntrColors.orange),
-                        const SizedBox(width: 6),
-                        Flexible(
-                          child: Text(
-                              // the count not until real
-                              // people are loaded
-                              waiting
-                                  ? 'People near you'
-                                  : app.onlineCount == 1
-                                      ? '1 online near you'
-                                      : '${app.onlineCount} online near you',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: text.bodyMedium
-                                  ?.copyWith(color: HuntrColors.muted)),
-                        ),
-                      ]),
                     ],
                   ),
                 ),
