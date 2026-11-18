@@ -19,7 +19,8 @@ import 'story_upload_avatar.dart';
 /// The stories row at the top of Explore: Add Story, Your Story, then the
 /// people nearby with a story (new ones first, then nearest), loaded a page
 /// at a time as it's scrolled. Tapping someone plays their stories, then the
-/// next person's.
+/// next person's. Not there at all while nobody has a story (mine neither,
+/// nor one posting): stories are added from Me then.
 class StoryTray extends StatefulWidget {
   const StoryTray({super.key, required this.service, required this.explore});
 
@@ -38,6 +39,9 @@ class _StoryTrayState extends State<StoryTray> {
   List<Profile> _people = const [];
   int? _next = 0;
   bool _loadingPeople = false;
+
+  /// The first page of people has been asked for (loaded or not).
+  bool _peopleKnown = false;
 
   /// Stories posted in the background so far ([storyUpload]): one more,
   /// and mine load again.
@@ -94,6 +98,7 @@ class _StoryTrayState extends State<StoryTray> {
       debugPrint('Stories tray not loaded: $error');
     } finally {
       _loadingPeople = false;
+      if (mounted && !_peopleKnown) setState(() => _peopleKnown = true);
     }
   }
 
@@ -108,6 +113,7 @@ class _StoryTrayState extends State<StoryTray> {
       app.endSession();
     } catch (error) {
       debugPrint('My stories not loaded: $error');
+      if (mounted) setState(() => _mine ??= const []);
     }
   }
 
@@ -119,7 +125,9 @@ class _StoryTrayState extends State<StoryTray> {
   void _uploadTapped() {
     if (storyUpload.error == null) return;
     final messenger = ScaffoldMessenger.of(context);
-    storyUpload.retry().then((posted) => announceStoryUpload(messenger, posted));
+    storyUpload
+        .retry()
+        .then((posted) => announceStoryUpload(messenger, posted));
   }
 
   /// The tray in order (mine first, when I have some), from [index]: ‹ and ›
@@ -144,6 +152,11 @@ class _StoryTrayState extends State<StoryTray> {
     final withStories = _people;
     final mine = _mine ?? const <Story>[];
     final posting = storyUpload.active || storyUpload.error != null;
+    // no stories anywhere (or not known yet): no row at all
+    final known = _peopleKnown && _mine != null;
+    if (!posting && (!known || (withStories.isEmpty && mine.isEmpty))) {
+      return const SizedBox.shrink(key: Key('storyTrayHidden'));
+    }
     return SizedBox(
       height: 104,
       child: ListView(
