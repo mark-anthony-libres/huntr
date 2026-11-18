@@ -23,6 +23,10 @@ class TabShown extends InheritedWidget {
   static bool of(BuildContext context) =>
       context.dependOnInheritedWidgetOfExactType<TabShown>()?.shown ?? true;
 
+  /// Shown now, without rebuilding when it changes (e.g. from a timer).
+  static bool isShown(BuildContext context) =>
+      context.getInheritedWidgetOfExactType<TabShown>()?.shown ?? true;
+
   @override
   bool updateShouldNotify(TabShown oldWidget) => shown != oldWidget.shown;
 }

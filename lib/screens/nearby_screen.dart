@@ -11,6 +11,7 @@ import '../theme.dart';
 import '../widgets/load_more_row.dart';
 import '../widgets/me/section_states.dart';
 import '../widgets/nearby/nearby_post_card.dart';
+import '../widgets/new_items_pill.dart';
 import '../widgets/anonymous_avatar.dart';
 import 'anonymous_profile_screen.dart' show MyAnonymousProfileScreen;
 import 'nearby_compose_screen.dart';
@@ -44,16 +45,100 @@ class NearbyScreenState extends State<NearbyScreen> {
   Timer? _recheck;
   static const _recheckEvery = Duration(seconds: 20);
 
+  final _scroll = ScrollController();
+
+  /// Nearby / Latest / Distance and +: the pill sits under them at the top.
+  final _filtersRow = GlobalKey();
+
+  /// Where their row ends in the list, measured once it's laid out.
+  double _filtersBottom = 0;
+
+  void _measureFilters() {
+    final box = _filtersRow.currentContext?.findRenderObject();
+    if (!mounted || box is! RenderBox || !box.hasSize) return;
+    // the list's top padding, then the row
+    final bottom = 12 + box.size.height + 6;
+    if (bottom != _filtersBottom) setState(() => _filtersBottom = bottom);
+  }
+
+  /// Where the pill sits: under the filters while they show, then at the
+  /// top as the list scrolls (like X's under its own bar).
+  double get _pillTop {
+    final scrolled = _scroll.hasClients ? _scroll.offset : 0.0;
+    return (_filtersBottom - scrolled).clamp(8.0, double.infinity);
+  }
+
+  /// Threads posted since the list loaded, not shown yet (the "posted" pill
+  /// at the top; tapped, the list starts over with them).
+  List<NearbyPost> _newer = const [];
+  late final _watch =
+      NewItemsWatch(context: context, every: _newerEvery, check: _checkNewer);
+  static const _newerEvery = Duration(seconds: 45);
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+    _watch.start();
   }
 
   @override
   void dispose() {
     _recheck?.cancel();
+    _watch.stop();
+    _scroll.dispose();
     super.dispose();
+  }
+
+  /// The first page as it is now: threads newer than the newest shown,
+  /// from someone else, wait in [_newer].
+  Future<void> _checkNewer() async {
+    final service = ServicesScope.nearbyOf(context);
+    final token = AppScope.read(context).sessionToken;
+    final posts = _posts;
+    if (service == null || token == null || posts == null || _loading) {
+      return;
+    }
+    final page = await service.feed(token,
+        sort: _latest ? 'latest' : 'nearby', withinM: _withinM, offset: 0);
+    if (!mounted || !identical(posts, _posts)) return;
+    final shown = {for (final p in posts) p.id};
+    final waiting = {for (final p in _newer) p.id};
+    final newest = posts.isEmpty
+        ? null
+        : posts.map((p) => p.createdAt).reduce((a, b) => a.isAfter(b) ? a : b);
+    final arrived = [
+      for (final p in page.posts)
+        if (!p.mine &&
+            !shown.contains(p.id) &&
+            !waiting.contains(p.id) &&
+            (newest == null || p.createdAt.isAfter(newest)))
+          p,
+    ];
+    if (arrived.isNotEmpty) setState(() => _newer = [...arrived, ..._newer]);
+  }
+
+  /// The pill tapped: up to the top, and the list again with them.
+  Future<void> _showNewer() async {
+    setState(() => _newer = const []);
+    if (_scroll.hasClients) {
+      unawaited(_scroll.animateTo(0,
+          duration: const Duration(milliseconds: 350),
+          curve: Curves.easeOutCubic));
+    }
+    await _load();
+  }
+
+  /// Who posted them: one face each, newest first.
+  List<Widget> get _newerFaces {
+    final seen = <String>{};
+    return [
+      for (final p in _newer)
+        if (seen.add(p.official ? 'huntr' : p.author.avatar))
+          p.official
+              ? const HuntrPostAvatar(size: 23)
+              : AnonymousArt(animal: p.author.avatar, radius: 11.5, size: 23),
+    ];
   }
 
   /// Looks again soon at posts whose video is still processing.
@@ -116,6 +201,7 @@ class NearbyScreenState extends State<NearbyScreen> {
         ];
         _next = page.nextOffset;
         _noLocation = false;
+        if (!more) _newer = const [];
       });
       _watchProcessing();
     } on SessionRejectedException {
@@ -319,68 +405,74 @@ class NearbyScreenState extends State<NearbyScreen> {
         builder: (context, box) {
           // a centred column on a wide screen, like Taps
           final side = box.maxWidth > 752 ? (box.maxWidth - 720) / 2 : 16.0;
-          return ListView(
+          final list = ListView(
             key: const Key('nearbyList'),
+            controller: _scroll,
             padding: EdgeInsets.fromLTRB(side, 12, side, 24),
             children: [
               // ---- nearest or newest, and how far: one line, a little
               // smaller when the screen is narrow ----
-              Row(children: [
-                Expanded(
-                  child: FittedBox(
-                    key: const Key('nearbyFilters'),
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.centerLeft,
-                    child: Row(children: [
-                      for (final (latest, label, key) in const [
-                        (false, 'Nearby', 'nearbySortNearby'),
-                        (true, 'Latest', 'nearbySortLatest'),
-                      ]) ...[
-                        ChoiceChip(
-                          key: Key(key),
+              KeyedSubtree(
+                key: _filtersRow,
+                child: Row(children: [
+                  Expanded(
+                    child: FittedBox(
+                      key: const Key('nearbyFilters'),
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Row(children: [
+                        for (final (latest, label, key) in const [
+                          (false, 'Nearby', 'nearbySortNearby'),
+                          (true, 'Latest', 'nearbySortLatest'),
+                        ]) ...[
+                          ChoiceChip(
+                            key: Key(key),
+                            visualDensity: VisualDensity.compact,
+                            materialTapTargetSize:
+                                MaterialTapTargetSize.shrinkWrap,
+                            labelPadding:
+                                const EdgeInsets.symmetric(horizontal: 4),
+                            label: Text(label),
+                            selected: _latest == latest,
+                            showCheckmark: false,
+                            onSelected: (_) => _sort(latest),
+                          ),
+                          const SizedBox(width: 8),
+                        ],
+                        ActionChip(
+                          key: const Key('nearbyWithin'),
                           visualDensity: VisualDensity.compact,
                           materialTapTargetSize:
                               MaterialTapTargetSize.shrinkWrap,
                           labelPadding:
                               const EdgeInsets.symmetric(horizontal: 4),
-                          label: Text(label),
-                          selected: _latest == latest,
-                          showCheckmark: false,
-                          onSelected: (_) => _sort(latest),
+                          avatar:
+                              const Icon(Icons.location_on_outlined, size: 16),
+                          label: Row(mainAxisSize: MainAxisSize.min, children: [
+                            Text(_withinM == null
+                                ? 'Distance'
+                                : nearbyRadiusLabel(_withinM!)),
+                            const Icon(Icons.expand_more_rounded, size: 16),
+                          ]),
+                          onPressed: _pickWithin,
                         ),
-                        const SizedBox(width: 8),
-                      ],
-                      ActionChip(
-                        key: const Key('nearbyWithin'),
-                        visualDensity: VisualDensity.compact,
-                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        labelPadding: const EdgeInsets.symmetric(horizontal: 4),
-                        avatar:
-                            const Icon(Icons.location_on_outlined, size: 16),
-                        label: Row(mainAxisSize: MainAxisSize.min, children: [
-                          Text(_withinM == null
-                              ? 'Distance'
-                              : nearbyRadiusLabel(_withinM!)),
-                          const Icon(Icons.expand_more_rounded, size: 16),
-                        ]),
-                        onPressed: _pickWithin,
-                      ),
-                    ]),
+                      ]),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                // + to write one
-                IconButton.filled(
-                  key: const Key('nearbyCompose'),
-                  tooltip: 'New thread',
-                  style: IconButton.styleFrom(
-                      backgroundColor: HuntrColors.orange,
-                      foregroundColor: Colors.black,
-                      minimumSize: const Size(40, 40)),
-                  onPressed: _noLocation ? null : _compose,
-                  icon: const Icon(Icons.add_rounded),
-                ),
-              ]),
+                  const SizedBox(width: 8),
+                  // + to write one
+                  IconButton.filled(
+                    key: const Key('nearbyCompose'),
+                    tooltip: 'New thread',
+                    style: IconButton.styleFrom(
+                        backgroundColor: HuntrColors.orange,
+                        foregroundColor: Colors.black,
+                        minimumSize: const Size(40, 40)),
+                    onPressed: _noLocation ? null : _compose,
+                    icon: const Icon(Icons.add_rounded),
+                  ),
+                ]),
+              ),
               const SizedBox(height: 14),
 
               // ---- the feed, or why not ----
@@ -433,6 +525,31 @@ class NearbyScreenState extends State<NearbyScreen> {
               ],
             ],
           );
+          if (_newer.isNotEmpty) {
+            WidgetsBinding.instance
+                .addPostFrameCallback((_) => _measureFilters());
+          }
+          // newer threads than the list shows: the pill over its top
+          return Stack(children: [
+            list,
+            ListenableBuilder(
+              listenable: _scroll,
+              builder: (context, pill) => Positioned(
+                top: _pillTop,
+                left: 0,
+                right: 0,
+                child: pill!,
+              ),
+              child: Center(
+                child: NewItemsPill(
+                  faces: _newerFaces,
+                  label: 'posted',
+                  visible: _newer.isNotEmpty,
+                  onTap: _showNewer,
+                ),
+              ),
+            ),
+          ]);
         },
       ),
     );

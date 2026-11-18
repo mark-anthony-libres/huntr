@@ -18,6 +18,7 @@ import '../widgets/explore/explore_map.dart';
 import '../widgets/explore/filter_sheet.dart';
 import '../widgets/explore/looking_for_dropdown.dart';
 import '../widgets/me/section_states.dart';
+import '../widgets/new_items_pill.dart';
 
 class ExploreScreen extends StatefulWidget {
   const ExploreScreen({super.key});
@@ -31,6 +32,40 @@ class _ExploreScreenState extends State<ExploreScreen> {
   bool _started = false;
   bool _loading = false;
   String? _loadError;
+
+  final _scroll = ScrollController();
+
+  /// The list's header (the title): the pill sits under it at the top.
+  final _listHeader = GlobalKey();
+
+  /// Its height, measured once it's laid out (not during a build).
+  double _headerHeight = 0;
+
+  void _measureHeader() {
+    final box = _listHeader.currentContext?.findRenderObject();
+    if (!mounted || box is! RenderBox || !box.hasSize) return;
+    if (box.size.height != _headerHeight) {
+      setState(() => _headerHeight = box.size.height);
+    }
+  }
+
+  /// Where the pill sits: under the header while it shows, then at the top
+  /// as the list scrolls (like X's under its own bar).
+  double get _pillTop {
+    final scrolled = _scroll.hasClients ? _scroll.offset : 0.0;
+    return (_headerHeight - scrolled).clamp(8.0, double.infinity);
+  }
+
+  /// People who arrived nearby, or came online, since the list loaded (the
+  /// pill at the top; tapped, the list starts over with them).
+  List<Profile> _arrived = const [];
+
+  /// Of [_arrived], someone not in the list at all (otherwise they only
+  /// came online).
+  bool _someoneNew = false;
+  late final _watch = NewItemsWatch(
+      context: context, every: _arrivedEvery, check: _checkArrived);
+  static const _arrivedEvery = Duration(seconds: 60);
 
   /// Explore as a map instead of the list.
   bool _mapView = false;
@@ -56,6 +91,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
     if (_started || ServicesScope.exploreOf(context) == null) return;
     _started = true;
     _loadNearby();
+    _watch.start();
   }
 
   /// The first page (or, with [more], the next one).
@@ -78,7 +114,14 @@ class _ExploreScreenState extends State<ExploreScreen> {
       // the filters changed while this page was on its way: it's not wanted
       if (key != _filtersKey(app.filters)) return;
       app.setNearby(page.people, nextOffset: page.nextOffset, append: more);
-      if (!more && mounted) setState(() => _trayGeneration++);
+      if (!more && mounted) {
+        setState(() {
+          _trayGeneration++;
+          // a fresh first page: nobody waits any more
+          _arrived = const [];
+          _someoneNew = false;
+        });
+      }
     } on SessionRejectedException {
       app.endSession();
     } catch (error) {
@@ -100,9 +143,66 @@ class _ExploreScreenState extends State<ExploreScreen> {
     return false;
   }
 
+  /// The first page as it is now: people not in the list, or in it and
+  /// only now online, wait in [_arrived].
+  Future<void> _checkArrived() async {
+    final explore = ServicesScope.exploreOf(context);
+    final app = AppScope.read(context);
+    final token = app.sessionToken;
+    final shownList = app.nearby;
+    if (explore == null || token == null || shownList == null || _loading) {
+      return;
+    }
+    final key = _filtersKey(app.filters);
+    final page =
+        await explore.fetchNearby(token, offset: 0, filters: app.filters);
+    // the list changed meanwhile (other filters, loaded again): not now
+    if (!mounted ||
+        key != _filtersKey(app.filters) ||
+        !identical(shownList, app.nearby)) {
+      return;
+    }
+    final now = DateTime.now();
+    final shown = {for (final p in shownList) p.id: p};
+    final waiting = {for (final p in _arrived) p.id};
+    var someoneNew = _someoneNew;
+    final arrived = <Profile>[];
+    for (final p in page.people) {
+      if (waiting.contains(p.id)) continue;
+      final before = shown[p.id];
+      if (before == null) {
+        arrived.add(p);
+        someoneNew = true;
+      } else if (!before.onlineNowAt(now) && p.onlineNowAt(now)) {
+        arrived.add(p);
+      }
+    }
+    if (arrived.isEmpty) return;
+    setState(() {
+      _arrived = [...arrived, ..._arrived];
+      _someoneNew = someoneNew;
+    });
+  }
+
+  /// The pill tapped: up to the top, and the list again with them.
+  Future<void> _showArrived() async {
+    setState(() {
+      _arrived = const [];
+      _someoneNew = false;
+    });
+    if (_scroll.hasClients) {
+      unawaited(_scroll.animateTo(0,
+          duration: const Duration(milliseconds: 350),
+          curve: Curves.easeOutCubic));
+    }
+    await _loadNearby();
+  }
+
   @override
   void dispose() {
     _reload?.cancel();
+    _watch.stop();
+    _scroll.dispose();
     super.dispose();
   }
 
@@ -318,170 +418,200 @@ class _ExploreScreenState extends State<ExploreScreen> {
           ]));
     }
 
-    return Scaffold(
-      floatingActionButton: mapToggle,
-      // the list and the map fade and settle into each other
-      body: AnimatedSwitcher(
-        duration: _switchDuration,
-        switchInCurve: Curves.easeOutCubic,
-        switchOutCurve: Curves.easeInCubic,
-        transitionBuilder: (child, animation) => FadeTransition(
-          opacity: animation,
-          child: ScaleTransition(
-            scale: Tween(begin: 0.97, end: 1.0).animate(animation),
-            child: child,
-          ),
+    // the list and the map fade and settle into each other
+    final Widget body = AnimatedSwitcher(
+      duration: _switchDuration,
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeInCubic,
+      transitionBuilder: (child, animation) => FadeTransition(
+        opacity: animation,
+        child: ScaleTransition(
+          scale: Tween(begin: 0.97, end: 1.0).animate(animation),
+          child: child,
         ),
-        child: map ??
-            SafeArea(
-              key: const ValueKey('exploreListView'),
-              bottom: false,
-              child: RefreshIndicator(
-                onRefresh: onBackend ? _loadNearby : app.refresh,
-                color: HuntrColors.orange,
-                child: NotificationListener<ScrollNotification>(
-                  onNotification: onBackend ? _onScroll : null,
-                  child: CustomScrollView(
-                    slivers: [
-                      // ---- header ----
-                      SliverToBoxAdapter(child: header),
+      ),
+      child: map ??
+          SafeArea(
+            key: const ValueKey('exploreListView'),
+            bottom: false,
+            child: RefreshIndicator(
+              onRefresh: onBackend ? _loadNearby : app.refresh,
+              color: HuntrColors.orange,
+              child: NotificationListener<ScrollNotification>(
+                onNotification: onBackend ? _onScroll : null,
+                child: CustomScrollView(
+                  controller: _scroll,
+                  slivers: [
+                    // ---- header ----
+                    SliverToBoxAdapter(
+                        child: KeyedSubtree(key: _listHeader, child: header)),
 
-                      // ---- the website: get the app, asked in a dialog
-                      // (nothing in the apps) ----
-                      const SliverToBoxAdapter(child: InstallInvite()),
+                    // ---- the website: get the app, asked in a dialog
+                    // (nothing in the apps) ----
+                    const SliverToBoxAdapter(child: InstallInvite()),
 
-                      // ---- stories: Add Story, Your Story, then people nearby ----
-                      if (onBackend && !waiting)
-                        if ((
-                          ServicesScope.storiesOf(context),
-                          ServicesScope.exploreOf(context)
-                        )
-                            case (final stories?, final explore?))
-                          SliverToBoxAdapter(
-                            child: StoryTray(
-                                key: ValueKey('tray-$_trayGeneration'),
-                                service: stories,
-                                explore: explore),
-                          ),
-
-                      // ---- quick filters ----
-                      SliverToBoxAdapter(child: quickFilters),
-
-                      // ---- favorites row ----
-                      if (favorites.isNotEmpty && f.isDefault) ...[
+                    // ---- stories: Add Story, Your Story, then people nearby ----
+                    if (onBackend && !waiting)
+                      if ((
+                        ServicesScope.storiesOf(context),
+                        ServicesScope.exploreOf(context)
+                      )
+                          case (final stories?, final explore?))
                         SliverToBoxAdapter(
-                          child: Padding(
-                            padding: const EdgeInsets.fromLTRB(20, 10, 20, 8),
-                            child: Text('Your favorites',
-                                style: text.titleSmall
-                                    ?.copyWith(color: HuntrColors.muted)),
-                          ),
-                        ),
-                        SliverToBoxAdapter(
-                          child: SizedBox(
-                            height: 86,
-                            child: ListView.separated(
-                              scrollDirection: Axis.horizontal,
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 16),
-                              itemCount: favorites.length,
-                              separatorBuilder: (_, __) =>
-                                  const SizedBox(width: 14),
-                              itemBuilder: (_, i) {
-                                final p = favorites[i];
-                                return InkWell(
-                                  borderRadius: BorderRadius.circular(40),
-                                  onTap: () => _open(p),
-                                  child: Column(children: [
-                                    Avatar(profile: p, size: 58),
-                                    const SizedBox(height: 4),
-                                    Text(p.name, style: text.labelSmall),
-                                  ]),
-                                );
-                              },
-                            ),
-                          ),
-                        ),
-                      ],
-
-                      // ---- grid ----
-                      if (waiting && _loadError != null)
-                        SliverPadding(
-                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-                          sliver: SliverToBoxAdapter(
-                            child: LoadFailedCard(
-                              title: "Couldn't load people nearby",
-                              message: _loadError!,
-                              onRetry: _loadNearby,
-                              retryKey: const Key('exploreRetry'),
-                            ),
-                          ),
-                        )
-                      else if (waiting)
-                        SliverPadding(
-                          padding: EdgeInsets.fromLTRB(side, 10, side, 24),
-                          sliver: SliverGrid.builder(
-                            gridDelegate: grid,
-                            itemCount: columns * 3,
-                            itemBuilder: (_, __) =>
-                                _TilePlaceholder(square: wall),
-                          ),
-                        )
-                      else if (people.isEmpty)
-                        SliverFillRemaining(
-                          hasScrollBody: false,
-                          child: EmptyExplore(
-                            filtered: !f.isDefault,
-                            onClear: () => app.filters = const ExploreFilters(),
-                            onRefresh: onBackend ? _loadNearby : null,
-                          ),
-                        )
-                      else
-                        SliverPadding(
-                          padding: EdgeInsets.fromLTRB(side, 10, side, 24),
-                          sliver: SliverGrid.builder(
-                            gridDelegate: grid,
-                            itemCount: people.length,
-                            itemBuilder: (_, i) => layout == ExploreLayout.one
-                                ? ProfileRowTile(
-                                    profile: people[i],
-                                    favorite: app.isFavorite(people[i].id),
-                                    onTap: () => _open(people[i]),
-                                  )
-                                : ProfileTile(
-                                    profile: people[i],
-                                    favorite: app.isFavorite(people[i].id),
-                                    layout: layout,
-                                    onTap: () => _open(people[i]),
-                                  ),
-                          ),
+                          child: StoryTray(
+                              key: ValueKey('tray-$_trayGeneration'),
+                              service: stories,
+                              explore: explore),
                         ),
 
-                      // ---- the next page, as you reach the end ----
-                      if (onBackend && !waiting && _loading)
-                        const SliverToBoxAdapter(
-                          child: Padding(
-                            padding: EdgeInsets.only(bottom: 24),
-                            child: Center(child: CircularProgressIndicator()),
-                          ),
-                        )
-                      else if (onBackend && !waiting && _loadError != null)
-                        SliverToBoxAdapter(
-                          child: Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                            child: LoadFailedCard(
-                              title: "Couldn't load more people",
-                              message: _loadError!,
-                              onRetry: () => _loadNearby(more: true),
-                            ),
+                    // ---- quick filters ----
+                    SliverToBoxAdapter(child: quickFilters),
+
+                    // ---- favorites row ----
+                    if (favorites.isNotEmpty && f.isDefault) ...[
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 10, 20, 8),
+                          child: Text('Your favorites',
+                              style: text.titleSmall
+                                  ?.copyWith(color: HuntrColors.muted)),
+                        ),
+                      ),
+                      SliverToBoxAdapter(
+                        child: SizedBox(
+                          height: 86,
+                          child: ListView.separated(
+                            scrollDirection: Axis.horizontal,
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            itemCount: favorites.length,
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(width: 14),
+                            itemBuilder: (_, i) {
+                              final p = favorites[i];
+                              return InkWell(
+                                borderRadius: BorderRadius.circular(40),
+                                onTap: () => _open(p),
+                                child: Column(children: [
+                                  Avatar(profile: p, size: 58),
+                                  const SizedBox(height: 4),
+                                  Text(p.name, style: text.labelSmall),
+                                ]),
+                              );
+                            },
                           ),
                         ),
+                      ),
                     ],
-                  ),
+
+                    // ---- grid ----
+                    if (waiting && _loadError != null)
+                      SliverPadding(
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                        sliver: SliverToBoxAdapter(
+                          child: LoadFailedCard(
+                            title: "Couldn't load people nearby",
+                            message: _loadError!,
+                            onRetry: _loadNearby,
+                            retryKey: const Key('exploreRetry'),
+                          ),
+                        ),
+                      )
+                    else if (waiting)
+                      SliverPadding(
+                        padding: EdgeInsets.fromLTRB(side, 10, side, 24),
+                        sliver: SliverGrid.builder(
+                          gridDelegate: grid,
+                          itemCount: columns * 3,
+                          itemBuilder: (_, __) =>
+                              _TilePlaceholder(square: wall),
+                        ),
+                      )
+                    else if (people.isEmpty)
+                      SliverFillRemaining(
+                        hasScrollBody: false,
+                        child: EmptyExplore(
+                          filtered: !f.isDefault,
+                          onClear: () => app.filters = const ExploreFilters(),
+                          onRefresh: onBackend ? _loadNearby : null,
+                        ),
+                      )
+                    else
+                      SliverPadding(
+                        padding: EdgeInsets.fromLTRB(side, 10, side, 24),
+                        sliver: SliverGrid.builder(
+                          gridDelegate: grid,
+                          itemCount: people.length,
+                          itemBuilder: (_, i) => layout == ExploreLayout.one
+                              ? ProfileRowTile(
+                                  profile: people[i],
+                                  favorite: app.isFavorite(people[i].id),
+                                  onTap: () => _open(people[i]),
+                                )
+                              : ProfileTile(
+                                  profile: people[i],
+                                  favorite: app.isFavorite(people[i].id),
+                                  layout: layout,
+                                  onTap: () => _open(people[i]),
+                                ),
+                        ),
+                      ),
+
+                    // ---- the next page, as you reach the end ----
+                    if (onBackend && !waiting && _loading)
+                      const SliverToBoxAdapter(
+                        child: Padding(
+                          padding: EdgeInsets.only(bottom: 24),
+                          child: Center(child: CircularProgressIndicator()),
+                        ),
+                      )
+                    else if (onBackend && !waiting && _loadError != null)
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                          child: LoadFailedCard(
+                            title: "Couldn't load more people",
+                            message: _loadError!,
+                            onRetry: () => _loadNearby(more: true),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
             ),
-      ),
+          ),
+    );
+    if (_arrived.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _measureHeader());
+    }
+    return Scaffold(
+      floatingActionButton: mapToggle,
+      // new people nearby (or newly online): the pill over the list (the
+      // Stack stays either way, so the list and map still fade between them)
+      body: Stack(children: [
+        body,
+        if (onBackend && map == null)
+          ListenableBuilder(
+            listenable: _scroll,
+            builder: (context, pill) => Positioned(
+              top: MediaQuery.paddingOf(context).top + _pillTop,
+              left: 0,
+              right: 0,
+              child: pill!,
+            ),
+            child: Center(
+              child: NewItemsPill(
+                faces: [
+                  for (final p in _arrived)
+                    Avatar(profile: p, size: 23, showOnline: false),
+                ],
+                label: _someoneNew ? 'new nearby' : 'online',
+                visible: _arrived.isNotEmpty,
+                onTap: _showArrived,
+              ),
+            ),
+          ),
+      ]),
     );
   }
 
