@@ -1,0 +1,24 @@
+# Security headers for every page and file of https://huntr.online (Cloudflare
+# Workers static assets read this file; it isn't served itself).
+#
+# - HSTS: browsers only ever use HTTPS here, for a year (not subdomains: each
+#   sets its own).
+# - frame-ancestors / X-Frame-Options: no other site can show HUNTR in a frame
+#   (clickjacking: tricking taps through an invisible copy).
+# - object-src / base-uri: no plugins, and no <base> tag can redirect the
+#   app's own files.
+#   A full script policy (script-src) isn't set yet: the app has inline
+#   scripts and loads Google sign-in, Firebase and the map, so it needs
+#   testing in real browsers first.
+# - nosniff: files are only treated as the type they're sent as.
+# - Referrer-Policy: other sites see at most https://huntr.online, never a
+#   page's full address.
+# - Permissions-Policy: location, camera and microphone only for HUNTR
+#   itself (never a frame); things the app never uses are off.
+/*
+  Strict-Transport-Security: max-age=31536000
+  Content-Security-Policy: frame-ancestors 'none'; object-src 'none'; base-uri 'self'
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: geolocation=(self), camera=(self), microphone=(self), payment=(), usb=(), serial=(), bluetooth=(), midi=()
