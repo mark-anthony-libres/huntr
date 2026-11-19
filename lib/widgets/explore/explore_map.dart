@@ -411,6 +411,11 @@ class _ExploreMapState extends State<ExploreMap> {
                   // a new layer per source (nothing of the last one kept)
                   key: ValueKey('tiles-$_source'),
                   urlTemplate: tiles.url,
+                  // a refused image (e.g. MapTiler's "Invalid key" picture,
+                  // sent with a 403) counts as failed, not drawn: so the
+                  // next source, or "The map can't be shown", takes over
+                  tileProvider: NetworkTileProvider(
+                      attemptDecodeOfHttpErrorResponses: false),
                   errorTileCallback: (tile, error, stack) =>
                       _tileFailed(source),
                   // sharp images on sharp screens, where the provider has
