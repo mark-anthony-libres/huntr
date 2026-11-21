@@ -27,7 +27,8 @@ const mapEnabled = bool.fromEnvironment('MAP_ENABLED');
 ///   accent. Its rules don't
 ///   allow it for a live app, so set one of the above for production.
 ///
-/// MAP_FALLBACK_URL (+ MAP_FALLBACK_ATTRIBUTION): another provider, used
+/// MAP_FALLBACK_URL (+ MAP_FALLBACK_ATTRIBUTION, and MAP_FALLBACK_MAX_ZOOM:
+/// the closest zoom it has images for, e.g. 18 for CARTO): another provider, used
 /// when the first one's images keep failing (e.g. its monthly quota is used
 /// up). Without one, or when it fails too, the map says it can't be shown
 /// (people are still on it, and in the list).
@@ -36,6 +37,7 @@ class MapTiles {
       {required this.url,
       required this.attributions,
       this.night = false,
+      this.maxNativeZoom = ExploreMap.tileMaxZoom,
       this.fallback});
 
   /// '' for no map images (e.g. tests).
@@ -45,6 +47,11 @@ class MapTiles {
   /// A light, colourful map made dark like the app: near black, with
   /// streets' names and water in the accent.
   final bool night;
+
+  /// The closest zoom this provider has images for; closer in, those are
+  /// enlarged (never asked for: a provider refuses zooms it doesn't have,
+  /// and that would count as failing).
+  final int maxNativeZoom;
 
   /// Where the images come from when these keep failing.
   final MapTiles? fallback;
@@ -58,13 +65,18 @@ class MapTiles {
   static const _fallbackUrl = String.fromEnvironment('MAP_FALLBACK_URL');
   static const _fallbackCredit =
       String.fromEnvironment('MAP_FALLBACK_ATTRIBUTION');
+  static const _fallbackMaxZoom = int.fromEnvironment('MAP_FALLBACK_MAX_ZOOM',
+      defaultValue: ExploreMap.tileMaxZoom);
 
   static MapTiles? get _configuredFallback => _fallbackUrl.isEmpty
       ? null
-      : MapTiles(url: _fallbackUrl, attributions: [
-          if (_fallbackCredit.isNotEmpty) _fallbackCredit,
-          'OpenStreetMap contributors',
-        ]);
+      : MapTiles(
+          url: _fallbackUrl,
+          attributions: [
+            if (_fallbackCredit.isNotEmpty) _fallbackCredit,
+            'OpenStreetMap contributors',
+          ],
+          maxNativeZoom: _fallbackMaxZoom);
 
   static MapTiles get configured {
     if (_customUrl.isNotEmpty) {
@@ -423,7 +435,7 @@ class _ExploreMapState extends State<ExploreMap> {
                   retinaMode: tiles.url.contains('{r}') &&
                       RetinaMode.isHighDensity(context),
                   userAgentPackageName: 'com.marklibres.huntr',
-                  maxNativeZoom: ExploreMap.tileMaxZoom,
+                  maxNativeZoom: tiles.maxNativeZoom,
                 ),
               ),
             ),
