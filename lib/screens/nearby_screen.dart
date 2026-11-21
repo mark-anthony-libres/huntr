@@ -11,11 +11,11 @@ import '../theme.dart';
 import '../widgets/load_more_row.dart';
 import '../widgets/me/section_states.dart';
 import '../widgets/nearby/nearby_post_card.dart';
+import '../widgets/nearby/thread_list_actions.dart';
 import '../widgets/new_items_pill.dart';
 import '../widgets/anonymous_avatar.dart';
 import 'anonymous_profile_screen.dart' show MyAnonymousProfileScreen;
 import 'nearby_compose_screen.dart';
-import 'nearby_post_screen.dart';
 
 /// Threads (in Explore): anonymous posts from people around me - nearest
 /// or newest first, optionally only within a distance - and Post to write one.
@@ -28,13 +28,18 @@ class NearbyScreen extends StatefulWidget {
   State<NearbyScreen> createState() => NearbyScreenState();
 }
 
-class NearbyScreenState extends State<NearbyScreen> {
+class NearbyScreenState extends State<NearbyScreen> with ThreadListActions {
   bool _latest = false;
 
   /// Only posts within this of me (null: as far as each post reaches).
   int? _withinM;
 
   List<NearbyPost>? _posts;
+
+  @override
+  List<NearbyPost>? get threads => _posts;
+  @override
+  set threads(List<NearbyPost>? value) => _posts = value;
   int? _next;
   bool _loading = false;
   String? _error;
@@ -281,119 +286,6 @@ class NearbyScreenState extends State<NearbyScreen> {
           SnackBar(content: Text('Posted as ${posted.author.name}')));
   }
 
-  Future<void> _open(NearbyPost post) async {
-    final updated = await Navigator.of(context).push<NearbyPost?>(
-        MaterialPageRoute(builder: (_) => NearbyPostScreen(post: post)));
-    if (!mounted) return;
-    // a deleted or no-longer-visible post leaves; otherwise its counts
-    setState(() => _posts = [
-          for (final p in _posts ?? const <NearbyPost>[])
-            if (p.id != post.id) p else if (updated != null) updated,
-        ]);
-  }
-
-  Future<void> _like(NearbyPost post) async {
-    final service = ServicesScope.nearbyOf(context);
-    final token = AppScope.read(context).sessionToken;
-    if (service == null || token == null) return;
-    // at once; corrected (or undone) by the answer
-    _replace(post.copyWith(
-        liked: !post.liked, likeCount: post.likeCount + (post.liked ? -1 : 1)));
-    try {
-      final result = await service.like(token, post.id, like: !post.liked);
-      _replace(post.copyWith(likeCount: result.count, liked: result.liked));
-    } catch (error) {
-      _replace(post);
-      _say(error is BackendException
-          ? error.message
-          : "That didn't go through.");
-    }
-  }
-
-  Future<void> _act(NearbyPost post, NearbyAction action) async {
-    final service = ServicesScope.nearbyOf(context);
-    final token = AppScope.read(context).sessionToken;
-    if (service == null || token == null) return;
-    if (action == NearbyAction.edit) {
-      final edited = await editNearbyThread(context, post);
-      if (edited != null && mounted) {
-        setState(() => _posts = [
-              for (final p in _posts ?? const <NearbyPost>[])
-                p.id == post.id ? edited : p
-            ]);
-      }
-      return;
-    }
-    try {
-      if (action == NearbyAction.delete) {
-        final sure = await _confirmDelete();
-        if (!sure) return;
-        await service.delete(token, postId: post.id);
-        _say('Post deleted.');
-      } else {
-        final reason = await askReportReason(context);
-        if (reason == null) return;
-        await service.report(token, post.id, reason: reason);
-        _say("Thanks. It's reported, and you won't see it anymore.");
-      }
-      if (mounted) {
-        setState(() => _posts = [
-              for (final p in _posts ?? const <NearbyPost>[])
-                if (p.id != post.id) p
-            ]);
-      }
-    } catch (error) {
-      _say(error is BackendException
-          ? error.message
-          : "That didn't go through.");
-    }
-  }
-
-  /// The post author's anonymous profile: Report there reports it here.
-  Future<void> _openAuthor(NearbyPost post) async {
-    final action = await openThreadsAuthor(context,
-        author: post.author,
-        postId: post.id,
-        distanceM: post.distanceM,
-        mine: post.mine);
-    if (action != null && mounted) await _act(post, action);
-  }
-
-  Future<bool> _confirmDelete() async =>
-      await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Delete this post?'),
-          content: const Text('Its comments go with it.'),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
-                child: const Text('Cancel')),
-            TextButton(
-                key: const Key('nearbyConfirmDelete'),
-                onPressed: () => Navigator.of(context).pop(true),
-                child: const Text('Delete',
-                    style: TextStyle(color: HuntrColors.coral))),
-          ],
-        ),
-      ) ??
-      false;
-
-  void _replace(NearbyPost post) {
-    if (!mounted) return;
-    setState(() => _posts = [
-          for (final p in _posts ?? const <NearbyPost>[])
-            p.id == post.id ? post : p
-        ]);
-  }
-
-  void _say(String message) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
-  }
-
   @override
   Widget build(BuildContext context) {
     final posts = _posts;
@@ -515,10 +407,11 @@ class NearbyScreenState extends State<NearbyScreen> {
                     key: ValueKey('nearbyCard-${post.id}'),
                     post: post,
                     now: now,
-                    onLike: () => _like(post),
-                    onAction: (action) => _act(post, action),
-                    onOpen: () => _open(post),
-                    onAuthor: () => _openAuthor(post),
+                    onLike: () => likeThread(post),
+                    onRepost: () => repostThread(post),
+                    onAction: (action) => actOnThread(post, action),
+                    onOpen: () => openThread(post),
+                    onAuthor: () => openThreadAuthor(post),
                   ),
                 if (_next != null)
                   LoadMoreRow(onVisible: () => _load(more: true)),

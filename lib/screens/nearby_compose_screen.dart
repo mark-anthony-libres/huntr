@@ -13,24 +13,21 @@ import '../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/chat/picked_video_io.dart'
     if (dart.library.js_interop) '../widgets/chat/picked_video_web.dart';
-import '../widgets/load_more_row.dart';
-import '../widgets/nearby/nearby_media.dart' show NearbyMediaGrid;
-import '../widgets/nearby/nearby_post_card.dart';
 import '../widgets/nearby/nearby_tags.dart';
-import 'chats_screen.dart' show timeLabel;
-import 'nearby_post_screen.dart';
 
-/// New thread: what's on my mind (up to [NearbyService.maxLength]
+/// New thread: a subject (like a Reddit title: up to
+/// [NearbyService.subjectMaxLength] characters of letters, numbers and basic
+/// punctuation, no emoji), what's on my mind (up to [NearbyService.maxLength]
 /// characters), one photo or video (optional; with one, the text is too),
 /// and who sees it (everyone on HUNTR, unless a distance is picked), then
 /// Post - it goes up under a random name and animal, and stays until it's
 /// deleted. A chosen photo or video starts
 /// uploading at once (app-wide, [NearbyUploads]), and Post doesn't wait for
-/// it: the thread shows how it's going. Below, my live threads (open one,
-/// or delete it). Pops with the new thread once it's up.
+/// it: the thread shows how it's going. My threads are on my anonymous
+/// profile's Feed. Pops with the new thread once it's up.
 ///
-/// With [editing] (mine): its text, tags and who sees it, then Save - no
-/// photo or video, no My posts. Pops with it as it is now.
+/// With [editing] (mine): its subject, text, tags and who sees it, then
+/// Save - no photo or video. Pops with it as it is now.
 class NearbyComposeScreen extends StatefulWidget {
   const NearbyComposeScreen({super.key, this.editing});
 
@@ -41,6 +38,7 @@ class NearbyComposeScreen extends StatefulWidget {
 }
 
 class _NearbyComposeScreenState extends State<NearbyComposeScreen> {
+  final _subject = TextEditingController();
   final _text = TextEditingController();
 
   /// How far it reaches, in metres (one of [NearbyService.radii]); null:
@@ -73,21 +71,16 @@ class _NearbyComposeScreenState extends State<NearbyComposeScreen> {
   String? _token;
   bool _posted = false;
 
-  /// My live threads (null: loading), and where the next page starts.
-  List<NearbyPost>? _mine;
-  int? _next;
-  bool _loadingMine = false;
-
   @override
   void initState() {
     super.initState();
     if (widget.editing case final post?) {
+      _subject.text = post.subject ?? '';
       _text.text = post.body;
       _radiusM = post.everyone ? null : (post.radiusM ?? 5000);
       _tagIds = {for (final tag in post.tags) tag.id};
-    } else {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _loadMine());
     }
+    _subject.addListener(() => setState(() {}));
     _text.addListener(() => setState(() {}));
   }
 
@@ -95,36 +88,26 @@ class _NearbyComposeScreenState extends State<NearbyComposeScreen> {
   void dispose() {
     // closed without posting: the chosen one goes
     if (!_posted) _discardChosen();
+    _subject.dispose();
     _text.dispose();
     super.dispose();
   }
 
-  Future<void> _loadMine({bool more = false}) async {
-    final service = ServicesScope.nearbyOf(context);
-    final token = AppScope.read(context).sessionToken;
-    final offset = more ? _next : 0;
-    if (service == null || token == null || offset == null || _loadingMine) {
-      return;
-    }
-    _loadingMine = true;
-    try {
-      final page = await service.mine(token, offset: offset);
-      if (!mounted) return;
-      setState(() {
-        _mine = [if (more) ...?_mine, ...page.posts];
-        _next = page.nextOffset;
-      });
-    } catch (error) {
-      debugPrint('My threads not loaded: $error');
-      if (mounted && _mine == null) setState(() => _mine = const []);
-    } finally {
-      _loadingMine = false;
-    }
-  }
-
   /// Text, or a photo or video (chosen now, or the edited one's), within
   /// the length, and not still being added.
+  /// An older thread of mine, written before subjects: it may stay
+  /// without one (left empty, it's kept so).
+  bool get _keepsNoSubject =>
+      widget.editing != null &&
+      widget.editing!.subject == null &&
+      _subject.text.trim().isEmpty;
+
+  /// What's wrong with the subject (null: nothing).
+  String? get _subjectProblem =>
+      _keepsNoSubject ? null : nearbySubjectProblem(_subject.text);
+
   bool get _ready =>
+      _subjectProblem == null &&
       (_text.text.trim().isNotEmpty ||
           _mediaId != null ||
           (widget.editing?.media.isNotEmpty ?? false)) &&
@@ -245,10 +228,12 @@ class _NearbyComposeScreenState extends State<NearbyComposeScreen> {
       final post = editing != null
           ? await service.edit(token,
               postId: editing.id,
+              subject: _keepsNoSubject ? null : _subject.text,
               body: _text.text,
               radiusM: _radiusM,
               tagIds: _tagIds.toList())
           : await service.post(token,
+              subject: _subject.text,
               body: _text.text,
               radiusM: _radiusM,
               tagIds: _tagIds.toList(),
@@ -357,73 +342,14 @@ class _NearbyComposeScreenState extends State<NearbyComposeScreen> {
     if (picked != null && mounted) setState(() => _radiusM = picked.radiusM);
   }
 
-  Future<void> _open(NearbyPost post) async {
-    final updated = await Navigator.of(context).push<NearbyPost?>(
-        MaterialPageRoute(builder: (_) => NearbyPostScreen(post: post)));
-    if (!mounted) return;
-    setState(() => _mine = [
-          for (final p in _mine ?? const <NearbyPost>[])
-            if (p.id != post.id) p else if (updated != null) updated,
-        ]);
-  }
-
-  Future<void> _act(NearbyPost post, NearbyAction action) async {
-    final service = ServicesScope.nearbyOf(context);
-    final token = AppScope.read(context).sessionToken;
-    if (action == NearbyAction.edit) {
-      final edited = await editNearbyThread(context, post);
-      if (edited != null && mounted) {
-        setState(() => _mine = [
-              for (final p in _mine ?? const <NearbyPost>[])
-                p.id == post.id ? edited : p
-            ]);
-      }
-      return;
-    }
-    if (service == null || token == null || action != NearbyAction.delete) {
-      return;
-    }
-    final sure = await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Delete this thread?'),
-            content: const Text('Its comments go with it.'),
-            actions: [
-              TextButton(
-                  onPressed: () => Navigator.of(context).pop(false),
-                  child: const Text('Cancel')),
-              TextButton(
-                  key: const Key('nearbyConfirmDelete'),
-                  onPressed: () => Navigator.of(context).pop(true),
-                  child: const Text('Delete',
-                      style: TextStyle(color: HuntrColors.coral))),
-            ],
-          ),
-        ) ??
-        false;
-    if (!sure) return;
-    try {
-      await service.delete(token, postId: post.id);
-      if (!mounted) return;
-      setState(() => _mine = [
-            for (final p in _mine ?? const <NearbyPost>[])
-              if (p.id != post.id) p
-          ]);
-    } catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(error is BackendException
-              ? error.message
-              : "That didn't go through.")));
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final count = _text.text.length;
     final over = count > NearbyService.maxLength;
-    final mine = _mine;
-    final now = DateTime.now();
+    final subjectCount = _subject.text.trim().length;
+    // said once something's typed (not "Add a subject." at first)
+    final subjectProblem =
+        _subject.text.trim().isEmpty ? null : _subjectProblem;
     final radiusM = _radiusM;
     final editing = widget.editing != null;
     return Scaffold(
@@ -461,6 +387,56 @@ class _NearbyComposeScreenState extends State<NearbyComposeScreen> {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
               children: [
+                // ---- its subject (like a Reddit title) ----
+                Container(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                  decoration: BoxDecoration(
+                    color: HuntrColors.surface,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(
+                        color: subjectProblem == null
+                            ? HuntrColors.border
+                            : HuntrColors.coral),
+                  ),
+                  child: Column(children: [
+                    TextField(
+                      key: const Key('nearbySubject'),
+                      controller: _subject,
+                      autofocus: true,
+                      minLines: 1,
+                      maxLines: 3,
+                      textCapitalization: TextCapitalization.sentences,
+                      textInputAction: TextInputAction.next,
+                      style: const TextStyle(
+                          fontSize: 18, fontWeight: FontWeight.w700),
+                      decoration: const InputDecoration(
+                        hintText: 'Subject',
+                        filled: false,
+                        border: InputBorder.none,
+                        contentPadding: EdgeInsets.symmetric(vertical: 8),
+                      ),
+                    ),
+                    Row(children: [
+                      Expanded(
+                        child: Text(subjectProblem ?? '',
+                            key: const Key('nearbySubjectProblem'),
+                            style: const TextStyle(
+                                color: HuntrColors.coral, fontSize: 13)),
+                      ),
+                      const SizedBox(width: 12),
+                      Text('$subjectCount/${NearbyService.subjectMaxLength}',
+                          key: const Key('nearbySubjectCount'),
+                          style: TextStyle(
+                              color:
+                                  subjectCount > NearbyService.subjectMaxLength
+                                      ? HuntrColors.coral
+                                      : HuntrColors.muted,
+                              fontSize: 13)),
+                    ]),
+                  ]),
+                ),
+                const SizedBox(height: 12),
+
                 // ---- what's on my mind ----
                 Container(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
@@ -473,7 +449,6 @@ class _NearbyComposeScreenState extends State<NearbyComposeScreen> {
                     TextField(
                       key: const Key('nearbyText'),
                       controller: _text,
-                      autofocus: true,
                       minLines: 4,
                       maxLines: 10,
                       textCapitalization: TextCapitalization.sentences,
@@ -640,41 +615,6 @@ class _NearbyComposeScreenState extends State<NearbyComposeScreen> {
                     ),
                   ),
                 ),
-                // ---- my threads (not while editing one) ----
-                if (!editing) ...[
-                  const SizedBox(height: 18),
-                  const Divider(color: HuntrColors.border, height: 1),
-                  const SizedBox(height: 18),
-                  const Text('My posts',
-                      style:
-                          TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-                  const SizedBox(height: 12),
-                  if (mine == null)
-                    const Padding(
-                      padding: EdgeInsets.all(24),
-                      child: Center(child: CircularProgressIndicator()),
-                    )
-                  else if (mine.isEmpty)
-                    const Padding(
-                      key: Key('nearbyNoMine'),
-                      padding: EdgeInsets.symmetric(vertical: 20),
-                      child: Text('Your threads will show here.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: HuntrColors.muted)),
-                    )
-                  else ...[
-                    for (final post in mine)
-                      _MyPost(
-                        key: ValueKey('nearbyMine-${post.id}'),
-                        post: post,
-                        now: now,
-                        onOpen: () => _open(post),
-                        onAction: (action) => _act(post, action),
-                      ),
-                    if (_next != null)
-                      LoadMoreRow(onVisible: () => _loadMine(more: true)),
-                  ],
-                ],
               ],
             ),
           ),
@@ -684,133 +624,6 @@ class _NearbyComposeScreenState extends State<NearbyComposeScreen> {
   }
 }
 
-/// One of my threads: its random name and animal on that thread, how long
-/// ago (edited?), what I wrote, its photo or video, its tags, who it's
-/// for, and its hearts and comments.
-class _MyPost extends StatelessWidget {
-  const _MyPost({
-    super.key,
-    required this.post,
-    required this.now,
-    required this.onOpen,
-    required this.onAction,
-  });
-
-  final NearbyPost post;
-  final DateTime now;
-  final VoidCallback onOpen;
-  final ValueChanged<NearbyAction> onAction;
-
-  @override
-  Widget build(BuildContext context) {
-    final ago = timeLabel(post.createdAt, now);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Material(
-        color: HuntrColors.surface,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(18),
-          side: const BorderSide(color: HuntrColors.border),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onOpen,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 4, 12),
-            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              NearbyAvatar(
-                  animal: post.author.avatar, size: 52, mine: post.mine),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(children: [
-                        Flexible(
-                          child: Text(post.author.name,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                  fontSize: 15.5, fontWeight: FontWeight.w700)),
-                        ),
-                        const SizedBox(width: 10),
-                        Text(
-                            '${ago == 'now' ? 'just now' : '$ago ago'}'
-                            '${post.edited ? ' · edited' : ''}',
-                            style: const TextStyle(
-                                color: HuntrColors.muted, fontSize: 13)),
-                      ]),
-                      const SizedBox(height: 6),
-                      if (post.body.isNotEmpty)
-                        Text(post.body,
-                            style:
-                                const TextStyle(fontSize: 15.5, height: 1.4)),
-                      // its photo or video (or how its upload is going)
-                      if (post.media.isNotEmpty)
-                        Padding(
-                          padding: EdgeInsets.only(
-                              top: post.body.isEmpty ? 0 : 10, right: 12),
-                          child: NearbyMediaGrid(
-                              key: Key('nearbyMineMedia-${post.id}'),
-                              media: post.media),
-                        ),
-                      NearbyTagPills(
-                          key: ValueKey('nearbyMineTags-${post.id}'),
-                          tags: post.tags,
-                          limit: 4),
-                      const SizedBox(height: 8),
-                      // who it's for
-                      Row(children: [
-                        Icon(
-                            post.everyone
-                                ? Icons.public_rounded
-                                : Icons.location_on_outlined,
-                            size: 15,
-                            color: HuntrColors.muted),
-                        const SizedBox(width: 4),
-                        Flexible(
-                          child: Text(
-                              post.everyone
-                                  ? 'Everyone on HUNTR'
-                                  : post.radiusM == null
-                                      ? 'Nearby'
-                                      : 'Within ${nearbyRadiusLabel(post.radiusM!)}',
-                              key: ValueKey('nearbyMineReach-${post.id}'),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                  color: HuntrColors.muted, fontSize: 13)),
-                        ),
-                      ]),
-                      const SizedBox(height: 10),
-                      Row(children: [
-                        const Icon(Icons.favorite_border_rounded,
-                            size: 20, color: HuntrColors.muted),
-                        const SizedBox(width: 6),
-                        Text('${post.likeCount}',
-                            style: const TextStyle(color: HuntrColors.muted)),
-                        const SizedBox(width: 26),
-                        const Icon(Icons.chat_bubble_outline_rounded,
-                            size: 19, color: HuntrColors.muted),
-                        const SizedBox(width: 6),
-                        Text('${post.commentCount}',
-                            style: const TextStyle(color: HuntrColors.muted)),
-                      ]),
-                    ]),
-              ),
-              NearbyMenu(mine: true, editable: true, onSelected: onAction),
-            ]),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// The thread's photo or video: "Add photo or video" until one is chosen;
-/// then its picture from this device (a photo, or a video's first frame),
-/// how its upload is going, and Replace or Remove (Try again when it
-/// failed). Only one: no way to add a second.
 class _Attachment extends StatelessWidget {
   const _Attachment({
     required this.mediaId,

@@ -135,6 +135,29 @@ class _NearbyPostScreenState extends State<NearbyPostScreen> {
     }
   }
 
+  Future<void> _repostPost() async {
+    final service = _service;
+    final token = _token;
+    if (service == null || token == null) return;
+    final before = _post;
+    setState(() => _post = before.copyWith(
+        reposted: !before.reposted,
+        repostCount: before.repostCount + (before.reposted ? -1 : 1)));
+    try {
+      final r =
+          await service.repost(token, before.id, repost: !before.reposted);
+      if (mounted) {
+        setState(() => _post =
+            before.copyWith(repostCount: r.count, reposted: r.reposted));
+      }
+    } catch (error) {
+      if (mounted) setState(() => _post = before);
+      _say(error is BackendException
+          ? error.message
+          : "That didn't go through.");
+    }
+  }
+
   Future<void> _likeComment(NearbyComment comment) async {
     final service = _service;
     final token = _token;
@@ -266,6 +289,7 @@ class _NearbyPostScreenState extends State<NearbyPostScreen> {
                         now: now,
                         large: true,
                         onLike: _likePost,
+                        onRepost: _repostPost,
                         onAction: (action) => _act(action),
                         onAuthor: () => _openAuthor(),
                       ),

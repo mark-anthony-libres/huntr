@@ -4474,6 +4474,7 @@ class NearbyPost {
   const NearbyPost({
     required this.id,
     required this.author,
+    this.subject,
     required this.body,
     required this.distanceM,
     required this.createdAt,
@@ -4481,6 +4482,8 @@ class NearbyPost {
     required this.liked,
     required this.commentCount,
     required this.mine,
+    this.repostCount = 0,
+    this.reposted = false,
     this.radiusM,
     this.tags = const [],
     this.official = false,
@@ -4492,6 +4495,7 @@ class NearbyPost {
   factory NearbyPost.fromJson(Map<String, dynamic> json) => NearbyPost(
         id: json['id'] as int,
         author: AnonymousName.fromJson(json),
+        subject: json['subject'] as String?,
         body: json['body'] as String,
         distanceM: json['distance_m'] as int?,
         createdAt: DateTime.parse(json['created_at'] as String).toLocal(),
@@ -4499,6 +4503,8 @@ class NearbyPost {
         liked: json['liked'] as bool? ?? false,
         commentCount: json['comment_count'] as int? ?? 0,
         mine: json['mine'] as bool? ?? false,
+        repostCount: json['repost_count'] as int? ?? 0,
+        reposted: json['reposted'] as bool? ?? false,
         radiusM: json['radius_m'] as int?,
         tags: [
           for (final t in json['tags'] as List? ?? const [])
@@ -4515,6 +4521,9 @@ class NearbyPost {
 
   final int id;
   final AnonymousName author;
+
+  /// Its subject, like a Reddit title (none on older posts and HUNTR's).
+  final String? subject;
   final String body;
 
   /// From me to where it was posted, to 10 m (mine too).
@@ -4524,6 +4533,10 @@ class NearbyPost {
   final bool liked;
   final int commentCount;
   final bool mine;
+
+  /// How many reposted it, and whether I did (never on my own).
+  final int repostCount;
+  final bool reposted;
 
   /// How far it reaches (mine only).
   final int? radiusM;
@@ -4557,10 +4570,13 @@ class NearbyPost {
           {int? likeCount,
           bool? liked,
           int? commentCount,
+          int? repostCount,
+          bool? reposted,
           List<NearbyMedia>? media}) =>
       NearbyPost(
         id: id,
         author: author,
+        subject: subject,
         body: body,
         distanceM: distanceM,
         createdAt: createdAt,
@@ -4568,6 +4584,8 @@ class NearbyPost {
         liked: liked ?? this.liked,
         commentCount: commentCount ?? this.commentCount,
         mine: mine,
+        repostCount: repostCount ?? this.repostCount,
+        reposted: reposted ?? this.reposted,
         radiusM: radiusM,
         tags: tags,
         official: official,
@@ -4777,6 +4795,7 @@ Future<NearbyPost> createNearbyPost(
         required String token,
         required String body,
         required int? radiusM,
+        String? subject,
         AnonymousName? as,
         List<int> tagIds = const [],
         int? mediaId,
@@ -4786,6 +4805,7 @@ Future<NearbyPost> createNearbyPost(
           (httpClient) => httpClient.post(_nearby(backendUrl, '/posts'),
               headers: _json(token),
               body: jsonEncode({
+                if (subject != null) 'subject': subject,
                 'body': body,
                 'radius_m': radiusM,
                 if (tagIds.isNotEmpty) 'tag_ids': tagIds,
@@ -4805,14 +4825,20 @@ Future<NearbyPost> editNearbyPost(
         required int postId,
         required String body,
         required int? radiusM,
+        String? subject,
         List<int> tagIds = const [],
         http.Client? client}) =>
     _nearbyCall(() => _sendAuthorized(
           client,
           (httpClient) => httpClient.put(_nearby(backendUrl, '/posts/$postId'),
               headers: _json(token),
-              body: jsonEncode(
-                  {'body': body, 'radius_m': radiusM, 'tag_ids': tagIds})),
+              body: jsonEncode({
+                // not sent: kept (an older post may have none)
+                if (subject != null) 'subject': subject,
+                'body': body,
+                'radius_m': radiusM,
+                'tag_ids': tagIds,
+              })),
           NearbyPost.fromJson,
         ));
 
@@ -4938,6 +4964,79 @@ Future<({int count, bool liked})> likeNearby(
       },
       (data) =>
           (count: data['like_count'] as int, liked: data['liked'] as bool),
+    );
+
+/// POST (or DELETE) my repost of someone else's thread: how many reposted
+/// it now, and whether I did.
+Future<({int count, bool reposted})> repostNearby(
+        {required String backendUrl,
+        required String token,
+        required int postId,
+        required bool repost,
+        http.Client? client}) =>
+    _sendAuthorized(
+      client,
+      (httpClient) {
+        final url = _nearby(backendUrl, '/posts/$postId/repost');
+        return repost
+            ? httpClient.post(url, headers: _authorization(token))
+            : httpClient.delete(url, headers: _authorization(token));
+      },
+      (data) => (
+        count: data['repost_count'] as int,
+        reposted: data['reposted'] as bool
+      ),
+    );
+
+/// GET someone's anonymous profile tab ([reposts]: what they reposted;
+/// otherwise their threads), as the anonymous name they wrote post [postId]
+/// (or its comment [commentId]) with.
+Future<NearbyFeedPage> fetchNearbyAuthorThreads(
+        {required String backendUrl,
+        required String token,
+        required int postId,
+        int? commentId,
+        required bool reposts,
+        int offset = 0,
+        http.Client? client}) =>
+    _sendAuthorized(
+      client,
+      (httpClient) => httpClient.get(
+          _nearby(backendUrl,
+                  '/posts/$postId/author/${reposts ? 'reposts' : 'threads'}')
+              .replace(queryParameters: {
+            'offset': '$offset',
+            if (commentId != null) 'comment_id': '$commentId',
+          }),
+          headers: _authorization(token)),
+      (data) => NearbyFeedPage(
+        posts: [
+          for (final p in data['posts'] as List)
+            NearbyPost.fromJson(p as Map<String, dynamic>),
+        ],
+        nextOffset: data['next_offset'] as int?,
+      ),
+    );
+
+/// GET the live threads I reposted, the latest repost first.
+Future<NearbyFeedPage> fetchMyNearbyReposts(
+        {required String backendUrl,
+        required String token,
+        int offset = 0,
+        http.Client? client}) =>
+    _sendAuthorized(
+      client,
+      (httpClient) => httpClient.get(
+          _nearby(backendUrl, '/reposts')
+              .replace(queryParameters: {'offset': '$offset'}),
+          headers: _authorization(token)),
+      (data) => NearbyFeedPage(
+        posts: [
+          for (final p in data['posts'] as List)
+            NearbyPost.fromJson(p as Map<String, dynamic>),
+        ],
+        nextOffset: data['next_offset'] as int?,
+      ),
     );
 
 /// DELETE my post, or ([commentId]) my comment.

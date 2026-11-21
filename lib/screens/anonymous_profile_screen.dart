@@ -12,6 +12,7 @@ import '../widgets/chat/anonymous_chat.dart';
 import '../services/nearby_service.dart' show nearbyDistanceLabel;
 import '../widgets/me/section_states.dart';
 import '../widgets/avatar.dart' show OnlineDot;
+import '../widgets/nearby/threads_profile_tabs.dart';
 import '../widgets/nearby/nearby_post_card.dart' show NearbyAction;
 import '../widgets/profile/gradient_button.dart';
 import 'chat_screen.dart';
@@ -675,6 +676,23 @@ class _MyAnonymousProfileScreenState extends State<MyAnonymousProfileScreen> {
       appBar: AppBar(
         title: const Text('Anonymous profile'),
         actions: [
+          // how being anonymous works (it was under the card)
+          IconButton(
+            key: const Key('anonymousHowItWorks'),
+            tooltip: 'How it works',
+            onPressed: () => showModalBottomSheet<void>(
+              context: context,
+              isScrollControlled: true,
+              showDragHandle: true,
+              builder: (_) => const SafeArea(
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.fromLTRB(16, 0, 16, 24),
+                  child: _HowItWorks(),
+                ),
+              ),
+            ),
+            icon: const Icon(Icons.info_outline_rounded),
+          ),
           Padding(
             padding: const EdgeInsets.only(right: 8),
             child: IconButton(
@@ -690,39 +708,31 @@ class _MyAnonymousProfileScreenState extends State<MyAnonymousProfileScreen> {
           ),
         ],
       ),
+      // the card, then Feed / Reposts / Mentions under it
       body: mine == null
           ? const Center(child: CircularProgressIndicator())
-          : ListView(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
-              children: [
-                Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 480),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        const Padding(
-                          padding: EdgeInsets.only(bottom: 12),
-                          child: Text(
-                              'This is how others see you in anonymous chats '
-                              'and Threads.',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(color: HuntrColors.muted)),
-                        ),
-                        _Hero(
-                          profile: AnonymousProfile(
-                              conversationId: 0,
-                              name: mine.name,
-                              avatar: mine.avatar,
-                              online: true),
-                        ),
-                        const SizedBox(height: 20),
-                        const _HowItWorks(),
-                      ],
-                    ),
+          : ThreadsProfileBody(
+              header: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 12),
+                    child: Text(
+                        'This is how others see you in anonymous chats and '
+                        'Threads.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: HuntrColors.muted)),
                   ),
-                ),
-              ],
+                  _Hero(
+                    profile: AnonymousProfile(
+                        conversationId: 0,
+                        name: mine.name,
+                        avatar: mine.avatar,
+                        online: true),
+                  ),
+                ],
+              ),
+              tabs: const ThreadsProfileTabs.mine(),
             ),
     );
   }
@@ -787,63 +797,81 @@ class _ThreadsAuthorScreenState extends State<ThreadsAuthorScreen> {
     final far = widget.distanceM;
     return Scaffold(
       key: const Key('threadsAuthorProfile'),
-      appBar: AppBar(title: const Text('Anonymous profile')),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
-        children: [
-          Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 480),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _Hero(
-                    profile: AnonymousProfile(
-                        conversationId: 0,
-                        name: widget.author.name,
-                        avatar: widget.author.avatar,
-                        online: false),
-                    presence: false,
-                    distance: widget.mine
-                        ? 'This is you'
-                        : far == null
-                            ? null
-                            : far < 10
-                                ? 'Right here'
-                                : '${nearbyDistanceLabel(far)} away',
-                  ),
-                  const SizedBox(height: 20),
-                  const _HowItWorks(mutual: true),
-                  if (!widget.mine) ...[
-                    const SizedBox(height: 24),
-                    GradientButton(
-                      key: const Key('threadsMessage'),
-                      icon: Icons.chat_bubble_rounded,
-                      label: _opening ? 'Opening chat…' : 'Message',
-                      onPressed: _opening ? null : _message,
-                    ),
-                    const SizedBox(height: 10),
-                    OutlinedButton.icon(
-                      key: const Key('threadsReport'),
-                      style: OutlinedButton.styleFrom(
-                        minimumSize: const Size.fromHeight(52),
-                        shape: const StadiumBorder(),
-                        foregroundColor: const Color(0xFFFF8A80),
-                        side: BorderSide(
-                            color:
-                                const Color(0xFFFF8A80).withValues(alpha: 0.5)),
-                      ),
-                      onPressed: () =>
-                          Navigator.of(context).pop(NearbyAction.report),
-                      icon: const Icon(Icons.flag_outlined),
-                      label: const Text('Report'),
-                    ),
-                  ],
-                ],
+      appBar: AppBar(
+        title: const Text('Anonymous profile'),
+        actions: [
+          // how being anonymous works (it was under the card)
+          IconButton(
+            key: const Key('anonymousHowItWorks'),
+            tooltip: 'How it works',
+            onPressed: () => showModalBottomSheet<void>(
+              context: context,
+              isScrollControlled: true,
+              showDragHandle: true,
+              builder: (_) => const SafeArea(
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.fromLTRB(16, 0, 16, 24),
+                  child: _HowItWorks(mutual: true),
+                ),
               ),
             ),
+            icon: const Icon(Icons.info_outline_rounded),
           ),
         ],
+      ),
+      // the card, Message and Report, then their Feed / Reposts / Mentions
+      // (under this anonymous name)
+      body: ThreadsProfileBody(
+        header: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _Hero(
+              profile: AnonymousProfile(
+                  conversationId: 0,
+                  name: widget.author.name,
+                  avatar: widget.author.avatar,
+                  online: false),
+              presence: false,
+              distance: widget.mine
+                  ? 'This is you'
+                  : far == null
+                      ? null
+                      : far < 10
+                          ? 'Right here'
+                          : '${nearbyDistanceLabel(far)} away',
+            ),
+            if (!widget.mine) ...[
+              const SizedBox(height: 16),
+              Row(children: [
+                Expanded(
+                  child: GradientButton(
+                    key: const Key('threadsMessage'),
+                    icon: Icons.chat_bubble_rounded,
+                    label: _opening ? 'Opening chat…' : 'Message',
+                    onPressed: _opening ? null : _message,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                OutlinedButton.icon(
+                  key: const Key('threadsReport'),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(0, 52),
+                    shape: const StadiumBorder(),
+                    foregroundColor: const Color(0xFFFF8A80),
+                    side: BorderSide(
+                        color: const Color(0xFFFF8A80).withValues(alpha: 0.5)),
+                  ),
+                  onPressed: () =>
+                      Navigator.of(context).pop(NearbyAction.report),
+                  icon: const Icon(Icons.flag_outlined),
+                  label: const Text('Report'),
+                ),
+              ]),
+            ],
+          ],
+        ),
+        tabs: ThreadsProfileTabs.author(
+            postId: widget.postId, commentId: widget.commentId),
       ),
     );
   }

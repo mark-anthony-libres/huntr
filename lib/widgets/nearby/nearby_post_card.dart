@@ -199,6 +199,49 @@ class NearbyHeart extends StatelessWidget {
       );
 }
 
+/// Reposts on a thread: the count, green once I reposted it; tapped,
+/// reposted or taken back (no button on my own thread: [onTap] null).
+class NearbyRepostButton extends StatelessWidget {
+  const NearbyRepostButton(
+      {super.key,
+      required this.count,
+      required this.reposted,
+      required this.onTap});
+
+  final int count;
+  final bool reposted;
+  final VoidCallback? onTap;
+
+  static const _green = Color(0xFF2EC27E);
+
+  @override
+  Widget build(BuildContext context) {
+    final color = reposted ? _green : Colors.white;
+    return Semantics(
+      button: onTap != null,
+      label: reposted ? 'Reposted, $count' : 'Repost, $count',
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 180),
+              transitionBuilder: (child, animation) =>
+                  RotationTransition(turns: animation, child: child),
+              child: Icon(Icons.repeat_rounded,
+                  key: ValueKey(reposted), size: 21, color: color),
+            ),
+            const SizedBox(width: 6),
+            Text('$count', style: TextStyle(fontSize: 14, color: color)),
+          ]),
+        ),
+      ),
+    );
+  }
+}
+
 /// A Nearby post: who (a random name and animal), how far and when, what
 /// they wrote, its hearts and comments, and how far it is.
 class NearbyPostCard extends StatelessWidget {
@@ -210,12 +253,17 @@ class NearbyPostCard extends StatelessWidget {
     required this.onAction,
     this.onOpen,
     this.onAuthor,
+    this.onRepost,
     this.large = false,
   });
 
   final NearbyPost post;
   final DateTime now;
   final VoidCallback onLike;
+
+  /// Reposts it, or takes the repost back (others' threads only; my own
+  /// show the count without the button).
+  final VoidCallback? onRepost;
   final ValueChanged<NearbyAction> onAction;
 
   /// Opens the author's anonymous profile (their picture or name tapped).
@@ -315,6 +363,11 @@ class NearbyPostCard extends StatelessWidget {
                                                     : distance < 10
                                                         ? 'Right here'
                                                         : '${nearbyDistanceLabel(distance)} away',
+                                                // how far mine reaches
+                                                if (post.mine &&
+                                                    !post.everyone &&
+                                                    post.radiusM != null)
+                                                  'within ${nearbyRadiusLabel(post.radiusM!)}',
                                               ].join(' · '),
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
@@ -332,6 +385,17 @@ class NearbyPostCard extends StatelessWidget {
                               onSelected: onAction),
                       ]),
                       const SizedBox(height: 4),
+                      // its subject, like a Reddit title
+                      if (post.subject case final subject?)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 12, bottom: 4),
+                          child: Text(subject,
+                              key: Key('nearbySubject-${post.id}'),
+                              style: TextStyle(
+                                  fontSize: large ? 20 : 17,
+                                  fontWeight: FontWeight.w800,
+                                  height: 1.3)),
+                        ),
                       if (post.body.isNotEmpty)
                         Padding(
                           padding: const EdgeInsets.only(right: 12),
@@ -385,6 +449,12 @@ class NearbyPostCard extends StatelessWidget {
                               ]),
                             ),
                           ),
+                          const SizedBox(width: 10),
+                          NearbyRepostButton(
+                              key: Key('nearbyRepost-${post.id}'),
+                              count: post.repostCount,
+                              reposted: post.reposted,
+                              onTap: post.mine ? null : onRepost),
                         ]),
                       ),
                     ]),

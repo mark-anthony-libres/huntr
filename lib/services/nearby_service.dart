@@ -22,6 +22,9 @@ class NearbyService {
   /// The longest post or comment.
   static const maxLength = 500;
 
+  /// The longest subject (a Reddit title's length).
+  static const subjectMaxLength = 300;
+
   /// The largest photo or video (the backend's
   /// NEARBY_USER_MEDIA_MAX_UPLOAD_BYTES), and the longest video
   /// (NEARBY_USER_VIDEO_MAX_SECONDS).
@@ -44,12 +47,43 @@ class NearbyService {
       backend.fetchMyNearbyPosts(
           backendUrl: await _url(), token: token, offset: offset);
 
+  /// The live threads I reposted, the latest repost first.
+  Future<NearbyFeedPage> reposts(String token, {int offset = 0}) async =>
+      backend.fetchMyNearbyReposts(
+          backendUrl: await _url(), token: token, offset: offset);
+
+  /// Someone's anonymous profile: their threads ([reposts]: what they
+  /// reposted) under the anonymous name they wrote post [postId] (or its
+  /// comment [commentId]) with.
+  Future<NearbyFeedPage> authorThreads(String token,
+          {required int postId,
+          int? commentId,
+          required bool reposts,
+          int offset = 0}) async =>
+      backend.fetchNearbyAuthorThreads(
+          backendUrl: await _url(),
+          token: token,
+          postId: postId,
+          commentId: commentId,
+          reposts: reposts,
+          offset: offset);
+
+  /// Reposts someone else's thread, or takes my repost back.
+  Future<({int count, bool reposted})> repost(String token, int postId,
+          {required bool repost}) async =>
+      backend.repostNearby(
+          backendUrl: await _url(),
+          token: token,
+          postId: postId,
+          repost: repost);
+
   /// My post's text, who sees it ([radiusM] null: everyone on HUNTR) and
   /// tags, from now; the post as it is now.
   Future<NearbyPost> edit(String token,
           {required int postId,
           required String body,
           required int? radiusM,
+          String? subject,
           List<int> tagIds = const []}) async =>
       backend.editNearbyPost(
           backendUrl: await _url(),
@@ -57,12 +91,14 @@ class NearbyService {
           postId: postId,
           body: body,
           radiusM: radiusM,
+          subject: subject,
           tagIds: tagIds);
 
   /// [radiusM] null: for everyone on HUNTR.
   Future<NearbyPost> post(String token,
           {required String body,
           required int? radiusM,
+          String? subject,
           AnonymousName? as,
           List<int> tagIds = const [],
           int? mediaId}) async =>
@@ -71,6 +107,7 @@ class NearbyService {
           token: token,
           body: body,
           radiusM: radiusM,
+          subject: subject,
           as: as,
           tagIds: tagIds,
           mediaId: mediaId);
@@ -166,3 +203,29 @@ String nearbyAgo(DateTime at, DateTime now) {
   if (d.inHours < 24) return '${d.inHours} h ago';
   return '${d.inDays} d ago';
 }
+
+/// What's wrong with a subject, as the backend says it (null: nothing):
+/// it's needed, at most [NearbyService.subjectMaxLength] characters, of
+/// letters (any language), numbers, spaces and . , ! ? ' " - ( ) : ; & /
+/// only - no emoji or other symbols.
+String? nearbySubjectProblem(String subject) {
+  final text = subject.trim().replaceAll(RegExp(r'\s+'), ' ');
+  if (text.isEmpty) return 'Add a subject.';
+  if (text.length > NearbyService.subjectMaxLength) {
+    return 'Keep the subject to ${NearbyService.subjectMaxLength} characters.';
+  }
+  if (!_subjectAllowed.hasMatch(text)) return nearbySubjectRule;
+  return null;
+}
+
+const nearbySubjectRule = "A subject can have letters, numbers, spaces and "
+    ". , ! ? ' \" - ( ) : ; & / only.";
+
+/// Letters and their accents, plain digits, spaces and basic punctuation
+/// (with the curly quotes and dashes phones type) - never "fancy font"
+/// letters (Mathematical Alphanumeric Symbols).
+final _subjectAllowed = RegExp(
+    r"^(?:(?![\u{1D400}-\u{1D7FF}])[\p{L}\p{M}\p{Nd} .,!?'"
+    '"'
+    r"\-():;&/\u2018\u2019\u201C\u201D\u2013\u2014])+$",
+    unicode: true);

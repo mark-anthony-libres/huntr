@@ -7,6 +7,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:huntr/flows/chat_attachments.dart';
+import 'package:huntr/screens/anonymous_profile_screen.dart'
+    show MyAnonymousProfileScreen;
 import 'package:huntr/screens/nearby_post_screen.dart';
 import 'package:huntr/screens/nearby_screen.dart';
 import 'package:huntr/services/huntr_backend.dart';
@@ -134,6 +136,7 @@ class _FakeNearby extends NearbyService {
   Future<NearbyPost> post(String token,
       {required String body,
       required int? radiusM,
+      String? subject,
       AnonymousName? as,
       List<int> tagIds = const [],
       int? mediaId}) async {
@@ -142,6 +145,7 @@ class _FakeNearby extends NearbyService {
     return NearbyPost(
         id: 50,
         author: const AnonymousName(name: 'HappyMango', avatar: 'bear'),
+        subject: subject,
         body: body,
         distanceM: null,
         createdAt: DateTime.now(),
@@ -159,6 +163,7 @@ class _FakeNearby extends NearbyService {
       {required int postId,
       required String body,
       required int? radiusM,
+      String? subject,
       List<int> tagIds = const []}) async {
     calls.add('edit $postId $radiusM $body');
     final before = posts.firstWhere((p) => p.id == postId);
@@ -276,7 +281,8 @@ void main() {
     expect(find.text('320 m away'), findsOneWidget);
     expect(find.text('2.3 km away'), findsOneWidget);
     expect(find.text('  12m'), findsWidgets);
-    expect(find.text('You · 120 m away'), findsOneWidget);
+    // mine: how far it reaches too
+    expect(find.text('You · 120 m away · within 5 km'), findsOneWidget);
     expect(find.byKey(const Key('nearbyComments-1')), findsOneWidget);
     expect(find.text('14'), findsOneWidget);
     expect(find.text('28'), findsOneWidget);
@@ -316,7 +322,7 @@ void main() {
     expect(find.byKey(const Key('nearbyEmpty')), findsOneWidget);
   });
 
-  testWidgets('a new thread: counter, limit, distance, and my posts below',
+  testWidgets('a new thread: subject, counter, limit, distance; no My posts',
       (tester) async {
     final service = _FakeNearby()
       ..posts = [
@@ -327,12 +333,33 @@ void main() {
     await _open(tester, service);
     await tester.tap(find.byKey(const Key('nearbyCompose')));
     await tester.pumpAndSettle();
+    await tester.enterText(
+        find.byKey(const Key('nearbySubject')), 'Coffee nearby');
     expect(find.text('New thread'), findsOneWidget);
-    // my posts, below, with their photo or video
-    expect(find.text('My posts'), findsOneWidget);
-    expect(find.byKey(const Key('nearbyMine-2')), findsOneWidget);
-    expect(find.byKey(const Key('nearbyMineMedia-2')), findsOneWidget);
-    expect(find.byKey(const Key('nearbyMine-1')), findsNothing);
+    // my threads are on my anonymous profile now
+    expect(find.text('My posts'), findsNothing);
+    // a subject is needed, of letters, numbers and basic punctuation
+    final subject = find.byKey(const Key('nearbySubject'));
+    await tester.enterText(find.byKey(const Key('nearbyText')), 'Hi');
+    await tester.enterText(subject, '');
+    await tester.pump();
+    expect(
+        tester
+            .widget<FilledButton>(find.byKey(const Key('nearbyPost')))
+            .onPressed,
+        isNull);
+    await tester.enterText(subject, 'Coffee 😀');
+    await tester.pump();
+    expect(find.text(nearbySubjectRule), findsOneWidget);
+    expect(
+        tester
+            .widget<FilledButton>(find.byKey(const Key('nearbyPost')))
+            .onPressed,
+        isNull);
+    await tester.enterText(subject, 'Coffee nearby');
+    await tester.enterText(find.byKey(const Key('nearbyText')), '');
+    await tester.pump();
+    expect(find.text(nearbySubjectRule), findsNothing);
     // for everyone, unless a distance is picked
     expect(tester.widget<Text>(find.byKey(const Key('nearbyRadiusLabel'))).data,
         'Everyone');
@@ -369,6 +396,8 @@ void main() {
     await _open(tester, service);
     await tester.tap(find.byKey(const Key('nearbyCompose')));
     await tester.pumpAndSettle();
+    await tester.enterText(
+        find.byKey(const Key('nearbySubject')), 'Coffee nearby');
     await tester.enterText(find.byKey(const Key('nearbyText')), 'Hi all');
     await tester.pump();
     await tester.tap(find.byKey(const Key('nearbyRadius')));
@@ -413,7 +442,8 @@ void main() {
     expect(find.textContaining('edited'), findsOneWidget);
   });
 
-  testWidgets('my posts show their tags and who they are for', (tester) async {
+  testWidgets('my threads show their tags and who they are for (profile Feed)',
+      (tester) async {
     final service = _FakeNearby()
       ..posts = [
         _post(2, name: 'Me', mine: true),
@@ -436,22 +466,28 @@ void main() {
                   name: 'Friends')
             ]),
       ];
-    await _open(tester, service);
-    await tester.tap(find.byKey(const Key('nearbyCompose')));
+    tester.view.physicalSize = const Size(500, 1400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(AppScope(
+      state: AppState()
+        ..startSession('token')
+        ..anonymousName = const AnonymousName(name: 'Me', avatar: 'bear'),
+      child: ServicesScope(
+        profiles: null,
+        agreements: null,
+        nearby: service,
+        nearbyUploads: NearbyUploads(service),
+        child: MaterialApp(
+            theme: buildHuntrTheme(), home: const MyAnonymousProfileScreen()),
+      ),
+    ));
     await tester.pumpAndSettle();
-    expect(
-        tester
-            .widget<Text>(find.byKey(const ValueKey('nearbyMineReach-2')))
-            .data,
-        'Within 5 km');
-    expect(
-        tester
-            .widget<Text>(find.byKey(const ValueKey('nearbyMineReach-3')))
-            .data,
-        'Everyone on HUNTR');
+    expect(find.textContaining('within 5 km'), findsOneWidget);
+    expect(find.textContaining('Everyone'), findsWidgets);
     expect(
         find.descendant(
-            of: find.byKey(const ValueKey('nearbyMineTags-3')),
+            of: find.byKey(const ValueKey('myThread-3')),
             matching: find.textContaining('Friends')),
         findsOneWidget);
   });
@@ -465,6 +501,8 @@ void main() {
     await _open(tester, service, verified: false);
     await tester.tap(find.byKey(const Key('nearbyCompose')));
     await tester.pumpAndSettle();
+    await tester.enterText(
+        find.byKey(const Key('nearbySubject')), 'Coffee nearby');
     // everyone can be picked (and is, at first)
     await tester.tap(find.byKey(const Key('nearbyRadius')));
     await tester.pumpAndSettle();
@@ -494,6 +532,8 @@ void main() {
     await _open(tester, service);
     await tester.tap(find.byKey(const Key('nearbyCompose')));
     await tester.pumpAndSettle();
+    await tester.enterText(
+        find.byKey(const Key('nearbySubject')), 'Coffee nearby');
     await tester.enterText(find.byKey(const Key('nearbyText')), 'Sunset');
     await tester.tap(find.byKey(const Key('nearbyAddMedia')));
     await tester.pump();
@@ -532,6 +572,8 @@ void main() {
     await _open(tester, service);
     await tester.tap(find.byKey(const Key('nearbyCompose')));
     await tester.pumpAndSettle();
+    await tester.enterText(
+        find.byKey(const Key('nearbySubject')), 'Coffee nearby');
     await tester.enterText(find.byKey(const Key('nearbyText')), 'Sunset');
     await tester.tap(find.byKey(const Key('nearbyAddMedia')));
     await tester.pumpAndSettle();
@@ -564,6 +606,8 @@ void main() {
     await _open(tester, service);
     await tester.tap(find.byKey(const Key('nearbyCompose')));
     await tester.pumpAndSettle();
+    await tester.enterText(
+        find.byKey(const Key('nearbySubject')), 'Coffee nearby');
     await tester.enterText(find.byKey(const Key('nearbyText')), 'Sunset');
     await tester.tap(find.byKey(const Key('nearbyAddMedia')));
     await tester.pumpAndSettle();
@@ -579,6 +623,8 @@ void main() {
     // chosen, then the thread closed without posting: it goes
     await tester.tap(find.byKey(const Key('nearbyCompose')));
     await tester.pumpAndSettle();
+    await tester.enterText(
+        find.byKey(const Key('nearbySubject')), 'Coffee nearby');
     await tester.tap(find.byKey(const Key('nearbyAddMedia')));
     await tester.pumpAndSettle();
     service.calls.clear();
