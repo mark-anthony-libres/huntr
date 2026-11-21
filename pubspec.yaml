@@ -17,6 +17,7 @@ dependencies:
   flutter_map: ^8.3.2
   flutter_markdown_plus: ^1.0.12
   flutter_secure_storage: ^11.2.0
+  font_awesome_flutter: ^11.0.0
   geolocator: ^14.1.1
   google_sign_in: ^7.2.0
   google_sign_in_web: ^1.1.3

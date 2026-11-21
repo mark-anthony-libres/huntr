@@ -28,6 +28,7 @@ import '../widgets/profile/profile_section.dart';
 import '../widgets/notes/person_note.dart';
 import '../widgets/profile/looking_for_pill.dart';
 import '../widgets/profile/photo_gallery.dart';
+import '../widgets/profile/social_links_row.dart';
 import '../flows/accept_with_album.dart';
 import '../widgets/stories/profile_stories.dart';
 import '../widgets/stories/reaction_burst.dart';
@@ -272,6 +273,13 @@ class ProfileScreen extends StatelessWidget {
               ProfileSection(
                 title: 'Stats',
                 child: _StatsGrid(key: const Key('profileStats'), lines: lines),
+              ),
+            // Instagram, X, Facebook, TikTok: tapped, their profile there
+            if (!p.socialLinks.isEmpty)
+              ProfileSection(
+                title: 'Socials',
+                child: SocialLinksRow(
+                    key: const Key('profileSocials'), links: p.socialLinks),
               ),
             if (p.lookingFor.isNotEmpty)
               ProfileSection(

@@ -102,6 +102,7 @@ class MyProfile {
     this.stats = const ProfileStats(),
     this.anonymousName,
     this.hasPlace = false,
+    this.socialLinks = const SocialLinks(),
   });
 
   factory MyProfile.fromJson(Map<String, dynamic> json) => MyProfile(
@@ -121,6 +122,7 @@ class MyProfile {
         sexualPosition: json['sexual_position'] as String?,
         stats: ProfileStats.fromJson(json),
         hasPlace: json['has_place'] as bool? ?? false,
+        socialLinks: SocialLinks.fromJson(json['social_links']),
         anonymousName: json['anonymous_name'] == null
             ? null
             : AnonymousName.fromJson(
@@ -137,6 +139,9 @@ class MyProfile {
 
   /// The switch on Me: "Has a place" shows on my profile.
   final bool hasPlace;
+
+  /// My Instagram, X, Facebook, TikTok usernames (those I show).
+  final SocialLinks socialLinks;
 
   /// All my stats (with Show Age and my units).
   final ProfileStats stats;
@@ -605,6 +610,7 @@ Future<MyProfile> updateMyProfile({
   required int age,
   required List<String> lookingFor,
   ProfileStats? stats,
+  SocialLinks? socialLinks,
   http.Client? client,
 }) =>
     _sendAuthorized(
@@ -619,6 +625,7 @@ Future<MyProfile> updateMyProfile({
           'looking_for': lookingFor,
           // only when edited; otherwise the backend keeps them
           ...?stats?.toJson(),
+          ...?socialLinks?.toJson(),
         }),
       ),
       MyProfile.fromJson,

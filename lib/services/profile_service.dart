@@ -33,6 +33,7 @@ class ProfileService {
         age: edit.age,
         lookingFor: _choiceNames(edit.lookingFor),
         stats: edit.stats,
+        socialLinks: edit.socialLinks,
       );
 
   /// The one sexual position my profile shows (null: do not show).

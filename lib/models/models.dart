@@ -2,9 +2,11 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import 'profile_stats.dart';
+import 'social_links.dart';
 import 'stickers.dart';
 
 export 'profile_stats.dart';
+export 'social_links.dart';
 
 /// What someone is open to on Huntr. Shown as chips on profiles and used as a filter.
 enum LookingFor {
@@ -89,10 +91,14 @@ class ProfileEdit {
     required this.age,
     required this.lookingFor,
     this.stats,
+    this.socialLinks,
   });
 
   /// The stats to save (null: leave them as they are).
   final ProfileStats? stats;
+
+  /// The social links to save (null: leave them as they are).
+  final SocialLinks? socialLinks;
 
   /// Optional; empty means no display name.
   final String displayName;
@@ -335,6 +341,7 @@ class Profile {
     this.stickers,
     this.activeUntil,
     this.hasPlace = false,
+    this.socialLinks = const SocialLinks(),
   });
 
   /// Someone anonymous to me (the sender of an anonymous conversation): only
@@ -419,6 +426,8 @@ class Profile {
           : null,
       activeUntil: _time(json['active_until']),
       hasPlace: json['has_place'] == true,
+      // only on a full profile
+      socialLinks: SocialLinks.fromJson(json['social_links']),
     );
   }
 
@@ -512,6 +521,7 @@ class Profile {
         storySeen: storySeen ?? this.storySeen,
         stickers: stickers,
         hasPlace: hasPlace,
+        socialLinks: socialLinks,
       );
 
   /// A block between us (as the chat list knows it): I block them, or they
@@ -524,6 +534,9 @@ class Profile {
 
   /// Their stats (height, weight, body type, position, ...), as far as set.
   final ProfileStats stats;
+
+  /// Their Instagram, X, Facebook, TikTok (those they show).
+  final SocialLinks socialLinks;
 
   /// The position they show (null: they chose not to show one).
   SexualPosition? get sexualPosition => stats.sexualPosition;

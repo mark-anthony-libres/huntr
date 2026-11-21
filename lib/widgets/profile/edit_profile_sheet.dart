@@ -8,6 +8,7 @@ import '../../services/services_scope.dart';
 import '../../state/app_state.dart';
 import '../../theme.dart';
 import '../pill_chip.dart';
+import 'social_links_row.dart' show socialIcon;
 import 'stats_editor.dart';
 
 /// Opens Edit profile. The form is loaded from and saved to the backend;
@@ -47,6 +48,12 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
   final _displayName = TextEditingController();
   final _bio = TextEditingController();
   final _age = TextEditingController();
+
+  /// Instagram, X, Facebook, TikTok usernames (empty: not shown).
+  final _socials = {
+    for (final network in SocialNetwork.values)
+      network: TextEditingController(),
+  };
   Set<LookingFor> _lookingFor = {};
 
   /// Stats as edited here (saved with the rest).
@@ -74,6 +81,9 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
     _displayName.dispose();
     _bio.dispose();
     _age.dispose();
+    for (final field in _socials.values) {
+      field.dispose();
+    }
     super.dispose();
   }
 
@@ -96,6 +106,15 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
         _age.text = profile.age?.toString() ?? '';
         _lookingFor = LookingFor.fromNames(profile.lookingFor);
         _stats = profile.stats;
+        for (final network in SocialNetwork.values) {
+          // a link where one is asked for (Instagram, Facebook)
+          _socials[network]!.text = switch (profile.socialLinks[network]) {
+            final name? when network.asksForLink =>
+              network.urlFor(name).toString(),
+            final name? => name,
+            null => '',
+          };
+        }
         _loading = false;
       });
     } on SessionRejectedException {
@@ -128,6 +147,13 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
           age: int.parse(_age.text),
           lookingFor: _lookingFor,
           stats: _stats,
+          // every network: an empty one is cleared
+          socialLinks: SocialLinks({
+            for (final network in SocialNetwork.values)
+              if (_socials[network]!.text.trim() case final name
+                  when name.isNotEmpty)
+                network: name,
+          }),
         ),
       );
       if (!mounted) return;
@@ -138,7 +164,9 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
         age: saved.age,
         lookingFor: LookingFor.fromNames(saved.lookingFor),
       );
-      AppScope.read(context).setMyStats(saved.stats);
+      AppScope.read(context)
+        ..setMyStats(saved.stats)
+        ..setMySocialLinks(saved.socialLinks);
       Navigator.of(context).pop(true);
     } on SessionRejectedException {
       _sessionExpired();
@@ -371,6 +399,47 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
                     StatsEditor(
                       stats: _stats,
                       onChanged: (stats) => setState(() => _stats = stats),
+                    ),
+                    // Instagram, X, Facebook, TikTok: shown on my profile
+                    _LabeledField(
+                      label: 'Socials',
+                      child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            for (final network in SocialNetwork.values)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 10),
+                                child: TextFormField(
+                                  key: Key('editSocial-${network.name}'),
+                                  controller: _socials[network],
+                                  autocorrect: false,
+                                  enableSuggestions: false,
+                                  keyboardType: network.asksForLink
+                                      ? TextInputType.url
+                                      : TextInputType.text,
+                                  textInputAction: TextInputAction.next,
+                                  decoration: _borderedDecoration(
+                                    hint: network.asksForLink
+                                        ? '${network.label} profile link'
+                                        : '${network.label} username',
+                                    error: _fieldErrors[network.apiField],
+                                    prefixIcon: Padding(
+                                      padding: const EdgeInsets.fromLTRB(
+                                          12, 8, 10, 8),
+                                      child: _IconBox(
+                                          icon: socialIcon(network).data),
+                                    ),
+                                  ),
+                                  onChanged: (_) =>
+                                      _clearFieldError(network.apiField),
+                                ),
+                              ),
+                            const Text(
+                                'For Instagram and Facebook, open your profile '
+                                'and copy its link. Shown on your profile; '
+                                'leave one empty to hide it.',
+                                style: TextStyle(color: HuntrColors.muted)),
+                          ]),
                     ),
                   ],
                 ),

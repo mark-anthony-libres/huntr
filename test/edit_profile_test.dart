@@ -120,7 +120,8 @@ void main() {
     expect(find.text('Enter your display name'), findsOneWidget); // hint
     final decorators = tester.widgetList<InputDecorator>(find.descendant(
         of: find.byType(Form), matching: find.byType(InputDecorator)));
-    expect(decorators, hasLength(3)); // name, bio, age (chips are pills)
+    // name, bio, age and the 4 socials (chips are pills)
+    expect(decorators, hasLength(3 + SocialNetwork.values.length));
     for (final decorator in decorators) {
       final border = decorator.decoration.enabledBorder as OutlineInputBorder;
       expect(border.borderSide.style, BorderStyle.solid);

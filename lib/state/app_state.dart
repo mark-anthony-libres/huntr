@@ -78,6 +78,7 @@ class AppState extends ChangeNotifier {
     _notes.clear();
     myUserId = null;
     myStats = const ProfileStats();
+    mySocialLinks = const SocialLinks();
     anonymousMessaging = true;
     hideNsfw = true;
     _revealedNsfw.clear();
@@ -186,6 +187,14 @@ class AppState extends ChangeNotifier {
   /// The sexual position my profile shows (null: do not show).
   SexualPosition? get mySexualPosition => myStats.sexualPosition;
 
+  /// My Instagram, X, Facebook, TikTok (those I show).
+  SocialLinks mySocialLinks = const SocialLinks();
+
+  void setMySocialLinks(SocialLinks links) {
+    mySocialLinks = links;
+    notifyListeners();
+  }
+
   /// My profile as other people see it (for "View profile").
   /// My user id and whether my account is new, from the backend (for my
   /// profile as others see it).
@@ -223,6 +232,7 @@ class AppState extends ChangeNotifier {
         // as others see it: no age when I hide it
         ageHidden: !myStats.showAge,
         stats: myStats,
+        socialLinks: mySocialLinks,
         // others only see the green dot when it's turned on
         online: showOnline,
         lastActive: DateTime.now(),
