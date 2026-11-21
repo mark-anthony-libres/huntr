@@ -177,8 +177,24 @@ class HuntrSideBar extends StatelessWidget {
                   mainAxisAlignment:
                       wide ? MainAxisAlignment.start : MainAxisAlignment.center,
                   children: [
-                    Image.asset('assets/huntr_logo.png',
-                        key: const Key('sideBarLogo'), height: 40),
+                    // wide: "huntr" as on the splash screen (the theme's
+                    // gradient); narrow: the H, as there's no room
+                    if (wide)
+                      ShaderMask(
+                        key: const Key('sideBarLogo'),
+                        shaderCallback: HuntrColors.accentGradient.createShader,
+                        child: const Text('huntr',
+                            semanticsLabel: 'HUNTR',
+                            style: TextStyle(
+                                fontFamily: huntrFontFamily,
+                                fontSize: 38,
+                                fontWeight: FontWeight.w800,
+                                height: 1,
+                                color: Colors.white)),
+                      )
+                    else
+                      Image.asset('assets/huntr_logo.png',
+                          key: const Key('sideBarLogo'), height: 40),
                   ],
                 ),
               ),
