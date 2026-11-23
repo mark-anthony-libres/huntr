@@ -19,6 +19,7 @@ import 'taps_screen.dart';
 import '../widgets/activity_bubble.dart';
 import '../widgets/huntr_bottom_bar.dart';
 import '../widgets/page_title.dart';
+import '../theme.dart';
 
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key});
@@ -44,6 +45,7 @@ class _HomeShellState extends State<HomeShell> {
   void _showTab(int tab) {
     if (tab == _tab) return;
     setState(() => _tab = tab);
+    HomeTabs.current = tab;
     _visits[tab].value++;
   }
 
@@ -217,6 +219,7 @@ class _HomeShellState extends State<HomeShell> {
 
   @override
   void dispose() {
+    if (HomeTabs.show == _showTab) HomeTabs.show = null;
     _lifecycle?.dispose();
     for (final visits in _visits) {
       visits.dispose();
@@ -305,10 +308,11 @@ class _HomeShellState extends State<HomeShell> {
 
   @override
   Widget build(BuildContext context) {
-    final messaging = MessagingScope.of(context);
-    final unread = messaging?.unreadTotal ?? AppScope.of(context).chatsBadge;
     final taps = TapScope.of(context);
     _showActivity(taps?.latestActivity);
+    // pages opened over this one show the same sidebar (WithHomeSideBar)
+    HomeTabs.show = _showTab;
+    HomeTabs.current = _tab;
     final tabs = IndexedStack(
       index: _tab,
       children: [
@@ -324,33 +328,7 @@ class _HomeShellState extends State<HomeShell> {
               child: PageVisits(visits: _visits[i], child: tab)),
       ],
     );
-    final items = [
-      const HuntrBottomBarItem(
-          icon: Icons.explore_outlined,
-          selectedIcon: Icons.explore,
-          label: 'Explore'),
-      // anonymous posts from people around
-      const HuntrBottomBarItem(
-          icon: Icons.forum_outlined,
-          selectedIcon: Icons.forum_rounded,
-          label: 'Threads'),
-      HuntrBottomBarItem(
-          icon: Icons.waving_hand_outlined,
-          selectedIcon: Icons.waving_hand_rounded,
-          label: 'Taps',
-          // unread taps and new viewers, both under Taps
-          badge: (taps?.unreadCount ?? 0) + (taps?.newViewers ?? 0),
-          anchor: _tapsAnchor),
-      HuntrBottomBarItem(
-          icon: Icons.chat_bubble_outline,
-          selectedIcon: Icons.chat_bubble_rounded,
-          label: 'Chats',
-          badge: unread),
-      const HuntrBottomBarItem(
-          icon: Icons.person_outline,
-          selectedIcon: Icons.person_rounded,
-          label: 'Me'),
-    ];
+    final items = homeTabItems(context, tapsAnchor: _tapsAnchor);
     // the website on a wide screen (a computer, a tablet): the tabs down the
     // left; the app, and the website on a phone: along the bottom
     final side =
@@ -372,6 +350,87 @@ class _HomeShellState extends State<HomeShell> {
       controller: _bubble,
       overlayChildBuilder: (context) => _activityBubble(context, side: side),
       child: page,
+    );
+  }
+}
+
+/// The home screen's tabs, as the bottom bar and the sidebar show them
+/// (with their badges: unread taps and new viewers, unread chats).
+List<HuntrBottomBarItem> homeTabItems(BuildContext context,
+    {LayerLink? tapsAnchor}) {
+  final messaging = MessagingScope.of(context);
+  final unread = messaging?.unreadTotal ?? AppScope.of(context).chatsBadge;
+  final taps = TapScope.of(context);
+  return [
+    const HuntrBottomBarItem(
+        icon: Icons.explore_outlined,
+        selectedIcon: Icons.explore,
+        label: 'Explore'),
+    // anonymous posts from people around
+    const HuntrBottomBarItem(
+        icon: Icons.forum_outlined,
+        selectedIcon: Icons.forum_rounded,
+        label: 'Threads'),
+    HuntrBottomBarItem(
+        icon: Icons.waving_hand_outlined,
+        selectedIcon: Icons.waving_hand_rounded,
+        label: 'Taps',
+        // unread taps and new viewers, both under Taps
+        badge: (taps?.unreadCount ?? 0) + (taps?.newViewers ?? 0),
+        anchor: tapsAnchor),
+    HuntrBottomBarItem(
+        icon: Icons.chat_bubble_outline,
+        selectedIcon: Icons.chat_bubble_rounded,
+        label: 'Chats',
+        badge: unread),
+    const HuntrBottomBarItem(
+        icon: Icons.person_outline,
+        selectedIcon: Icons.person_rounded,
+        label: 'Me'),
+  ];
+}
+
+/// Which home tab is shown, and how to show another: for a page opened
+/// over the home screen that keeps the sidebar ([WithHomeSideBar]).
+class HomeTabs {
+  HomeTabs._();
+
+  static int current = 0;
+
+  /// Set while the home screen is there.
+  static void Function(int tab)? show;
+}
+
+/// [child] (a page opened over the home screen) with the home screen's
+/// sidebar beside it on a wide screen on the web, as the tabs have it;
+/// a tab tapped there closes the page and shows that tab. Elsewhere,
+/// [child] alone.
+class WithHomeSideBar extends StatelessWidget {
+  const WithHomeSideBar({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final show = HomeTabs.show;
+    if (!kIsWeb ||
+        show == null ||
+        MediaQuery.sizeOf(context).width < huntrSideBarMinWidth) {
+      return child;
+    }
+    return Material(
+      color: HuntrColors.night,
+      child: Row(children: [
+        HuntrSideBar(
+          items: homeTabItems(context),
+          selectedIndex: HomeTabs.current,
+          onSelected: (tab) {
+            Navigator.of(context).popUntil((route) => route.isFirst);
+            show(tab);
+          },
+        ),
+        Expanded(child: child),
+      ]),
     );
   }
 }

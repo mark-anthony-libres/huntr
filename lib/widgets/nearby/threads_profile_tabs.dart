@@ -134,7 +134,15 @@ class _TabsHeader extends SliverPersistentHeaderDelegate {
   @override
   Widget build(
           BuildContext context, double shrinkOffset, bool overlapsContent) =>
-      ColoredBox(color: HuntrColors.night, child: ThreadsProfileTabs.bar());
+      ColoredBox(
+        color: HuntrColors.night,
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: threadsColumnWidth),
+            child: ThreadsProfileTabs.bar(),
+          ),
+        ),
+      );
 
   @override
   bool shouldRebuild(_TabsHeader oldDelegate) => false;
@@ -241,37 +249,40 @@ class _ThreadsTabState extends State<_ThreadsTab>
     return RefreshIndicator(
       color: HuntrColors.orange,
       onRefresh: _load,
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-        children: [
-          if (posts == null && _error != null)
-            LoadFailedCard(
-              title: "Couldn't load these",
-              message: _error!,
-              onRetry: _load,
-            )
-          else if (posts == null)
-            const LoadingRows(count: 3, height: 150)
-          else if (posts.isEmpty)
-            EmptyStateCard(
-                icon: widget.emptyIcon,
-                title: widget.emptyTitle,
-                message: widget.emptyMessage)
-          else ...[
-            for (final post in posts)
-              NearbyPostCard(
-                key: ValueKey('myThread-${post.id}'),
-                post: post,
-                now: now,
-                onLike: () => likeThread(post),
-                onRepost: () => repostThread(post),
-                onAction: (action) => actOnThread(post, action),
-                onOpen: () => openThread(post),
-                onAuthor: () => openThreadAuthor(post),
-              ),
-            if (_next != null) LoadMoreRow(onVisible: () => _load(more: true)),
+      child: LayoutBuilder(
+        builder: (context, box) => ListView(
+          padding: threadsColumnPadding(box.maxWidth, top: 12),
+          children: [
+            if (posts == null && _error != null)
+              LoadFailedCard(
+                title: "Couldn't load these",
+                message: _error!,
+                onRetry: _load,
+              )
+            else if (posts == null)
+              const LoadingRows(count: 3, height: 150)
+            else if (posts.isEmpty)
+              EmptyStateCard(
+                  icon: widget.emptyIcon,
+                  title: widget.emptyTitle,
+                  message: widget.emptyMessage)
+            else ...[
+              for (final post in posts)
+                NearbyPostCard(
+                  key: ValueKey('myThread-${post.id}'),
+                  post: post,
+                  now: now,
+                  onLike: () => likeThread(post),
+                  onRepost: () => repostThread(post),
+                  onAction: (action) => actOnThread(post, action),
+                  onOpen: () => openThread(post),
+                  onAuthor: () => openThreadAuthor(post),
+                ),
+              if (_next != null)
+                LoadMoreRow(onVisible: () => _load(more: true)),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -282,6 +293,19 @@ class _Padded extends StatelessWidget {
   final Widget child;
 
   @override
-  Widget build(BuildContext context) => ListView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24), children: [child]);
+  Widget build(BuildContext context) => LayoutBuilder(
+      builder: (context, box) => ListView(
+          padding: threadsColumnPadding(box.maxWidth, top: 16),
+          children: [child]));
+}
+
+/// How wide threads get on a wide screen (as in the Threads feed).
+const threadsColumnWidth = 720.0;
+
+/// A list's padding that keeps its threads in a centred column of at most
+/// [threadsColumnWidth] of its [width] (16 at the sides on a phone).
+EdgeInsets threadsColumnPadding(double width, {required double top}) {
+  final side =
+      width > threadsColumnWidth + 32 ? (width - threadsColumnWidth) / 2 : 16.0;
+  return EdgeInsets.fromLTRB(side, top, side, 24);
 }

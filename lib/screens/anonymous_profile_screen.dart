@@ -16,6 +16,7 @@ import '../widgets/nearby/threads_profile_tabs.dart';
 import '../widgets/nearby/nearby_post_card.dart' show NearbyAction;
 import '../widgets/profile/gradient_button.dart';
 import 'chat_screen.dart';
+import 'home_shell.dart' show WithHomeSideBar;
 
 /// Someone writing to me anonymously, as I may see them: their anonymous
 /// name and animal, whether they're online, roughly how far away (if they
@@ -671,7 +672,9 @@ class _MyAnonymousProfileScreenState extends State<MyAnonymousProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final mine = AppScope.of(context).anonymousName;
-    return Scaffold(
+    // on a wide screen on the web, beside the home screen's sidebar
+    return WithHomeSideBar(
+        child: Scaffold(
       key: const Key('myAnonymousProfile'),
       appBar: AppBar(
         title: const Text('Anonymous profile'),
@@ -734,7 +737,7 @@ class _MyAnonymousProfileScreenState extends State<MyAnonymousProfileScreen> {
               ),
               tabs: const ThreadsProfileTabs.mine(),
             ),
-    );
+    ));
   }
 }
 
@@ -795,7 +798,9 @@ class _ThreadsAuthorScreenState extends State<ThreadsAuthorScreen> {
   @override
   Widget build(BuildContext context) {
     final far = widget.distanceM;
-    return Scaffold(
+    // on a wide screen on the web, beside the home screen's sidebar
+    return WithHomeSideBar(
+        child: Scaffold(
       key: const Key('threadsAuthorProfile'),
       appBar: AppBar(
         title: const Text('Anonymous profile'),
@@ -873,6 +878,6 @@ class _ThreadsAuthorScreenState extends State<ThreadsAuthorScreen> {
         tabs: ThreadsProfileTabs.author(
             postId: widget.postId, commentId: widget.commentId),
       ),
-    );
+    ));
   }
 }
