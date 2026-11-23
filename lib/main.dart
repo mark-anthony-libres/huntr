@@ -7,6 +7,7 @@ import 'screens/session_gate.dart';
 import 'services/agreement_service.dart';
 import 'services/album_service.dart';
 import 'services/explore_service.dart';
+import 'services/changelog_service.dart';
 import 'services/feedback_service.dart';
 import 'services/nearby_service.dart';
 import 'services/nearby_uploads.dart';
@@ -109,6 +110,7 @@ void main() {
     explore: const ExploreService(),
     presence: PresenceService(),
     feedback: const FeedbackService(),
+    changelog: const ChangelogService(),
     stories: const StoryService(),
     nearby: const NearbyService(),
     nearbyUploads: nearbyUploads,
@@ -132,6 +134,7 @@ class HuntrApp extends StatelessWidget {
     this.explore,
     this.presence,
     this.feedback,
+    this.changelog,
     this.stories,
     this.nearby,
     this.nearbyUploads,
@@ -179,6 +182,9 @@ class HuntrApp extends StatelessWidget {
   /// Feedback and suggestions (Settings > Support).
   final FeedbackService? feedback;
 
+  /// What's new (Settings, and a sheet once for news).
+  final ChangelogService? changelog;
+
   /// Stories (My Day).
   final StoryService? stories;
 
@@ -225,6 +231,7 @@ class HuntrApp extends StatelessWidget {
               explore: explore,
               presence: presence,
               feedback: feedback,
+              changelog: changelog,
               stories: stories,
               nearby: nearby,
               nearbyUploads: nearbyUploads,

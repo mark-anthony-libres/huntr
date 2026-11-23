@@ -113,7 +113,14 @@ class MeScreen extends StatelessWidget {
                     style: IconButton.styleFrom(
                         backgroundColor: HuntrColors.surface,
                         minimumSize: const Size(44, 44)),
-                    icon: const Icon(Icons.settings_outlined),
+                    // a dot while there's What's new I haven't seen
+                    icon: Badge(
+                      key: const Key('settingsNewDot'),
+                      isLabelVisible: app.whatsNewUnseen,
+                      smallSize: 9,
+                      backgroundColor: HuntrColors.orange,
+                      child: const Icon(Icons.settings_outlined),
+                    ),
                     onPressed: () => Navigator.of(context).push(
                         MaterialPageRoute(
                             builder: (_) => const SettingsScreen())),

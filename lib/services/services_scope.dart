@@ -2,6 +2,7 @@ import 'package:flutter/widgets.dart';
 
 import 'agreement_service.dart';
 import 'album_service.dart';
+import 'changelog_service.dart';
 import 'explore_service.dart';
 import 'feedback_service.dart';
 import 'nearby_service.dart';
@@ -27,6 +28,7 @@ class ServicesScope extends InheritedWidget {
     this.explore,
     this.presence,
     this.feedback,
+    this.changelog,
     this.stories,
     this.nearby,
     this.nearbyUploads,
@@ -56,6 +58,9 @@ class ServicesScope extends InheritedWidget {
 
   /// Feedback and suggestions. Null hides Settings' Support rows.
   final FeedbackService? feedback;
+
+  /// What's new (the changelog). Null hides it.
+  final ChangelogService? changelog;
 
   /// Stories (My Day). Null hides them.
   final StoryService? stories;
@@ -99,6 +104,9 @@ class ServicesScope extends InheritedWidget {
   static PresenceService? presenceOf(BuildContext context) =>
       _of(context)?.presence;
 
+  static ChangelogService? changelogOf(BuildContext context) =>
+      _of(context)?.changelog;
+
   static FeedbackService? feedbackOf(BuildContext context) =>
       _of(context)?.feedback;
 
@@ -120,6 +128,7 @@ class ServicesScope extends InheritedWidget {
       albumCache != oldWidget.albumCache ||
       explore != oldWidget.explore ||
       feedback != oldWidget.feedback ||
+      changelog != oldWidget.changelog ||
       stories != oldWidget.stories ||
       nearby != oldWidget.nearby ||
       nearbyUploads != oldWidget.nearbyUploads ||

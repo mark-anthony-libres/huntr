@@ -167,6 +167,16 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// There's a What's new entry I haven't seen (a dot on Settings and its
+  /// What's new row), as the backend said when the app last asked.
+  bool whatsNewUnseen = false;
+
+  void setWhatsNewUnseen(bool unseen) {
+    if (whatsNewUnseen == unseen) return;
+    whatsNewUnseen = unseen;
+    notifyListeners();
+  }
+
   /// The NSFW posts whose photos and videos I chose to see (until I sign
   /// out or the app closes).
   final _revealedNsfw = <int>{};

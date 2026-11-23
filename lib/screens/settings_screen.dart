@@ -18,6 +18,7 @@ import 'appearance_screen.dart';
 import 'blocked_users_screen.dart';
 import 'feedback_screen.dart';
 import 'unmatched_users_screen.dart';
+import 'whats_new_screen.dart';
 import '../config/store_build.dart';
 
 /// Privacy, safety and account, opened from the gear on Me. A search box at
@@ -228,6 +229,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ]),
           ),
         ],
+
+        // ---- what's new ----
+        if (ServicesScope.changelogOf(context) != null)
+          SettingsSection(
+            label: 'ABOUT',
+            child: SettingsGroup(children: [
+              SettingsRow(
+                key: const Key('openWhatsNew'),
+                icon: Icons.auto_awesome_outlined,
+                title: "What's new",
+                subtitle: 'New features and fixes in HUNTR',
+                trailing: AppScope.of(context).whatsNewUnseen
+                    ? Badge(
+                        key: const Key('whatsNewDot'),
+                        smallSize: 10,
+                        backgroundColor: HuntrColors.orange)
+                    : null,
+                onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const WhatsNewScreen())),
+              ),
+            ]),
+          ),
 
         // ---- account ----
         SettingsSection(

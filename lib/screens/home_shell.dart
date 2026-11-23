@@ -16,6 +16,7 @@ import 'explore_screen.dart';
 import 'me_screen.dart';
 import 'nearby_screen.dart';
 import 'taps_screen.dart';
+import 'whats_new_screen.dart';
 import '../widgets/activity_bubble.dart';
 import '../widgets/huntr_bottom_bar.dart';
 import '../widgets/page_title.dart';
@@ -124,6 +125,8 @@ class _HomeShellState extends State<HomeShell> {
         final linked =
             kIsWeb ? PushTarget.from(Uri.base.queryParameters) : null;
         if (linked != null) unawaited(_open(linked));
+        // What's new: Settings' dot, and news shown once
+        unawaited(checkWhatsNew(context));
       });
       _lifecycle = AppLifecycleListener(
         onShow: _foreground,

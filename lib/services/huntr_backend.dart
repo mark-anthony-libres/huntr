@@ -5075,3 +5075,121 @@ Future<void> reportNearby(
           body: jsonEncode({'reason': reason})),
       (_) {},
     );
+
+// ---- the changelog (What's new) ----
+
+/// An entry of HUNTR's changelog, written in the admin dashboard: its text
+/// is cleaned HTML; HUNTR's photos and videos in it are
+/// `/changelog/media/...` under the API ([changelogMediaLinks]).
+class ChangelogEntry {
+  const ChangelogEntry({
+    required this.id,
+    required this.title,
+    required this.version,
+    required this.bodyHtml,
+    required this.publishedAt,
+  });
+
+  factory ChangelogEntry.fromJson(Map<String, dynamic> json) => ChangelogEntry(
+        id: json['id'] as int,
+        title: json['title'] as String,
+        version: json['version'] as String?,
+        bodyHtml: json['body_html'] as String? ?? '',
+        publishedAt: DateTime.parse(json['published_at'] as String),
+      );
+
+  final int id;
+  final String title;
+  final String? version;
+  final String bodyHtml;
+  final DateTime publishedAt;
+}
+
+/// A page of the changelog, newest first ([nextOffset]: the next page's;
+/// null at the end).
+class ChangelogPage {
+  const ChangelogPage({required this.entries, required this.nextOffset});
+
+  final List<ChangelogEntry> entries;
+  final int? nextOffset;
+}
+
+/// What's new for me: [unseen] (Settings' dot), the newest entry's id, and
+/// the entry to show me once in the What's new sheet ([sheet]), if any.
+class ChangelogNews {
+  const ChangelogNews(
+      {required this.unseen, required this.newestId, required this.sheet});
+
+  factory ChangelogNews.fromJson(Map<String, dynamic> json) => ChangelogNews(
+        unseen: json['unseen'] as bool? ?? false,
+        newestId: json['newest_id'] as int?,
+        sheet: json['sheet'] == null
+            ? null
+            : ChangelogEntry.fromJson(json['sheet'] as Map<String, dynamic>),
+      );
+
+  static const none = ChangelogNews(unseen: false, newestId: null, sheet: null);
+
+  final bool unseen;
+  final int? newestId;
+  final ChangelogEntry? sheet;
+}
+
+/// [html] with HUNTR's photos and videos linked under [backendUrl].
+String changelogMediaLinks(String html, String backendUrl) {
+  final base = backendUrl.endsWith('/')
+      ? backendUrl.substring(0, backendUrl.length - 1)
+      : backendUrl;
+  return html.replaceAllMapped(RegExp(r'(src|poster)="/changelog/media/'),
+      (m) => '${m[1]}="$base/changelog/media/');
+}
+
+/// GET .../changelog: published entries, newest first.
+Future<ChangelogPage> fetchChangelog(
+        {required String backendUrl,
+        required String token,
+        int offset = 0,
+        http.Client? client}) =>
+    _sendAuthorizedJson(
+      client,
+      (httpClient) => httpClient.get(
+          _endpoint(backendUrl, '/changelog')
+              .replace(queryParameters: {'offset': '$offset', 'limit': '20'}),
+          headers: _authorization(token)),
+      (body) => ChangelogPage(
+        entries: [
+          for (final e in body['data'] as List<dynamic>)
+            ChangelogEntry.fromJson(e as Map<String, dynamic>),
+        ],
+        nextOffset: body['next_offset'] as int?,
+      ),
+    );
+
+/// GET .../changelog/news: whether there's something new for me.
+Future<ChangelogNews> fetchChangelogNews(
+        {required String backendUrl,
+        required String token,
+        http.Client? client}) =>
+    _sendAuthorized(
+      client,
+      (httpClient) => httpClient.get(_endpoint(backendUrl, '/changelog/news'),
+          headers: _authorization(token)),
+      ChangelogNews.fromJson,
+    );
+
+/// POST .../changelog/seen: I've seen the entries up to [entryId].
+Future<ChangelogNews> markChangelogSeen(
+        {required String backendUrl,
+        required String token,
+        required int entryId,
+        http.Client? client}) =>
+    _sendAuthorized(
+      client,
+      (httpClient) => httpClient.post(_endpoint(backendUrl, '/changelog/seen'),
+          headers: {
+            ..._authorization(token),
+            'Content-Type': 'application/json'
+          },
+          body: jsonEncode({'entry_id': entryId})),
+      ChangelogNews.fromJson,
+    );
