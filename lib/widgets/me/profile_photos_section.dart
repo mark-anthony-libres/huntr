@@ -5,12 +5,14 @@ import 'package:flutter/material.dart';
 
 import '../../flows/photo_upload_flow.dart';
 import '../../models/models.dart';
+import '../../screens/photo_info_screens.dart';
 import '../../services/huntr_backend.dart';
 import '../../services/photo_cache/photo_cache.dart';
 import '../../services/photo_service.dart';
 import '../../services/services_scope.dart';
 import '../../state/app_state.dart';
 import '../../theme.dart';
+import '../info_page.dart';
 import '../photos/photo_viewer_screen.dart';
 import 'profile_photo_grid.dart';
 import 'section_states.dart';
@@ -247,16 +249,18 @@ class _ProfilePhotosSectionState extends State<ProfilePhotosSection> {
             max == null
                 ? 'PROFILE PHOTOS'
                 : 'PROFILE PHOTOS · ${photos.length}/$max',
+            info: InfoIconButton(
+              key: const Key('profilePhotosInfoButton'),
+              tooltip: 'About profile photos',
+              screen: () => const ProfilePhotosInfoScreen(),
+            ),
             trailing: max == null
                 ? null
                 : PhotoCountDots(used: photos.length, max: max),
           ),
           const SizedBox(height: 6),
-          const Text(
-              'Everyone can see these on your profile. Tap one to view, crop, '
-              'remove or make it your main photo. Hold and drag to rearrange; '
-              'the first one is your main photo.',
-              style: _captionStyle),
+          const Text('Everyone can see these. No nudity or sexual content.',
+              key: Key('profilePhotoRules'), style: _captionStyle),
           const SizedBox(height: 14),
         ],
         if (_photos == null)

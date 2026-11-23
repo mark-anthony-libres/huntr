@@ -4,25 +4,33 @@ import '../../theme.dart';
 
 /// Small caps section title, with an optional widget on the right.
 class SectionLabel extends StatelessWidget {
-  const SectionLabel(this.text, {super.key, this.trailing});
+  const SectionLabel(this.text, {super.key, this.trailing, this.info});
 
   final String text;
   final Widget? trailing;
+
+  /// Right after the text (an ⓘ that explains the section).
+  final Widget? info;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
         Expanded(
-          child: Text(
-            text,
-            style: const TextStyle(
-              color: HuntrColors.muted,
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 1.6,
+          child: Row(children: [
+            Flexible(
+              child: Text(
+                text,
+                style: const TextStyle(
+                  color: HuntrColors.muted,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 1.6,
+                ),
+              ),
             ),
-          ),
+            if (info != null) ...[const SizedBox(width: 2), info!],
+          ]),
         ),
         if (trailing != null) trailing!,
       ],

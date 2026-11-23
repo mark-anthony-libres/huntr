@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 
 import '../../flows/my_albums.dart';
 import '../../screens/my_album_screen.dart';
+import '../../screens/photo_info_screens.dart';
 import '../../services/huntr_backend.dart';
 import '../../services/photo_cache/photo_cache.dart';
 import '../../services/services_scope.dart';
 import '../../state/app_state.dart';
 import '../../theme.dart';
+import '../info_page.dart';
 import 'profile_photo_grid.dart';
 import 'section_states.dart';
 import 'settings_group.dart';
@@ -89,6 +91,11 @@ class _MyAlbumsSectionState extends State<MyAlbumsSection> {
               : waiting
                   ? 'MY ALBUMS'
                   : 'MY ALBUMS · ${app.myAlbums.length}',
+          info: InfoIconButton(
+            key: const Key('albumsInfoButton'),
+            tooltip: 'About albums',
+            screen: () => const AlbumsInfoScreen(),
+          ),
           trailing: TextButton.icon(
             key: const Key('newAlbum'),
             style: TextButton.styleFrom(
@@ -104,7 +111,7 @@ class _MyAlbumsSectionState extends State<MyAlbumsSection> {
           ),
         ),
         const Text(
-          'Private and separate from your profile. You choose one to send when you send or accept a chat request.',
+          'Private. Only people you share one with can see it.',
           style: _captionStyle,
         ),
         const SizedBox(height: 14),
