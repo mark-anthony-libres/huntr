@@ -151,9 +151,17 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(next);
     await tester.pumpAndSettle();
-    // Show NSFW warning: No
+    // Show NSFW warning: No - asked first (cancelling keeps Yes), then
+    // confirmed
     await tester.tap(find.byKey(const Key('onboardNsfwNo')));
-    await tester.pump();
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('nsfwOffConfirm')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('nsfwOffCancel')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('onboardNsfwNo')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('nsfwOffConfirmButton')));
+    await tester.pumpAndSettle();
     await tester.tap(next);
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('onboardLocation')));

@@ -24,6 +24,10 @@ class _NsfwSettingState extends State<NsfwSetting> {
   Future<void> _save(bool hide) async {
     final app = AppScope.read(context);
     if (_saving || app.hideNsfw == hide) return;
+    // turning the warning off: asked first (a second step, as the stores
+    // require for showing sexual content)
+    if (!hide && !await confirmNsfwOff(context)) return;
+    if (!mounted) return;
     final profiles = ServicesScope.profilesOf(context);
     final token = app.sessionToken;
     final messenger = ScaffoldMessenger.of(context);
@@ -70,8 +74,8 @@ class _NsfwSettingState extends State<NsfwSetting> {
         icon: Icons.info_outline_rounded,
         title: 'What is NSFW?',
         subtitle: 'What counts and how HUNTR handles it',
-        onTap: () => Navigator.of(context).push(MaterialPageRoute(
-            builder: (_) => const NsfwGuidelinesScreen())),
+        onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const NsfwGuidelinesScreen())),
       ),
     ]);
   }
@@ -129,3 +133,29 @@ class _YesNo extends StatelessWidget {
     );
   }
 }
+
+/// Asks before NSFW content shows with no warning (Show NSFW warning: No):
+/// true when confirmed. A second step, so it's never turned off by one tap.
+Future<bool> confirmNsfwOff(BuildContext context) async =>
+    await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        key: const Key('nsfwOffConfirm'),
+        title: const Text('Show NSFW content without a warning?'),
+        content: const Text(
+            'Photos and videos tagged NSFW may show nudity or sexual content. '
+            'They will appear as they are, with no blur. You must be 18 or '
+            'older. You can turn the warning back on in Settings at any time.'),
+        actions: [
+          TextButton(
+              key: const Key('nsfwOffCancel'),
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Keep the warning')),
+          TextButton(
+              key: const Key('nsfwOffConfirmButton'),
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Show without warning')),
+        ],
+      ),
+    ) ??
+    false;

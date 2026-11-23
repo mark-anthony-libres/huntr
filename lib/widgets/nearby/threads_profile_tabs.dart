@@ -268,16 +268,17 @@ class _ThreadsTabState extends State<_ThreadsTab>
                   message: widget.emptyMessage)
             else ...[
               for (final post in posts)
-                NearbyPostCard(
-                  key: ValueKey('myThread-${post.id}'),
-                  post: post,
-                  now: now,
-                  onLike: () => likeThread(post),
-                  onRepost: () => repostThread(post),
-                  onAction: (action) => actOnThread(post, action),
-                  onOpen: () => openThread(post),
-                  onAuthor: () => openThreadAuthor(post),
-                ),
+                if (nearbyThreadShown(post))
+                  NearbyPostCard(
+                    key: ValueKey('myThread-${post.id}'),
+                    post: post,
+                    now: now,
+                    onLike: () => likeThread(post),
+                    onRepost: () => repostThread(post),
+                    onAction: (action) => actOnThread(post, action),
+                    onOpen: () => openThread(post),
+                    onAuthor: () => openThreadAuthor(post),
+                  ),
               if (_next != null)
                 LoadMoreRow(onVisible: () => _load(more: true)),
             ],

@@ -403,16 +403,17 @@ class NearbyScreenState extends State<NearbyScreen> with ThreadListActions {
                 )
               else ...[
                 for (final post in posts)
-                  NearbyPostCard(
-                    key: ValueKey('nearbyCard-${post.id}'),
-                    post: post,
-                    now: now,
-                    onLike: () => likeThread(post),
-                    onRepost: () => repostThread(post),
-                    onAction: (action) => actOnThread(post, action),
-                    onOpen: () => openThread(post),
-                    onAuthor: () => openThreadAuthor(post),
-                  ),
+                  if (nearbyThreadShown(post))
+                    NearbyPostCard(
+                      key: ValueKey('nearbyCard-${post.id}'),
+                      post: post,
+                      now: now,
+                      onLike: () => likeThread(post),
+                      onRepost: () => repostThread(post),
+                      onAction: (action) => actOnThread(post, action),
+                      onOpen: () => openThread(post),
+                      onAuthor: () => openThreadAuthor(post),
+                    ),
                 if (_next != null)
                   LoadMoreRow(onVisible: () => _load(more: true)),
               ],

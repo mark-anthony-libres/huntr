@@ -18,6 +18,7 @@ import 'appearance_screen.dart';
 import 'blocked_users_screen.dart';
 import 'feedback_screen.dart';
 import 'unmatched_users_screen.dart';
+import '../config/store_build.dart';
 
 /// Privacy, safety and account, opened from the gear on Me. A search box at
 /// the top keeps only the settings whose title or subtext has what's typed.
@@ -149,7 +150,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
 
         // ---- content: NSFW ----
-        const SettingsSection(label: 'CONTENT', child: NsfwSetting()),
+        // a store build shows no NSFW content, so nothing to set
+        if (!isStoreBuild)
+          const SettingsSection(label: 'CONTENT', child: NsfwSetting()),
 
         // ---- notifications: each kind, and this device ----
         const SettingsSection(

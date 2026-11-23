@@ -10,6 +10,8 @@ import '../widgets/onboarding/choice_card.dart';
 import 'nsfw_guidelines_screen.dart';
 import '../widgets/me/profile_photos_section.dart';
 import '../widgets/onboarding/nearby_radar.dart';
+import '../config/store_build.dart';
+import '../widgets/me/nsfw_setting.dart' show confirmNsfwOff;
 
 /// Short steps: what Huntr is, who you are, your photos (at least one), what
 /// you're looking for, and where you are. Without the photo service (tests,
@@ -58,7 +60,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         _Step.about,
         if (_withPhotos) _Step.photos,
         _Step.lookingFor,
-        _Step.nsfw,
+        if (!isStoreBuild) _Step.nsfw,
         _Step.location,
       ];
 
@@ -366,7 +368,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                             icon: Icons.visibility_outlined,
                             label: 'No, show everything',
                             selected: !_hideNsfw,
-                            onTap: () => setState(() => _hideNsfw = false),
+                            // asked first: a second step
+                            onTap: () async {
+                              if (!_hideNsfw) return;
+                              if (await confirmNsfwOff(context) && mounted) {
+                                setState(() => _hideNsfw = false);
+                              }
+                            },
                           ),
                           const Padding(
                             padding: EdgeInsets.fromLTRB(4, 6, 4, 24),

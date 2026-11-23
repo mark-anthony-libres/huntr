@@ -2,6 +2,7 @@ import 'package:http/http.dart' as http;
 
 import '../config/google_oauth_config.dart';
 import 'huntr_backend.dart' as backend;
+import '../config/store_build.dart';
 import 'huntr_backend.dart'
     show
         NearbyDiscussion,
@@ -229,3 +230,7 @@ final _subjectAllowed = RegExp(
     '"'
     r"\-():;&/\u2018\u2019\u201C\u201D\u2013\u2014])+$",
     unicode: true);
+
+/// Whether a thread is shown in this build: in an App Store or Google Play
+/// build, never one tagged NSFW (both stores reject explicit media).
+bool nearbyThreadShown(NearbyPost post) => !(isStoreBuild && post.nsfw);

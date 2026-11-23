@@ -1,0 +1,1 @@
+{"BACKEND_URL": "https://api.huntr.online/api", "MAP_ENABLED": true, "MAPTILER_KEY": "Vam1Ah0neGkqaeJ6s6Yq", "MAP_FALLBACK_URL": "https://basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}{r}.png?key=cb1_5de4_1_771d13e23df3068a2e3a6c3a", "MAP_FALLBACK_ATTRIBUTION": "CARTO", "MAP_FALLBACK_MAX_ZOOM": 18, "STORE_BUILD": true}

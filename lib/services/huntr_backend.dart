@@ -4423,7 +4423,7 @@ class AnonymousName {
   final String avatar;
 }
 
-/// A tag a Threads post can have, like "Hookup" (Looking for) or "Outdoor"
+/// A tag a Threads post can have, like "Meetup" (Looking for) or "Outdoor"
 /// (Meet preference).
 /// The tag (Content) an author puts on a post with adult content.
 const nsfwTagSlug = 'nsfw';

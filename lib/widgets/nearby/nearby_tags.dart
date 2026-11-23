@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../services/huntr_backend.dart';
 import '../../theme.dart';
+import '../../config/store_build.dart';
 
 /// A post's tags as small "#Sex" pills under its text: the first [limit]
 /// (all when null), then a quiet "See more" that shows the rest. Nothing
@@ -166,7 +167,10 @@ class _TagSheetState extends State<_TagSheet> {
                     ]),
                   );
                 }
-                final categories = snapshot.data;
+                // a category with nothing to pick (a store build's
+                // Content: only NSFW) isn't shown
+                final categories =
+                    snapshot.data?.where((c) => c.tags.any(_pickable)).toList();
                 if (categories == null) {
                   return const Padding(
                     padding: EdgeInsets.all(32),
@@ -191,6 +195,11 @@ class _TagSheetState extends State<_TagSheet> {
       ),
     );
   }
+
+  /// Can be picked: in a store build, never NSFW (both stores reject
+  /// explicit media).
+  static bool _pickable(NearbyTag tag) =>
+      !(isStoreBuild && tag.slug == nsfwTagSlug);
 
   Widget _group(NearbyTagCategory category) {
     final open = !_folded.contains(category.key);
@@ -226,7 +235,8 @@ class _TagSheetState extends State<_TagSheet> {
         Padding(
           padding: const EdgeInsets.only(top: 4, bottom: 4),
           child: Wrap(spacing: 10, runSpacing: 10, children: [
-            for (final tag in category.tags) _pill(tag),
+            for (final tag in category.tags)
+              if (_pickable(tag)) _pill(tag),
           ]),
         ),
     ]);
