@@ -5088,6 +5088,7 @@ class ChangelogEntry {
     required this.version,
     required this.bodyHtml,
     required this.publishedAt,
+    this.commentCount = 0,
   });
 
   factory ChangelogEntry.fromJson(Map<String, dynamic> json) => ChangelogEntry(
@@ -5096,13 +5097,25 @@ class ChangelogEntry {
         version: json['version'] as String?,
         bodyHtml: json['body_html'] as String? ?? '',
         publishedAt: DateTime.parse(json['published_at'] as String),
+        commentCount: json['comment_count'] as int? ?? 0,
       );
+
+  ChangelogEntry withCommentCount(int count) => ChangelogEntry(
+      id: id,
+      title: title,
+      version: version,
+      bodyHtml: bodyHtml,
+      publishedAt: publishedAt,
+      commentCount: count);
 
   final int id;
   final String title;
   final String? version;
   final String bodyHtml;
   final DateTime publishedAt;
+
+  /// Comments and replies.
+  final int commentCount;
 }
 
 /// A page of the changelog, newest first ([nextOffset]: the next page's;
@@ -5192,4 +5205,153 @@ Future<ChangelogNews> markChangelogSeen(
           },
           body: jsonEncode({'entry_id': entryId})),
       ChangelogNews.fromJson,
+    );
+
+/// A comment on a changelog entry (or a reply: [parentId]), by an
+/// anonymous name, or by HUNTR ([official]).
+class ChangelogComment {
+  const ChangelogComment({
+    required this.id,
+    required this.parentId,
+    required this.author,
+    required this.official,
+    required this.body,
+    required this.createdAt,
+    required this.likeCount,
+    required this.liked,
+    required this.mine,
+    this.replies = const [],
+  });
+
+  factory ChangelogComment.fromJson(Map<String, dynamic> json) =>
+      ChangelogComment(
+        id: json['id'] as int,
+        parentId: json['parent_id'] as int?,
+        author: AnonymousName.fromJson(json),
+        official: json['official'] as bool? ?? false,
+        body: json['body'] as String,
+        createdAt: DateTime.parse(json['created_at'] as String),
+        likeCount: json['like_count'] as int? ?? 0,
+        liked: json['liked'] as bool? ?? false,
+        mine: json['mine'] as bool? ?? false,
+        replies: [
+          for (final r in json['replies'] as List<dynamic>? ?? const [])
+            ChangelogComment.fromJson(r as Map<String, dynamic>),
+        ],
+      );
+
+  final int id;
+  final int? parentId;
+  final AnonymousName author;
+  final bool official;
+  final String body;
+  final DateTime createdAt;
+  final int likeCount;
+  final bool liked;
+  final bool mine;
+  final List<ChangelogComment> replies;
+}
+
+/// An entry's comments (newest first, each one's replies oldest first) and
+/// how many there are with replies.
+class ChangelogDiscussion {
+  const ChangelogDiscussion({required this.count, required this.comments});
+
+  factory ChangelogDiscussion.fromJson(Map<String, dynamic> json) =>
+      ChangelogDiscussion(
+        count: json['count'] as int? ?? 0,
+        comments: [
+          for (final c in json['comments'] as List<dynamic>)
+            ChangelogComment.fromJson(c as Map<String, dynamic>),
+        ],
+      );
+
+  final int count;
+  final List<ChangelogComment> comments;
+}
+
+/// GET .../changelog/{id}/discussion: the comments as I see them.
+Future<ChangelogDiscussion> fetchChangelogDiscussion(
+        {required String backendUrl,
+        required String token,
+        required int entryId,
+        http.Client? client}) =>
+    _sendAuthorized(
+      client,
+      (httpClient) => httpClient.get(
+          _endpoint(backendUrl, '/changelog/$entryId/discussion'),
+          headers: _authorization(token)),
+      ChangelogDiscussion.fromJson,
+    );
+
+/// POST .../changelog/{id}/discussion: my comment, or a reply to [parentId].
+Future<ChangelogDiscussion> addChangelogComment(
+        {required String backendUrl,
+        required String token,
+        required int entryId,
+        required String body,
+        int? parentId,
+        http.Client? client}) =>
+    _sendAuthorized(
+      client,
+      (httpClient) => httpClient.post(
+          _endpoint(backendUrl, '/changelog/$entryId/discussion'),
+          headers: {
+            ..._authorization(token),
+            'Content-Type': 'application/json'
+          },
+          body: jsonEncode({'body': body, 'parent_id': parentId})),
+      ChangelogDiscussion.fromJson,
+    );
+
+/// A heart on a changelog comment (or taken back): (count, liked).
+Future<(int, bool)> setChangelogCommentLike(
+        {required String backendUrl,
+        required String token,
+        required int commentId,
+        required bool liked,
+        http.Client? client}) =>
+    _sendAuthorized(
+      client,
+      (httpClient) {
+        final url =
+            _endpoint(backendUrl, '/changelog/comments/$commentId/like');
+        return liked
+            ? httpClient.post(url, headers: _authorization(token))
+            : httpClient.delete(url, headers: _authorization(token));
+      },
+      (data) => (data['like_count'] as int, data['liked'] as bool),
+    );
+
+/// DELETE .../changelog/comments/{id}: mine, with its replies.
+Future<void> deleteChangelogComment(
+        {required String backendUrl,
+        required String token,
+        required int commentId,
+        http.Client? client}) =>
+    _sendAuthorizedRaw(
+      client,
+      (httpClient) => httpClient.delete(
+          _endpoint(backendUrl, '/changelog/comments/$commentId'),
+          headers: _authorization(token)),
+      (_) {},
+    );
+
+/// POST .../changelog/comments/{id}/report: to moderation; hidden from me.
+Future<void> reportChangelogComment(
+        {required String backendUrl,
+        required String token,
+        required int commentId,
+        required String reason,
+        http.Client? client}) =>
+    _sendAuthorizedRaw(
+      client,
+      (httpClient) => httpClient.post(
+          _endpoint(backendUrl, '/changelog/comments/$commentId/report'),
+          headers: {
+            ..._authorization(token),
+            'Content-Type': 'application/json'
+          },
+          body: jsonEncode({'reason': reason})),
+      (_) {},
     );

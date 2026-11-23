@@ -11,6 +11,7 @@ import '../theme.dart';
 import '../widgets/changelog/changelog_body.dart';
 import '../widgets/load_more_row.dart';
 import '../widgets/me/section_states.dart';
+import 'changelog_comments_screen.dart';
 
 /// The changelog on the web (the same entries).
 final changelogWebsite = Uri.parse('https://web.huntr.online/changelog');
@@ -238,6 +239,17 @@ class _WhatsNewScreenState extends State<WhatsNewScreen> {
     }
   }
 
+  /// Its comments; back here with how many there are now.
+  Future<void> _openComments(ChangelogEntry entry) async {
+    final count = await Navigator.of(context).push<int>(MaterialPageRoute(
+        builder: (_) => ChangelogCommentsScreen(entry: entry)));
+    if (count == null || !mounted) return;
+    setState(() => _entries = [
+          for (final e in _entries ?? const <ChangelogEntry>[])
+            e.id == entry.id ? e.withCommentCount(count) : e,
+        ]);
+  }
+
   @override
   Widget build(BuildContext context) {
     final entries = _entries;
@@ -287,8 +299,32 @@ class _WhatsNewScreenState extends State<WhatsNewScreen> {
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(color: HuntrColors.border),
                       ),
-                      child: _EntryContent(
-                          entry: entry, backendUrl: _backendUrl ?? ''),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _EntryContent(
+                              entry: entry, backendUrl: _backendUrl ?? ''),
+                          const Divider(color: HuntrColors.border, height: 8),
+                          TextButton.icon(
+                            key: Key('whatsNewComments-${entry.id}'),
+                            style: TextButton.styleFrom(
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 4, vertical: 10)),
+                            onPressed: () => _openComments(entry),
+                            icon: const Icon(Icons.chat_bubble_outline_rounded,
+                                size: 19),
+                            label: Text(
+                                entry.commentCount == 0
+                                    ? 'Comment'
+                                    : entry.commentCount == 1
+                                        ? '1 comment'
+                                        : '${entry.commentCount} comments',
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w700)),
+                          ),
+                        ],
+                      ),
                     ),
                   if (_next != null)
                     LoadMoreRow(onVisible: () => _load(more: true)),
