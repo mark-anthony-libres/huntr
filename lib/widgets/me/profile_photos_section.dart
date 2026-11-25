@@ -221,11 +221,16 @@ class _ProfilePhotosSectionState extends State<ProfilePhotosSection> {
 
   /// The saved crop replaces the photo under a new id; returns it, or null.
   Future<ProfilePhoto?> _recrop(ProfilePhoto photo) async {
-    final crop = await cropStoredPhoto(context, photo, _cache);
-    if (crop == null) return null;
+    final choice = await editStoredPhoto(context, photo, _cache,
+        maxBytes: _maxUploadBytes ?? 10 * 1024 * 1024, onProblem: _say);
+    if (choice == null) return null;
     ProfilePhoto? saved;
     await _attempt((photos, token) async {
-      saved = await photos.recrop(token, photo.id, crop);
+      final edited = choice.edited;
+      saved = edited == null
+          ? await photos.recrop(token, photo.id, choice.crop)
+          : await photos.edit(token, photo.id,
+              bytes: edited, filename: 'edited.png', crop: choice.crop);
       await _cache?.retire(photo.id); // the old photo is gone
     });
     final replacement = saved;

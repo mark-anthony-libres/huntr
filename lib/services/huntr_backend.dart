@@ -1300,6 +1300,65 @@ Future<StoredAlbumItem> recropInMyAlbum(
       StoredAlbumItem.fromJson,
     );
 
+/// The crop's form fields, for a multipart upload.
+Map<String, String> _cropFields(PhotoCrop crop) => {
+      'crop_x': '${crop.x}',
+      'crop_y': '${crop.y}',
+      'crop_width': '${crop.width}',
+      'crop_height': '${crop.height}',
+    };
+
+/// Replaces a saved photo with an edited version of it (drawn on, blurred)
+/// and its crop (PUT .../profile/photos/{id}/edit): a new id in its place.
+Future<ProfilePhoto> editMyPhoto({
+  required String backendUrl,
+  required String token,
+  required int photoId,
+  required List<int> bytes,
+  required String filename,
+  required PhotoCrop crop,
+  http.Client? client,
+}) =>
+    _sendAuthorized(
+      client,
+      (httpClient) async {
+        final request = http.MultipartRequest(
+            'PUT', _photos(backendUrl, '/$photoId/edit'))
+          ..headers.addAll(_authorization(token))
+          ..fields.addAll(_cropFields(crop))
+          ..files.add(
+              http.MultipartFile.fromBytes('file', bytes, filename: filename));
+        return http.Response.fromStream(await httpClient.send(request));
+      },
+      ProfilePhoto.fromJson,
+    );
+
+/// Replaces an album photo with an edited version of it and its crop
+/// (PUT .../albums/{id}/media/{itemId}/edit): a new id in its place.
+Future<StoredAlbumItem> editInMyAlbum({
+  required String backendUrl,
+  required String token,
+  required int albumId,
+  required int itemId,
+  required List<int> bytes,
+  required String filename,
+  required PhotoCrop crop,
+  http.Client? client,
+}) =>
+    _sendAuthorized(
+      client,
+      (httpClient) async {
+        final request = http.MultipartRequest(
+            'PUT', _albums(backendUrl, '/$albumId/media/$itemId/edit'))
+          ..headers.addAll(_authorization(token))
+          ..fields.addAll(_cropFields(crop))
+          ..files.add(
+              http.MultipartFile.fromBytes('file', bytes, filename: filename));
+        return http.Response.fromStream(await httpClient.send(request));
+      },
+      StoredAlbumItem.fromJson,
+    );
+
 /// PUT .../albums/{id}/media/order - all the album's item ids in the new
 /// order; returns the album.
 Future<StoredAlbum> reorderMyAlbum(

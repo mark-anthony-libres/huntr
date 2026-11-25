@@ -59,6 +59,20 @@ class AlbumService {
           itemId: itemId,
           crop: crop);
 
+  /// An album photo replaced by an edited version of it with its crop.
+  Future<StoredAlbumItem> edit(String token, int albumId, int itemId,
+          {required List<int> bytes,
+          required String filename,
+          required PhotoCrop crop}) async =>
+      editInMyAlbum(
+          backendUrl: await GoogleOAuthConfig.loadBackendUrl(),
+          token: token,
+          albumId: albumId,
+          itemId: itemId,
+          bytes: bytes,
+          filename: filename,
+          crop: crop);
+
   /// All the album's item ids, in the new order.
   Future<StoredAlbum> reorder(
           String token, int albumId, List<int> itemIds) async =>

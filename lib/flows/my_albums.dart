@@ -147,13 +147,20 @@ class MyAlbums {
     });
   }
 
-  /// Crops an album photo; the crop replaces it under a new id.
+  /// Crops an album photo, draws on it or blurs parts of it; the result
+  /// replaces it under a new id.
   Future<bool> recrop(Album album, StoredAlbumItem item) async {
-    final crop = await cropStoredPhoto(context, item, cache);
-    if (crop == null) return false;
+    final choice = await editStoredPhoto(context, item, cache,
+        maxBytes: app.albumLimits?.maxPhotoBytes ?? 10 * 1024 * 1024,
+        onProblem: say);
+    if (choice == null) return false;
     return attempt((token) async {
-      final replacement =
-          await service.recrop(token, int.parse(album.id), item.id, crop);
+      final edited = choice.edited;
+      final albumId = int.parse(album.id);
+      final replacement = edited == null
+          ? await service.recrop(token, albumId, item.id, choice.crop)
+          : await service.edit(token, albumId, item.id,
+              bytes: edited, filename: 'edited.png', crop: choice.crop);
       await cache?.retire(item.id); // the old photo is gone
       unawaited(cache?.load(replacement));
       app.replaceMyAlbum(Album(id: album.id, name: album.name, photos: [

@@ -59,6 +59,20 @@ class PhotoService {
           photoId: photoId,
           crop: crop);
 
+  /// The saved photo replaced by an edited version of it (drawn on,
+  /// blurred) with its crop.
+  Future<ProfilePhoto> edit(String token, int photoId,
+          {required List<int> bytes,
+          required String filename,
+          required PhotoCrop crop}) async =>
+      editMyPhoto(
+          backendUrl: await GoogleOAuthConfig.loadBackendUrl(),
+          token: token,
+          photoId: photoId,
+          bytes: bytes,
+          filename: filename,
+          crop: crop);
+
   Future<ProfilePhotoList> remove(String token, int photoId) async =>
       removeMyPhoto(
           backendUrl: await GoogleOAuthConfig.loadBackendUrl(),

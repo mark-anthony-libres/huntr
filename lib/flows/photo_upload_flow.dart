@@ -2,6 +2,7 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 
 import '../models/models.dart';
 import '../services/huntr_backend.dart';
@@ -57,11 +58,8 @@ Future<CroppedPhoto?> checkAndCropPhoto(
   }
   // drawn on or blurred: the edited photo (smaller if it'd be too big)
   try {
-    var edited = await applyPhotoEdits(bytes, result.strokes);
-    if (edited.length > maxBytes) {
-      edited = await applyPhotoEdits(bytes, result.strokes, maxSide: 1400);
-    }
-    if (edited.length > maxBytes) {
+    final edited = await _edited(bytes, result.strokes, maxBytes);
+    if (edited == null) {
       onProblem('The edited photo is too large. Try a smaller photo.');
       return null;
     }
@@ -75,16 +73,28 @@ Future<CroppedPhoto?> checkAndCropPhoto(
   }
 }
 
-/// Lets the user crop a stored photo further, from its cached bytes when the
-/// device has them. Null when cancelled.
-Future<PhotoCrop?> cropStoredPhoto(
-    BuildContext context, StoredPhoto photo, PhotoCache? cache) async {
+/// What was chosen for a saved photo: its crop, and (drawn on or blurred)
+/// the edited photo, uncropped, the crop still to apply.
+class StoredPhotoEdit {
+  const StoredPhotoEdit(this.crop, [this.edited]);
+  final PhotoCrop crop;
+  final Uint8List? edited;
+}
+
+/// Lets the user crop a saved photo further, draw on it or blur parts of it
+/// (from its cached bytes when the device has them). Null when cancelled,
+/// or when the edits can't be applied ([onProblem] gets why).
+Future<StoredPhotoEdit?> editStoredPhoto(
+    BuildContext context, StoredPhoto photo, PhotoCache? cache,
+    {required int maxBytes,
+    required void Function(String problem) onProblem}) async {
   final cached = cache?.peek(photo.id);
   final result =
       await Navigator.of(context).push<PhotoCropResult>(MaterialPageRoute(
     builder: (_) => PhotoCropScreen(
       title: 'Edit photo',
-      confirmLabel: 'Save crop',
+      confirmLabel: 'Save',
+      editable: true,
       image: cached != null
           ? MemoryImage(cached.bytes)
           : NetworkImage(photo.imageUrl,
@@ -92,7 +102,33 @@ Future<PhotoCrop?> cropStoredPhoto(
       imageSize: Size(photo.width.toDouble(), photo.height.toDouble()),
     ),
   ));
-  return result?.crop;
+  if (result == null) return null;
+  if (result.strokes.isEmpty) return StoredPhotoEdit(result.crop);
+  try {
+    final bytes = (await cache?.load(photo))?.bytes ??
+        (await http.get(Uri.parse(photo.imageUrl))).bodyBytes;
+    final edited = await _edited(bytes, result.strokes, maxBytes);
+    if (edited == null) {
+      onProblem('The edited photo is too large. Try a smaller photo.');
+      return null;
+    }
+    return StoredPhotoEdit(result.crop, edited);
+  } catch (error) {
+    debugPrint('Photo edits not applied: $error');
+    onProblem("The photo couldn't be edited. Please try again.");
+    return null;
+  }
+}
+
+/// [bytes] with [strokes] baked in, smaller if it'd be over [maxBytes]
+/// (null when even that is).
+Future<Uint8List?> _edited(
+    Uint8List bytes, List<PhotoStroke> strokes, int maxBytes) async {
+  var edited = await applyPhotoEdits(bytes, strokes);
+  if (edited.length > maxBytes) {
+    edited = await applyPhotoEdits(bytes, strokes, maxSide: 1400);
+  }
+  return edited.length > maxBytes ? null : edited;
 }
 
 Future<Size> _imageSize(Uint8List bytes) async {
