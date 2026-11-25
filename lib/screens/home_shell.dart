@@ -176,20 +176,19 @@ class _HomeShellState extends State<HomeShell> {
   }
 
   /// Notifications aren't on for HUNTR on this device (never answered, put
-  /// off, or blocked): each time the app opens, a screen says so and how to
-  /// turn them on.
+  /// off, or blocked; or the website in an iPhone's Safari, where they come
+  /// only from the Home Screen): each time the app opens, a screen says so
+  /// and how to turn them on.
   Future<void> _remindNotifications() async {
     final status = PushNotifications.instance.permission.value;
-    if (!mounted ||
-        !PushNotifications.supported ||
-        status == null ||
-        status == AuthorizationStatus.authorized) {
-      return;
-    }
-    final on = await Navigator.of(context).push<bool>(MaterialPageRoute(
-        fullscreenDialog: true,
-        builder: (_) => const NotificationsOffScreen()));
-    if (on == true && mounted) {
+    final off = needsHomeScreenForNotifications ||
+        (PushNotifications.supported &&
+            status != null &&
+            status != AuthorizationStatus.authorized);
+    if (!mounted || !off) return;
+    // a sheet over the app (not a whole screen)
+    final on = await showNotificationsOff(context);
+    if (on && mounted) {
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(const SnackBar(

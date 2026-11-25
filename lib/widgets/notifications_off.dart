@@ -4,8 +4,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../flows/media_permission.dart' show openAppSettingsAndWait;
+import '../services/app_install/app_install.dart';
 import '../services/push_notifications.dart';
 import '../theme.dart';
+import 'install_banner.dart' show AddToHomeScreenSteps;
 
 /// How to allow notifications for HUNTR where this is (once they're
 /// blocked, only the person can): the Android app, or a browser on a phone
@@ -43,6 +45,11 @@ List<String> notificationAllowSteps() {
 }
 
 /// [steps], numbered.
+/// The website in an iPhone's (or iPad's) browser, not added to its Home
+/// Screen: there it can't have notifications at all.
+bool get needsHomeScreenForNotifications =>
+    kIsWeb && AppInstall.isIos && !AppInstall.isInstalled;
+
 class NumberedSteps extends StatelessWidget {
   const NumberedSteps({super.key, required this.steps});
 
@@ -75,18 +82,31 @@ class NumberedSteps extends StatelessWidget {
       );
 }
 
-/// A reminder that notifications are off on this device: what they're for,
-/// and turning them on - the device's own question when it hasn't been
-/// answered (or was put off), else, when they're blocked, how to allow them
-/// and checking again. Pops with true when they're on.
-class NotificationsOffScreen extends StatefulWidget {
-  const NotificationsOffScreen({super.key});
+/// Shows [NotificationsOffSheet] over what's on screen (not covering it);
+/// true when notifications got turned on.
+Future<bool> showNotificationsOff(BuildContext context) async =>
+    await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      constraints: const BoxConstraints(maxWidth: 520),
+      builder: (_) => const NotificationsOffSheet(),
+    ) ==
+    true;
+
+/// A reminder that notifications are off on this device, as a sheet: what
+/// they're for, and turning them on - the device's own question when it
+/// hasn't been answered (or was put off), else, when they're blocked, how to
+/// allow them and checking again (on an iPhone's Safari: adding HUNTR to the
+/// Home Screen). Pops with true when they're on.
+class NotificationsOffSheet extends StatefulWidget {
+  const NotificationsOffSheet({super.key});
 
   @override
-  State<NotificationsOffScreen> createState() => _NotificationsOffScreenState();
+  State<NotificationsOffSheet> createState() => _NotificationsOffSheetState();
 }
 
-class _NotificationsOffScreenState extends State<NotificationsOffScreen> {
+class _NotificationsOffSheetState extends State<NotificationsOffSheet> {
   PushNotifications get _push => PushNotifications.instance;
   bool _busy = false;
 
@@ -94,6 +114,10 @@ class _NotificationsOffScreenState extends State<NotificationsOffScreen> {
   String? _still;
 
   bool get _blocked => _push.permission.value == AuthorizationStatus.denied;
+
+  /// The website in an iPhone's Safari: notifications come only to HUNTR
+  /// added to the Home Screen (and opened from there).
+  bool get _needsHomeScreen => needsHomeScreenForNotifications;
 
   Future<void> _turnOn() async {
     setState(() {
@@ -127,90 +151,92 @@ class _NotificationsOffScreenState extends State<NotificationsOffScreen> {
   @override
   Widget build(BuildContext context) {
     final blocked = _blocked;
-    return Scaffold(
-      body: SafeArea(
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 480),
-            child: SingleChildScrollView(
-              key: const Key('notificationsOff'),
-              padding: const EdgeInsets.fromLTRB(24, 32, 24, 24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 88,
-                      height: 88,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: HuntrColors.orange.withValues(alpha: 0.14),
-                      ),
-                      child: Icon(Icons.notifications_off_outlined,
-                          size: 42, color: HuntrColors.orange),
-                    ),
-                  ),
-                  const SizedBox(height: 22),
-                  const Text('Notifications are off',
-                      textAlign: TextAlign.center,
-                      style:
-                          TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
-                  const SizedBox(height: 10),
-                  const Text(
-                      'Turn them on to know when someone taps you, messages '
-                      'you, reacts to your message or replies to your story. '
-                      'A notification says who, never what they wrote.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: HuntrColors.muted, height: 1.45)),
-                  if (blocked) ...[
-                    const SizedBox(height: 24),
-                    const Text(
-                        "They're blocked for HUNTR on this device, so HUNTR "
-                        "can't ask. Turn them on yourself:",
-                        style: TextStyle(fontWeight: FontWeight.w700)),
-                    const SizedBox(height: 12),
-                    NumberedSteps(steps: notificationAllowSteps()),
-                  ],
-                  const SizedBox(height: 24),
-                  FilledButton(
-                    key: const Key('notificationsTurnOn'),
-                    onPressed: _busy ? null : _turnOn,
-                    style: FilledButton.styleFrom(
-                        minimumSize: const Size.fromHeight(52)),
-                    child: _busy
-                        ? const SizedBox.square(
-                            dimension: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2.5))
-                        : Text(!blocked
-                            ? 'Turn on notifications'
-                            : kIsWeb
-                                ? "I've allowed it"
-                                : 'Open settings'),
-                  ),
-                  if (_still != null)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 10),
-                      child: Text(_still!,
-                          key: const Key('notificationsStillOff'),
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(color: HuntrColors.coral)),
-                    ),
-                  const SizedBox(height: 6),
-                  TextButton(
-                    key: const Key('notificationsNotNow'),
-                    onPressed:
-                        _busy ? null : () => Navigator.of(context).pop(false),
-                    child: const Text('Not now'),
-                  ),
-                  const SizedBox(height: 4),
-                  const Text('You can change this any time in Settings.',
-                      textAlign: TextAlign.center,
-                      style:
-                          TextStyle(color: HuntrColors.muted, fontSize: 12.5)),
-                ],
+    final homeScreen = _needsHomeScreen;
+    return SafeArea(
+      child: SingleChildScrollView(
+        key: const Key('notificationsOff'),
+        padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Center(
+              child: Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: HuntrColors.orange.withValues(alpha: 0.14),
+                ),
+                child: Icon(Icons.notifications_off_outlined,
+                    size: 32, color: HuntrColors.orange),
               ),
             ),
-          ),
+            const SizedBox(height: 14),
+            const Text('Notifications are off',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 21, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 10),
+            const Text(
+                'Turn them on to know when someone taps you, messages '
+                'you, reacts to your message or replies to your story. '
+                'A notification says who, never what they wrote.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: HuntrColors.muted, height: 1.45)),
+            if (homeScreen) ...[
+              const SizedBox(height: 24),
+              const Text(
+                  'On an iPhone, HUNTR can send notifications only once '
+                  "it's on your Home Screen:",
+                  style: TextStyle(fontWeight: FontWeight.w700)),
+              const SizedBox(height: 14),
+              const AddToHomeScreenSteps(
+                  after: 'Then open HUNTR from your Home Screen and turn '
+                      'on notifications there.'),
+            ] else if (blocked) ...[
+              const SizedBox(height: 24),
+              const Text(
+                  "They're blocked for HUNTR on this device, so HUNTR "
+                  "can't ask. Turn them on yourself:",
+                  style: TextStyle(fontWeight: FontWeight.w700)),
+              const SizedBox(height: 12),
+              NumberedSteps(steps: notificationAllowSteps()),
+            ],
+            const SizedBox(height: 24),
+            if (!homeScreen)
+              FilledButton(
+                key: const Key('notificationsTurnOn'),
+                onPressed: _busy ? null : _turnOn,
+                style: FilledButton.styleFrom(
+                    minimumSize: const Size.fromHeight(52)),
+                child: _busy
+                    ? const SizedBox.square(
+                        dimension: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2.5))
+                    : Text(!blocked
+                        ? 'Turn on notifications'
+                        : kIsWeb
+                            ? "I've allowed it"
+                            : 'Open settings'),
+              ),
+            if (_still != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 10),
+                child: Text(_still!,
+                    key: const Key('notificationsStillOff'),
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: HuntrColors.coral)),
+              ),
+            const SizedBox(height: 6),
+            TextButton(
+              key: const Key('notificationsNotNow'),
+              onPressed: _busy ? null : () => Navigator.of(context).pop(false),
+              child: Text(homeScreen ? 'Got it' : 'Not now'),
+            ),
+            const SizedBox(height: 4),
+            const Text('You can change this any time in Settings.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: HuntrColors.muted, fontSize: 12.5)),
+          ],
         ),
       ),
     );

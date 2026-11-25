@@ -172,7 +172,7 @@ class _InstallDialog extends StatelessWidget {
                 Padding(
                   padding: const EdgeInsets.fromLTRB(24, 20, 24, 12),
                   child: steps
-                      ? const _IosStepList()
+                      ? const AddToHomeScreenSteps()
                       : FilledButton.icon(
                           key: const Key('installApp'),
                           style: FilledButton.styleFrom(
@@ -232,42 +232,46 @@ class _IosSteps extends StatelessWidget {
                     style:
                         TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
                 SizedBox(height: 16),
-                _IosStepList(),
+                AddToHomeScreenSteps(),
               ]),
         ),
       );
 }
 
 /// Adding it to the Home Screen on an iPhone, step by step.
-class _IosStepList extends StatelessWidget {
-  const _IosStepList();
+/// Adding the website to an iPhone's Home Screen (Safari has no button for
+/// it), and [after] that (what it gives).
+class AddToHomeScreenSteps extends StatelessWidget {
+  const AddToHomeScreenSteps(
+      {super.key, this.after = 'HUNTR then opens full screen, like any app.'});
+
+  final String after;
 
   @override
-  Widget build(BuildContext context) => const Column(
+  Widget build(BuildContext context) => Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // newer Safari keeps Share under ⋯ (older ones show it in
             // the bar)
-            _Step(
+            const _Step(
                 number: 1,
                 icon: Icons.more_horiz_rounded,
                 text: 'Tap ⋯ at the bottom right, then Share. (Older '
                     'iPhones: tap Share in the browser bar.)'),
-            SizedBox(height: 12),
-            _Step(
+            const SizedBox(height: 12),
+            const _Step(
                 number: 2,
                 icon: Icons.add_box_outlined,
                 text: 'Choose "Add to Home Screen". Not in the list? '
                     'Tap View More.'),
-            SizedBox(height: 12),
-            _Step(
+            const SizedBox(height: 12),
+            const _Step(
                 number: 3,
                 icon: Icons.check_circle_outline_rounded,
                 text: 'Keep "Open as Web App" on, then tap Add.'),
-            SizedBox(height: 16),
-            Text('HUNTR then opens full screen, like any app.',
-                style: TextStyle(color: HuntrColors.muted)),
+            const SizedBox(height: 16),
+            Text(after, style: const TextStyle(color: HuntrColors.muted)),
           ]);
 }
 
