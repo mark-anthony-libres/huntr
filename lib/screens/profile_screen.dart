@@ -185,7 +185,7 @@ class ProfileScreen extends StatelessWidget {
             profile: p,
             firstIsAvatar: !_isPreview,
             autoPlay: true,
-            showAlbums: !_isPreview,
+            showAlbums: true,
             onAlbums: _albumTrader(context, p),
             onOpen: _opener(context, p)),
         const IgnorePointer(
@@ -239,7 +239,7 @@ class ProfileScreen extends StatelessWidget {
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               // roaming: where (tapped), instead of a distance
-              if (!_isPreview && p.roaming != null)
+              if (p.roaming != null)
                 RoamingTag(
                     key: const Key('profileRoaming'),
                     onTap: () => showRoamWhere(context, p)),
@@ -249,7 +249,7 @@ class ProfileScreen extends StatelessWidget {
                 label: p.activeLabel(DateTime.now()),
                 color: p.online ? HuntrColors.online : HuntrColors.muted,
               ),
-              if (_isPreview || p.roaming == null)
+              if (p.roaming == null)
                 ProfileMeta(
                     icon: Icons.near_me_outlined,
                     label: _isPreview
@@ -335,8 +335,8 @@ class ProfileScreen extends StatelessWidget {
             // some; nobody anonymous has them shown
             if ((_isPreview ? app.myUserId : p.backendId) case final userId?
                 when !p.isAnonymous)
-              if ((_isPreview ? myStickers : p.stickers) case final stickers?
-                  when stickers.isNotEmpty)
+              if ((p.stickers ?? (_isPreview ? myStickers : null))
+                  case final stickers? when stickers.isNotEmpty)
                 StickerShelf(
                     key: ValueKey('stickers-$userId'),
                     userId: userId,
@@ -1051,7 +1051,7 @@ class _WideGalleryState extends State<_WideGallery> {
                     controller: _pages,
                     onPageChanged: (i) => setState(() => _page = i),
                     autoPlay: true,
-                    showAlbums: widget.firstIsAvatar,
+                    showAlbums: true,
                     onAlbums: widget.onAlbums,
                     onOpen: widget.onOpen),
                 // only a top shade, for the buttons

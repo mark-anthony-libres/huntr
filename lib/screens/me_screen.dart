@@ -13,7 +13,7 @@ import 'settings_screen.dart';
 import '../widgets/profile/edit_profile_sheet.dart';
 import '../widgets/page_title.dart';
 import 'anonymous_profile_screen.dart' show MyAnonymousProfileScreen;
-import 'profile_screen.dart';
+import '../flows/open_person_profile.dart' show openMyProfilePreview;
 
 class MeScreen extends StatelessWidget {
   const MeScreen({super.key});
@@ -68,14 +68,8 @@ class MeScreen extends StatelessWidget {
         const SizedBox(height: 16),
       ],
       ProfilePreviewBanner(
-        onViewProfile: () => Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => ProfileScreen.preview(
-              profile: app.myPublicProfile,
-              showDistance: app.showDistance,
-            ),
-          ),
-        ),
+        onViewProfile: () =>
+            openMyProfilePreview(context, showDistance: app.showDistance),
       ),
     ];
     final sections = <Widget>[

@@ -37,3 +37,34 @@ Future<void> openPersonProfile(BuildContext context, Profile p,
   }
   return closed;
 }
+
+/// My profile as others see it (the preview): at once with what's known
+/// here, then exactly as the backend gives it to everyone else (the same
+/// profile, photos, albums, stickers, roaming).
+Future<void> openMyProfilePreview(BuildContext context,
+    {bool showDistance = true}) {
+  final app = AppScope.read(context);
+  final me = ValueNotifier<Profile>(app.myPublicProfile);
+  final closed = Navigator.of(context)
+      .push(MaterialPageRoute(
+          builder: (_) => ValueListenableBuilder<Profile>(
+              valueListenable: me,
+              builder: (_, profile, __) => ProfileScreen.preview(
+                  profile: profile, showDistance: showDistance))))
+      .whenComplete(me.dispose);
+  final explore = ServicesScope.exploreOf(context);
+  final token = app.sessionToken;
+  final userId = app.myUserId;
+  if (explore != null && token != null && userId != null) {
+    explore.fetchPerson(token, userId).then((full) {
+      try {
+        me.value = full;
+      } on FlutterError {
+        // closed meanwhile (the notifier is disposed)
+      }
+    }, onError: (Object error) {
+      debugPrint('My profile could not be loaded as others see it: $error');
+    });
+  }
+  return closed;
+}
