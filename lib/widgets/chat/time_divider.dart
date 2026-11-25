@@ -13,10 +13,14 @@ class TimeDivider extends StatelessWidget {
     final h = time.hour % 12 == 0 ? 12 : time.hour % 12;
     final clock =
         '$h:${time.minute.toString().padLeft(2, '0')} ${time.hour < 12 ? 'AM' : 'PM'}';
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      child: Text(sameDay ? 'Today $clock' : '${time.day}/${time.month} $clock',
-          style: const TextStyle(fontSize: 12, color: HuntrColors.muted)),
+    // centred, in every chat (chats, anonymous chats, guest chats)
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        child: Text(
+            sameDay ? 'Today $clock' : '${time.day}/${time.month} $clock',
+            style: const TextStyle(fontSize: 12, color: HuntrColors.muted)),
+      ),
     );
   }
 }

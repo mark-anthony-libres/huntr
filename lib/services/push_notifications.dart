@@ -22,8 +22,12 @@ sealed class PushTarget {
     final open = data['open'] ?? data['type'];
     final conversation =
         int.tryParse('${data['conversation'] ?? data['conversation_id']}');
+    final guestChat = int.tryParse('${data['chat'] ?? data['chat_id']}');
     return switch (open) {
       'tap' || 'taps' => const OpenTaps(),
+      'guest' ||
+      'guest_message' when guestChat != null =>
+        OpenGuestChat(guestChat),
       'chat' ||
       'message' ||
       'story_reply' when conversation != null =>
@@ -40,6 +44,12 @@ class OpenTaps extends PushTarget {
 class OpenChat extends PushTarget {
   const OpenChat(this.conversationId);
   final int conversationId;
+}
+
+/// A guest chat (from my guest link).
+class OpenGuestChat extends PushTarget {
+  const OpenGuestChat(this.chatId);
+  final int chatId;
 }
 
 /// Push notifications (Firebase Cloud Messaging) on this device: asking to

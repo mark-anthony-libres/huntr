@@ -14,6 +14,7 @@ import '../state/messaging_state.dart';
 import '../state/tap_state.dart';
 import '../state/guest_chats_state.dart';
 import '../flows/guest_join.dart';
+import 'guest_chat_screen.dart';
 import 'chat_screen.dart';
 import 'chats_screen.dart';
 import 'explore_screen.dart';
@@ -183,6 +184,15 @@ class _HomeShellState extends State<HomeShell> {
         await Navigator.of(context).push(MaterialPageRoute(
             builder: (_) => ChatScreen.conversation(
                 conversationId: conversationId, other: chat.other)));
+      case OpenGuestChat(:final chatId):
+        _showTab(_chatsTab);
+        final guests = _guestChats;
+        if (guests == null) return;
+        await guests.refresh();
+        final chat = guests.chats.where((c) => c.id == chatId).firstOrNull;
+        if (chat == null || !mounted) return;
+        await Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => GuestChatScreen(chat: chat)));
     }
   }
 

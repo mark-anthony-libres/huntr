@@ -97,7 +97,10 @@ class _GuestPageState extends State<GuestPage> {
     try {
       final started = await _api.start(widget.code);
       await GuestStore.saveToken(widget.code, started.token);
-      if (mounted) _open(started.token);
+      if (!mounted) return;
+      _open(started.token);
+      // the names and time left at once, before its first check
+      _chat?.chat ??= started.chat;
     } on BackendException catch (e) {
       if (mounted) setState(() => _startError = e.message);
     } catch (_) {
