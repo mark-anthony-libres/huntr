@@ -6,6 +6,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../flows/chat_attachments.dart' show ChatMediaPicker;
 import '../services/save_image.dart';
 import '../state/guest_chats_state.dart';
 import '../theme.dart';
@@ -42,6 +43,93 @@ class GuestLinkScreen extends StatefulWidget {
 class _GuestLinkScreenState extends State<GuestLinkScreen> {
   final _card = GlobalKey();
   int _prompt = 0;
+
+  /// My own words (the last card) and picture (instead of a colour).
+  String _ownWords = '';
+  Uint8List? _photo;
+  bool get _onOwnWords => _prompt == guestStoryPrompts.length;
+
+  /// What the card at [i] says.
+  String _words(int i) => i < guestStoryPrompts.length
+      ? guestStoryPrompts[i]
+      : _ownWords.isEmpty
+          ? 'Write your own'
+          : _ownWords;
+
+  Future<void> _writeOwn() async {
+    final input = TextEditingController(text: _ownWords);
+    final words = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Your words'),
+        content: TextField(
+          key: const Key('guestStoryOwnWords'),
+          controller: input,
+          autofocus: true,
+          maxLength: 60,
+          maxLines: 3,
+          minLines: 1,
+          textCapitalization: TextCapitalization.sentences,
+          decoration: const InputDecoration(hintText: 'e.g. Tell me a secret'),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.of(context).pop(input.text.trim()),
+              child: const Text('Done')),
+        ],
+      ),
+    );
+    input.dispose();
+    if (words != null && mounted) setState(() => _ownWords = words);
+  }
+
+  /// A picture from the device for the card (it stays on the device: only
+  /// the shared image has it).
+  Future<void> _pickPhoto() async {
+    if (_photo != null && _look < 0) {
+      // already showing it: change it or go back to colours
+      final choice = await showModalBottomSheet<String>(
+        context: context,
+        showDragHandle: true,
+        builder: (context) => SafeArea(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Choose another picture'),
+              onTap: () => Navigator.of(context).pop('change'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.close_rounded),
+              title: const Text('Remove the picture'),
+              onTap: () => Navigator.of(context).pop('remove'),
+            ),
+          ]),
+        ),
+      );
+      if (choice == 'remove') {
+        setState(() {
+          _photo = null;
+          _look = 0;
+        });
+      }
+      if (choice != 'change') return;
+    } else if (_photo != null) {
+      setState(() => _look = -1);
+      return;
+    }
+    final picked = await ChatMediaPicker.instance.pickImage();
+    if (picked == null) return;
+    final bytes = await picked.readAsBytes();
+    if (mounted) {
+      setState(() {
+        _photo = bytes;
+        _look = -1;
+      });
+    }
+  }
 
   /// The story cards, swiped for other words.
   PageController? _pages;
@@ -103,6 +191,10 @@ class _GuestLinkScreenState extends State<GuestLinkScreen> {
 
   Future<void> _share(String url) async {
     if (_sharing) return;
+    if (_onOwnWords && _ownWords.isEmpty) {
+      await _writeOwn();
+      if (_ownWords.isEmpty) return;
+    }
     setState(() => _sharing = true);
     try {
       await _copy(url, quiet: true);
@@ -233,20 +325,30 @@ class _GuestLinkScreenState extends State<GuestLinkScreen> {
                               child: PageView.builder(
                                 key: const Key('guestStoryCards'),
                                 controller: _pages,
-                                itemCount: guestStoryPrompts.length,
+                                itemCount: guestStoryPrompts.length + 1,
                                 onPageChanged: (i) =>
                                     setState(() => _prompt = i),
                                 itemBuilder: (_, i) => Center(
-                                  child: SizedBox(
-                                    width: _cardWidth,
-                                    // the one shown is the one shared
-                                    child: RepaintBoundary(
-                                      key: i == _prompt ? _card : null,
-                                      child: GuestStoryCard(
-                                        animal: link.avatar,
-                                        prompt: guestStoryPrompts[i],
-                                        colors: guestStoryLooks[_look],
-                                        url: url,
+                                  child: GestureDetector(
+                                    // my own words: tap to write them
+                                    onTap: i == guestStoryPrompts.length
+                                        ? _writeOwn
+                                        : null,
+                                    child: SizedBox(
+                                      width: _cardWidth,
+                                      // the one shown is the one shared
+                                      child: RepaintBoundary(
+                                        key: i == _prompt ? _card : null,
+                                        child: GuestStoryCard(
+                                          animal: link.avatar,
+                                          prompt: _words(i),
+                                          colors: guestStoryLooks[
+                                              _look < 0 ? 0 : _look],
+                                          photo: _look < 0 && _photo != null
+                                              ? MemoryImage(_photo!)
+                                              : null,
+                                          url: url,
+                                        ),
                                       ),
                                     ),
                                   ),
@@ -259,7 +361,7 @@ class _GuestLinkScreenState extends State<GuestLinkScreen> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            for (var i = 0; i < guestStoryPrompts.length; i++)
+                            for (var i = 0; i <= guestStoryPrompts.length; i++)
                               GestureDetector(
                                 onTap: () => _pages?.animateToPage(i,
                                     duration: const Duration(milliseconds: 250),
@@ -281,16 +383,33 @@ class _GuestLinkScreenState extends State<GuestLinkScreen> {
                           ],
                         ),
                         const SizedBox(height: 8),
-                        const Text('Swipe the card for other words',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                                color: HuntrColors.muted, fontSize: 13)),
+                        _onOwnWords
+                            ? Center(
+                                child: TextButton.icon(
+                                  key: const Key('guestStoryEditWords'),
+                                  onPressed: _writeOwn,
+                                  icon:
+                                      const Icon(Icons.edit_rounded, size: 18),
+                                  label: Text(_ownWords.isEmpty
+                                      ? 'Write your own words'
+                                      : 'Change your words'),
+                                ),
+                              )
+                            : const Text('Swipe the card for other words',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                    color: HuntrColors.muted, fontSize: 13)),
                         const SizedBox(height: 28),
-                        const _Label('COLOUR'),
+                        const _Label('BACKGROUND'),
                         const SizedBox(height: 12),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
+                            _PhotoSwatch(
+                              photo: _photo,
+                              selected: _look < 0,
+                              onTap: _pickPhoto,
+                            ),
                             for (var i = 0; i < guestStoryLooks.length; i++)
                               _Swatch(
                                 colors: guestStoryLooks[i],
@@ -399,6 +518,7 @@ class GuestStoryCard extends StatelessWidget {
     required this.prompt,
     required this.colors,
     required this.url,
+    this.photo,
   });
 
   final String animal;
@@ -406,16 +526,30 @@ class GuestStoryCard extends StatelessWidget {
   final List<Color> colors;
   final String url;
 
+  /// A picture of my own behind it (darkened so the words stay readable),
+  /// instead of [colors].
+  final ImageProvider? photo;
+
   @override
   Widget build(BuildContext context) => AspectRatio(
         aspectRatio: 9 / 16,
         child: Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(28),
-            gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: colors),
+            image: photo == null
+                ? null
+                : DecorationImage(
+                    image: photo!,
+                    fit: BoxFit.cover,
+                    colorFilter: ColorFilter.mode(
+                        Colors.black.withValues(alpha: 0.38),
+                        BlendMode.darken)),
+            gradient: photo != null
+                ? null
+                : LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: colors),
           ),
           padding: const EdgeInsets.fromLTRB(18, 24, 18, 18),
           child: Column(children: [
@@ -484,6 +618,46 @@ class _Label extends StatelessWidget {
           fontSize: 12,
           letterSpacing: 1.1,
           fontWeight: FontWeight.w800));
+}
+
+/// The first background: a picture of mine (a + until one is chosen).
+class _PhotoSwatch extends StatelessWidget {
+  const _PhotoSwatch(
+      {required this.photo, required this.selected, required this.onTap});
+
+  final Uint8List? photo;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+        button: true,
+        selected: selected,
+        label: photo == null ? 'Use a picture' : 'Your picture',
+        child: GestureDetector(
+          key: const Key('guestStoryPhoto'),
+          onTap: onTap,
+          child: Container(
+            width: 52,
+            height: 52,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: HuntrColors.surfaceHigh,
+              image: photo == null
+                  ? null
+                  : DecorationImage(
+                      image: MemoryImage(photo!), fit: BoxFit.cover),
+              border: Border.all(
+                  color: selected ? Colors.white : HuntrColors.border,
+                  width: selected ? 3 : 1),
+            ),
+            child: photo == null
+                ? Icon(Icons.add_photo_alternate_outlined,
+                    color: HuntrColors.orange)
+                : null,
+          ),
+        ),
+      );
 }
 
 class _Swatch extends StatelessWidget {
