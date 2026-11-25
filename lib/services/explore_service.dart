@@ -46,8 +46,8 @@ class ExploreService {
           token: token,
           userId: userId);
 
-  /// Where I roam (null: I don't).
-  Future<RoamSpot?> fetchRoam(String token) async => backend.fetchRoam(
+  /// Where I roam (null: I don't), and how far I can.
+  Future<backend.RoamStatus> fetchRoam(String token) async => backend.fetchRoam(
       backendUrl: await GoogleOAuthConfig.loadBackendUrl(), token: token);
 
   /// Roam there; the roam as kept.

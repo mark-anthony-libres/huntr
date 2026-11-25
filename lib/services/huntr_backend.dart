@@ -3172,8 +3172,11 @@ Future<String?> savePersonNote(
       (data) => data['body'] as String?,
     );
 
-/// GET {backendUrl}/roam: where I roam (null: I don't).
-Future<RoamSpot?> fetchRoam(
+/// Where I roam (null: I don't), and how far from where I am I can roam.
+typedef RoamStatus = ({RoamSpot? roaming, double? reachKm});
+
+/// GET {backendUrl}/roam: where I roam, and how far I can.
+Future<RoamStatus> fetchRoam(
         {required String backendUrl,
         required String token,
         http.Client? client}) =>
@@ -3181,7 +3184,10 @@ Future<RoamSpot?> fetchRoam(
       client,
       (httpClient) => httpClient.get(_endpoint(backendUrl, '/roam'),
           headers: _authorization(token)),
-      (data) => RoamSpot.fromJson(data['roaming']),
+      (data) => (
+        roaming: RoamSpot.fromJson(data['roaming']),
+        reachKm: (data['reach_km'] as num?)?.toDouble(),
+      ),
     );
 
 /// PUT {backendUrl}/roam: roam there (anywhere, as often as I like); the

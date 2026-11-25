@@ -111,6 +111,10 @@ class AppState extends ChangeNotifier {
   /// location ([myLocation]) stays what chat and Nearby use.
   RoamSpot? myRoam;
 
+  /// How far from where I am I can roam (km), as the backend says (null:
+  /// not known yet).
+  double? roamReachKm;
+
   /// How far a map goes from its middle (km, each way), as the backend says
   /// (Explore's map learns it): Roam's map keeps to it too.
   double? mapReachKm;

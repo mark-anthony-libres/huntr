@@ -373,7 +373,7 @@ class _ExploreMapState extends State<ExploreMap> {
               point: me,
               width: 64,
               height: 64,
-              child: const _MyDot(),
+              child: const MyLocationDot(),
             ),
           ]),
         _PeopleLayer(
@@ -405,7 +405,7 @@ class _ExploreMapState extends State<ExploreMap> {
           top: 10,
           child: Align(
             alignment: Alignment.centerLeft,
-            child: _Note(
+            child: MapNote(
               key: const Key('mapNote'),
               // the usual note: tap to learn how locations are shown
               onTap: _error == null && !noMap
@@ -657,80 +657,6 @@ class _FaceMarker extends StatelessWidget {
       );
 }
 
-/// Where I am (only my own, exact position, to me): a dot in the accent
-/// with a soft ring pulsing out of it (still when the device asks for
-/// less motion).
-class _MyDot extends StatefulWidget {
-  const _MyDot();
-
-  @override
-  State<_MyDot> createState() => _MyDotState();
-}
-
-class _MyDotState extends State<_MyDot> with SingleTickerProviderStateMixin {
-  late final _pulse = AnimationController(
-      vsync: this, duration: const Duration(milliseconds: 2200));
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final still = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
-    if (still) {
-      _pulse.stop();
-    } else if (!_pulse.isAnimating) {
-      _pulse.repeat();
-    }
-  }
-
-  @override
-  void dispose() {
-    _pulse.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final accent = HuntrColors.orange;
-    return RepaintBoundary(
-      child: Stack(alignment: Alignment.center, children: [
-        AnimatedBuilder(
-          animation: _pulse,
-          builder: (context, _) {
-            final t = Curves.easeOut.transform(_pulse.value);
-            return Container(
-              width: 20 + 44 * t,
-              height: 20 + 44 * t,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: accent.withValues(alpha: 0.28 * (1 - t)),
-                border: Border.all(
-                    color: accent.withValues(alpha: 0.5 * (1 - t)), width: 1.5),
-              ),
-            );
-          },
-        ),
-        Container(
-          key: const Key('mapMyDot'),
-          width: 20,
-          height: 20,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: accent,
-            border: Border.all(color: Colors.white, width: 3),
-            boxShadow: [
-              BoxShadow(
-                  color: accent.withValues(alpha: 0.6),
-                  blurRadius: 12,
-                  spreadRadius: 1),
-              const BoxShadow(color: Colors.black54, blurRadius: 4),
-            ],
-          ),
-        ),
-      ]),
-    );
-  }
-}
-
 /// Where the map meets the header (top) or the tabs (bottom): a short
 /// fade from the app's night, so the map has no hard edge.
 class _Fade extends StatelessWidget {
@@ -753,61 +679,6 @@ class _Fade extends StatelessWidget {
             ),
           ),
         ),
-      );
-}
-
-class _Note extends StatelessWidget {
-  const _Note(
-      {super.key,
-      required this.icon,
-      required this.text,
-      this.error = false,
-      this.onTap});
-
-  final IconData icon;
-  final String text;
-  final bool error;
-
-  /// Tapped: more about it (with a small info mark).
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final note = _box();
-    if (onTap == null) return note;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-          borderRadius: BorderRadius.circular(999), onTap: onTap, child: note),
-    );
-  }
-
-  Widget _box() => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-        decoration: BoxDecoration(
-          color: Colors.black.withValues(alpha: 0.65),
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(
-              color: error
-                  ? HuntrColors.coral
-                  : Colors.white.withValues(alpha: 0.15)),
-        ),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Icon(icon,
-              size: 15, color: error ? HuntrColors.coral : HuntrColors.orange),
-          const SizedBox(width: 6),
-          Flexible(
-            child: Text(text,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(color: Colors.white, fontSize: 12.5)),
-          ),
-          if (onTap != null) ...[
-            const SizedBox(width: 6),
-            const Icon(Icons.info_outline_rounded,
-                size: 15, color: Colors.white70),
-          ],
-        ]),
       );
 }
 
@@ -834,7 +705,7 @@ class _MapLocationsInfo extends StatelessWidget {
               const Text('How your location works on the map',
                   style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
               const SizedBox(height: 16),
-              const _InfoPoint(
+              const MapInfoPoint(
                 icon: Icons.blur_on_rounded,
                 title: 'Your exact location stays private',
                 text: 'To protect your privacy, we show you at an approximate '
@@ -843,14 +714,14 @@ class _MapLocationsInfo extends StatelessWidget {
                     'another area, so nobody can use the map to find your '
                     'home or street.',
               ),
-              const _InfoPoint(
+              const MapInfoPoint(
                 icon: Icons.people_alt_outlined,
                 title: 'Distance is only an estimate',
                 text: 'People nearby may appear closer or farther away than '
                     'they really are. The distance shown on profiles is a '
                     'helpful guide, not an exact measurement.',
               ),
-              const _InfoPoint(
+              const MapInfoPoint(
                 icon: Icons.workspaces_outline,
                 title: 'Find people around you',
                 text: "When zoomed out, nearby people may appear together as "
@@ -858,7 +729,7 @@ class _MapLocationsInfo extends StatelessWidget {
                     'see their photos. Your own location appears as a '
                     'glowing dot that only you can see.',
               ),
-              const _InfoPoint(
+              const MapInfoPoint(
                 icon: Icons.visibility_off_outlined,
                 title: "You're in control of who sees you",
                 text: 'Only people who share their distance and have Show me '
@@ -873,32 +744,3 @@ class _MapLocationsInfo extends StatelessWidget {
       );
 }
 
-class _InfoPoint extends StatelessWidget {
-  const _InfoPoint(
-      {required this.icon, required this.title, required this.text});
-
-  final IconData icon;
-  final String title;
-  final String text;
-
-  @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(bottom: 18),
-        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Icon(icon, color: HuntrColors.orange, size: 24),
-          const SizedBox(width: 14),
-          Expanded(
-            child:
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(title,
-                  style: const TextStyle(
-                      fontSize: 16, fontWeight: FontWeight.w700)),
-              const SizedBox(height: 4),
-              Text(text,
-                  style: const TextStyle(
-                      color: HuntrColors.muted, fontSize: 14, height: 1.45)),
-            ]),
-          ),
-        ]),
-      );
-}

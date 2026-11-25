@@ -110,7 +110,9 @@ class _ExploreScreenState extends State<ExploreScreen> {
     final token = app.sessionToken;
     if (explore == null || token == null) return;
     try {
-      app.setMyRoam(await explore.fetchRoam(token));
+      final status = await explore.fetchRoam(token);
+      app.roamReachKm = status.reachKm ?? app.roamReachKm;
+      app.setMyRoam(status.roaming);
     } catch (error) {
       debugPrint('Roam not loaded: $error');
     }
