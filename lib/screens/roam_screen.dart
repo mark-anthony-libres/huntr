@@ -11,7 +11,8 @@ import '../services/services_scope.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/huntr_map.dart';
-import '../widgets/map_controls.dart' show mapFloating;
+import '../widgets/map_controls.dart'
+    show defaultMapReachKm, mapFloating, reachBounds;
 import '../widgets/roam/roaming.dart';
 
 /// Makes the place search Roam uses (tests put a fake one here).
@@ -49,6 +50,14 @@ class _RoamScreenState extends State<RoamScreen> {
   Place? _picked;
   bool _naming = false;
   bool _saving = false;
+
+  /// The map's middle place: it moves (and zooms out) only within the
+  /// reach around it, like Explore's map; search moves it somewhere else.
+  LatLng? _anchor;
+
+  /// Going to a place searched for: no reach for that moment (the map is
+  /// outside the new one until it gets there).
+  bool _relocating = false;
 
   /// Which search is the latest (an older answer is dropped).
   int _searchNumber = 0;
@@ -156,19 +165,30 @@ class _RoamScreenState extends State<RoamScreen> {
     }
   }
 
-  /// A place from the list (or Recent): the map goes there.
+  /// A place from the list (or Recent): the map goes there, and its reach
+  /// with it.
   void _choose(Place place) {
     _focus.unfocus();
     _settling?.cancel();
+    final there = LatLng(place.latitude, place.longitude);
+    // no reach while it goes there, then the reach around there
     setState(() {
       _picked = place;
       _naming = false;
       _results = const [];
+      _relocating = true;
     });
     _query.removeListener(_typed);
     _query.clear();
     _query.addListener(_typed);
-    _map.move(LatLng(place.latitude, place.longitude), 13);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _map.move(there, 13);
+      setState(() {
+        _anchor = there;
+        _relocating = false;
+      });
+    });
   }
 
   /// The map was moved by hand: the spot under the pin is named once it
@@ -271,6 +291,8 @@ class _RoamScreenState extends State<RoamScreen> {
         : me != null
             ? LatLng(me.latitude, me.longitude)
             : const LatLng(20, 0);
+    final anchor = _anchor ??= start;
+    final reachKm = app.mapReachKm ?? defaultMapReachKm;
     final typing = _focus.hasFocus;
     final showList = typing && _query.text.trim().length >= 2;
     final showRecent = typing && !showList && _recent.isNotEmpty;
@@ -287,8 +309,14 @@ class _RoamScreenState extends State<RoamScreen> {
           child: HuntrMap(
             key: const Key('roamMap'),
             controller: _map,
-            center: start,
+            center: anchor,
             zoom: 12,
+            // like Explore's map: only so far around the place (search
+            // for somewhere else)
+            cameraConstraint: _relocating
+                ? const CameraConstraint.unconstrained()
+                : CameraConstraint.contain(
+                    bounds: reachBounds(anchor, reachKm)),
             onEvent: _mapEvent,
             onTap: _focus.unfocus,
             overlays: [
@@ -373,6 +401,10 @@ class _RoamScreenState extends State<RoamScreen> {
                           ),
                         ),
                       ]),
+                      if (typing) ...[
+                        const SizedBox(height: 8),
+                        _ReachNote(km: reachKm),
+                      ],
                       if (showList || showRecent) const SizedBox(height: 8),
                       if (showList)
                         _Card(
@@ -654,4 +686,31 @@ class _PlaceCard extends StatelessWidget {
       ),
     );
   }
+}
+
+/// What the search is for: the map only goes so far around a place.
+class _ReachNote extends StatelessWidget {
+  const _ReachNote({required this.km});
+
+  final double km;
+
+  @override
+  Widget build(BuildContext context) => _Card(
+        child: Padding(
+          key: const Key('roamReachNote'),
+          padding: const EdgeInsets.fromLTRB(14, 11, 14, 11),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Icon(Icons.info_outline_rounded,
+                size: 18, color: HuntrColors.orange),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                  'The map moves up to ${km.round()} km around a place, as on '
+                  'Explore. Search to roam somewhere else.',
+                  style: const TextStyle(
+                      color: HuntrColors.muted, fontSize: 13, height: 1.35)),
+            ),
+          ]),
+        ),
+      );
 }

@@ -191,14 +191,6 @@ class _ExploreMapState extends State<ExploreMap> {
     super.dispose();
   }
 
-  /// The square [km] around me.
-  static LatLngBounds _reach(LatLng me, double km) {
-    final lat = km / 111.32;
-    final lng = lat / math.max(0.01, math.cos(me.latitude * math.pi / 180));
-    return LatLngBounds(LatLng(me.latitude - lat, me.longitude - lng),
-        LatLng(me.latitude + lat, me.longitude + lng));
-  }
-
   /// Once the map stops moving: the people in what's on screen.
   void _moved(MapCamera camera) {
     _settle?.cancel();
@@ -264,6 +256,8 @@ class _ExploreMapState extends State<ExploreMap> {
         app.rememberPeople([for (final p in found.people) p.profile]);
         _more = found.more;
         _reachKm = found.reachKm ?? _reachKm;
+        // (Roam's map keeps to the same)
+        app.mapReachKm = _reachKm ?? app.mapReachKm;
         _photosWithinMeters = found.photosWithinMeters ?? _photosWithinMeters;
         _error = null;
         _fetched = area;
@@ -355,7 +349,7 @@ class _ExploreMapState extends State<ExploreMap> {
       // any area asked for to it, too)
       cameraConstraint: switch ((me, _reachKm)) {
         (final me?, final km?) =>
-          CameraConstraint.contain(bounds: _reach(me, km)),
+          CameraConstraint.contain(bounds: reachBounds(me, km)),
         _ => const CameraConstraint.unconstrained(),
       },
       tiles: widget.tiles,

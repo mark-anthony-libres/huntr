@@ -2,11 +2,25 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 
 import '../theme.dart';
 
 /// The controls floating over HUNTR's maps (Explore's, Roam's): zoom in
 /// and out with how wide the map is, and round buttons.
+
+/// How far a map goes from its middle (km, each way) until the backend
+/// says (its MAP_REACH_KM): Explore's map, and Roam's around a place.
+const defaultMapReachKm = 50.0;
+
+/// The square [km] each way around [center] (a map kept within it can't be
+/// panned or zoomed out past it).
+LatLngBounds reachBounds(LatLng center, double km) {
+  final lat = km / 111.32;
+  final lng = lat / math.max(0.01, math.cos(center.latitude * math.pi / 180));
+  return LatLngBounds(LatLng(center.latitude - lat, center.longitude - lng),
+      LatLng(center.latitude + lat, center.longitude + lng));
+}
 
 /// Zooms [map] in (+) or out (-) by [delta], kept within [min]-[max].
 void zoomMapBy(MapController map, double delta,
