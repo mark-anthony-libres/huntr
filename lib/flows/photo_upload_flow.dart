@@ -8,6 +8,7 @@ import '../services/huntr_backend.dart';
 import '../services/photo_cache/photo_cache.dart';
 import '../services/photo_service.dart';
 import '../widgets/photos/photo_crop_screen.dart';
+import '../widgets/photos/photo_edits.dart';
 import '../widgets/photos/photo_file_check.dart';
 
 /// A picked photo, checked and cropped by the user, ready to upload.
@@ -19,9 +20,11 @@ class CroppedPhoto {
   final PhotoCrop crop;
 }
 
-/// Checks a picked photo (type, size, readable), then lets the user crop it.
-/// Null when it's refused ([onProblem] gets the reason) or the crop is
-/// cancelled. Shared by profile photos and album photos.
+/// Checks a picked photo (type, size, readable), then lets the user crop it
+/// (and draw on it or blur parts of it: baked in before it's uploaded, so
+/// the original never leaves the device). Null when it's refused
+/// ([onProblem] gets the reason) or the crop is cancelled. Shared by
+/// profile photos and album photos.
 Future<CroppedPhoto?> checkAndCropPhoto(
   BuildContext context,
   PickedPhoto picked, {
@@ -42,19 +45,43 @@ Future<CroppedPhoto?> checkAndCropPhoto(
     return null;
   }
   if (!context.mounted) return null;
-  final crop = await Navigator.of(context).push<PhotoCrop>(MaterialPageRoute(
-    builder: (_) => PhotoCropScreen(image: MemoryImage(bytes), imageSize: size),
+  final result =
+      await Navigator.of(context).push<PhotoCropResult>(MaterialPageRoute(
+    builder: (_) => PhotoCropScreen(
+        image: MemoryImage(bytes), imageSize: size, editable: true),
   ));
-  if (crop == null) return null;
-  return CroppedPhoto(bytes: bytes, filename: picked.filename, crop: crop);
+  if (result == null) return null;
+  if (result.strokes.isEmpty) {
+    return CroppedPhoto(
+        bytes: bytes, filename: picked.filename, crop: result.crop);
+  }
+  // drawn on or blurred: the edited photo (smaller if it'd be too big)
+  try {
+    var edited = await applyPhotoEdits(bytes, result.strokes);
+    if (edited.length > maxBytes) {
+      edited = await applyPhotoEdits(bytes, result.strokes, maxSide: 1400);
+    }
+    if (edited.length > maxBytes) {
+      onProblem('The edited photo is too large. Try a smaller photo.');
+      return null;
+    }
+    final name = picked.filename.replaceFirst(RegExp(r'\.[^.]*$'), '');
+    return CroppedPhoto(
+        bytes: edited, filename: '$name.png', crop: result.crop);
+  } catch (error) {
+    debugPrint('Photo edits not applied: $error');
+    onProblem("The photo couldn't be edited. Please try again.");
+    return null;
+  }
 }
 
 /// Lets the user crop a stored photo further, from its cached bytes when the
 /// device has them. Null when cancelled.
 Future<PhotoCrop?> cropStoredPhoto(
-    BuildContext context, StoredPhoto photo, PhotoCache? cache) {
+    BuildContext context, StoredPhoto photo, PhotoCache? cache) async {
   final cached = cache?.peek(photo.id);
-  return Navigator.of(context).push<PhotoCrop>(MaterialPageRoute(
+  final result =
+      await Navigator.of(context).push<PhotoCropResult>(MaterialPageRoute(
     builder: (_) => PhotoCropScreen(
       title: 'Edit photo',
       confirmLabel: 'Save crop',
@@ -65,6 +92,7 @@ Future<PhotoCrop?> cropStoredPhoto(
       imageSize: Size(photo.width.toDouble(), photo.height.toDouble()),
     ),
   ));
+  return result?.crop;
 }
 
 Future<Size> _imageSize(Uint8List bytes) async {

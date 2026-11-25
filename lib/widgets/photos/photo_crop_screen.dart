@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../services/huntr_backend.dart';
 import '../../theme.dart';
+import 'photo_edits.dart';
 
 /// The area of the photo shown in the viewport (square, or [viewportHeight]
 /// tall), as fractions 0-1 of the photo. [displaySize] is the photo's size
@@ -30,17 +31,48 @@ PhotoCrop cropForViewport({
   );
 }
 
+/// What the crop screen gives back: the crop, and (a photo still to upload)
+/// what was drawn or blurred on it.
+class PhotoCropResult {
+  const PhotoCropResult(this.crop, [this.strokes = const []]);
+
+  final PhotoCrop crop;
+  final List<PhotoStroke> strokes;
+}
+
+/// The crop screen's tools: moving the photo, drawing on it, blurring it.
+enum _Tool { move, draw, blur }
+
+/// The colours Draw has.
+const _drawColors = [
+  Colors.white,
+  Colors.black,
+  Color(0xFFFF7A1A),
+  Color(0xFFFF5252),
+  Color(0xFFFFC83D),
+  Color(0xFF2EE59D),
+  Color(0xFF3B82F6),
+  Color(0xFFFF5CA8),
+];
+
 /// Square (1:1) crop editor: drag to move, pinch / scroll / slider to zoom.
-/// What's inside the frame is exactly what's kept. Pops with a [PhotoCrop],
-/// or null when cancelled. The photo itself is cropped by the backend.
+/// What's inside the frame is exactly what's kept. With [editable] (a photo
+/// not uploaded yet) it can also be drawn on and parts of it blurred (Draw,
+/// Blur; Undo), baked into the photo before it's uploaded. Pops with a
+/// [PhotoCropResult], or null when cancelled. The photo itself is cropped
+/// by the backend.
 class PhotoCropScreen extends StatefulWidget {
   const PhotoCropScreen({
     super.key,
     required this.image,
     required this.imageSize,
-    this.title = 'Crop photo',
+    this.title = 'Edit photo',
     this.confirmLabel = 'Use photo',
+    this.editable = false,
   });
+
+  /// Draw and Blur too (only before uploading: they change the photo).
+  final bool editable;
 
   final ImageProvider image;
 
@@ -59,6 +91,22 @@ class _PhotoCropScreenState extends State<PhotoCropScreen> {
   final _transform = TransformationController();
   double? _viewport;
   double _zoom = 1;
+
+  /// The tools are open (Edit): Move, Draw, Blur in place of the buttons.
+  bool _editing = false;
+  _Tool _tool = _Tool.move;
+  final _strokes = <PhotoStroke>[];
+
+  /// Bumped whenever a stroke changes (they grow in place while drawn).
+  int _version = 0;
+  Color _color = _drawColors.first;
+
+  /// Brush sizes on screen (logical pixels), whatever the zoom.
+  double _drawSize = 8;
+  double _blurSize = 36;
+
+  /// The pointer drawing now (one at a time).
+  int? _pointer;
 
   @override
   void initState() {
@@ -114,11 +162,55 @@ class _PhotoCropScreenState extends State<PhotoCropScreen> {
   void _confirm() {
     final viewport = _viewport;
     if (viewport == null) return;
-    Navigator.of(context).pop(cropForViewport(
-      displaySize: _displaySize(viewport),
-      viewport: viewport,
-      transform: _transform.value,
-    ));
+    Navigator.of(context).pop(PhotoCropResult(
+        cropForViewport(
+          displaySize: _displaySize(viewport),
+          viewport: viewport,
+          transform: _transform.value,
+        ),
+        List.of(_strokes)));
+  }
+
+  /// A finger (or the mouse) down on the photo, while drawing or blurring:
+  /// a new stroke (its size the brush's on screen, whatever the zoom).
+  void _strokeStart(PointerDownEvent event, Size display) {
+    if (_tool == _Tool.move || _pointer != null) return;
+    _pointer = event.pointer;
+    final onScreen = _tool == _Tool.draw ? _drawSize : _blurSize;
+    setState(() {
+      _strokes.add(PhotoStroke(
+        kind:
+            _tool == _Tool.draw ? PhotoStrokeKind.paint : PhotoStrokeKind.blur,
+        color: _color,
+        width: onScreen / _zoom / display.width,
+        points: [_fraction(event.localPosition, display)],
+      ));
+      _version++;
+    });
+  }
+
+  void _strokeMove(PointerMoveEvent event, Size display) {
+    if (event.pointer != _pointer || _strokes.isEmpty) return;
+    setState(() {
+      _strokes.last.points.add(_fraction(event.localPosition, display));
+      _version++;
+    });
+  }
+
+  void _strokeEnd(PointerEvent event) {
+    if (event.pointer == _pointer) _pointer = null;
+  }
+
+  static Offset _fraction(Offset local, Size display) => Offset(
+      (local.dx / display.width).clamp(0.0, 1.0),
+      (local.dy / display.height).clamp(0.0, 1.0));
+
+  void _undo() {
+    if (_strokes.isEmpty) return;
+    setState(() {
+      _strokes.removeLast();
+      _version++;
+    });
   }
 
   @override
@@ -131,11 +223,32 @@ class _PhotoCropScreenState extends State<PhotoCropScreen> {
           icon: const Icon(Icons.close),
           onPressed: () => Navigator.of(context).pop(),
         ),
+        actions: [
+          // the tools: drawing on the photo, blurring parts of it
+          if (widget.editable)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: TextButton.icon(
+                key: const Key('photoEdit'),
+                onPressed: () => setState(() {
+                  _editing = !_editing;
+                  if (!_editing) _tool = _Tool.move;
+                }),
+                icon: Icon(_editing ? Icons.check_rounded : Icons.brush_rounded,
+                    size: 20),
+                label: Text(_editing ? 'Done' : 'Edit'),
+              ),
+            ),
+        ],
       ),
       body: SafeArea(
         child: LayoutBuilder(builder: (context, box) {
+          // room for the tools too, when there are some
           final viewport = math
-              .min(math.min(box.maxWidth - 40, box.maxHeight - 220), 560.0)
+              .min(
+                  math.min(box.maxWidth - 40,
+                      box.maxHeight - (widget.editable ? 300 : 220)),
+                  560.0)
               .clamp(160.0, 560.0);
           if (_viewport != viewport) {
             _viewport = viewport;
@@ -147,8 +260,15 @@ class _PhotoCropScreenState extends State<PhotoCropScreen> {
           return Column(
             children: [
               const SizedBox(height: 16),
-              const Text('Drag to move · pinch or scroll to zoom',
-                  style: TextStyle(color: HuntrColors.muted)),
+              Text(
+                  switch (_tool) {
+                    _Tool.move => 'Drag to move · pinch or scroll to zoom',
+                    _Tool.draw => 'Draw on the photo',
+                    _Tool.blur =>
+                      'Paint over anything to blur it (a face, a tattoo…)',
+                  },
+                  key: const Key('photoEditHint'),
+                  style: const TextStyle(color: HuntrColors.muted)),
               const SizedBox(height: 16),
               Center(
                 child: SizedBox.square(
@@ -163,10 +283,22 @@ class _PhotoCropScreenState extends State<PhotoCropScreen> {
                         minScale: 1,
                         maxScale: _maxZoom,
                         boundaryMargin: EdgeInsets.zero,
-                        child: SizedBox(
-                          width: display.width,
-                          height: display.height,
-                          child: Image(image: widget.image, fit: BoxFit.fill),
+                        // drawing or blurring: a finger paints (zoom with
+                        // the slider)
+                        panEnabled: _tool == _Tool.move,
+                        scaleEnabled: _tool == _Tool.move,
+                        child: Listener(
+                          key: const Key('photoEditCanvas'),
+                          onPointerDown: (e) => _strokeStart(e, display),
+                          onPointerMove: (e) => _strokeMove(e, display),
+                          onPointerUp: _strokeEnd,
+                          onPointerCancel: _strokeEnd,
+                          child: PhotoWithStrokes(
+                            image: widget.image,
+                            size: display,
+                            strokes: _strokes,
+                            version: _version,
+                          ),
                         ),
                       ),
                     ),
@@ -198,37 +330,179 @@ class _PhotoCropScreenState extends State<PhotoCropScreen> {
                 ]),
               ),
               const Spacer(),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 560),
-                  child: Row(children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        style: OutlinedButton.styleFrom(
-                            minimumSize: const Size.fromHeight(52),
-                            shape: const StadiumBorder()),
-                        onPressed: () => _center(viewport),
-                        child: const Text('Reset'),
+              if (_editing)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 560),
+                    child: _toolbar(),
+                  ),
+                )
+              else
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 560),
+                    child: Row(children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                              minimumSize: const Size.fromHeight(52),
+                              shape: const StadiumBorder()),
+                          onPressed: () => _center(viewport),
+                          child: const Text('Reset'),
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      flex: 2,
-                      child: FilledButton(
-                        key: const Key('photoCropConfirm'),
-                        onPressed: _confirm,
-                        child: Text(widget.confirmLabel),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        flex: 2,
+                        child: FilledButton(
+                          key: const Key('photoCropConfirm'),
+                          onPressed: _confirm,
+                          child: Text(widget.confirmLabel),
+                        ),
                       ),
-                    ),
-                  ]),
+                    ]),
+                  ),
                 ),
-              ),
             ],
           );
         }),
       ),
     );
+  }
+
+  /// Move, Draw or Blur, and Undo; Draw's colours and brush size, Blur's
+  /// brush size.
+  Widget _toolbar() {
+    Widget tool(_Tool which, IconData icon, String label) {
+      final on = _tool == which;
+      return Expanded(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 5),
+          child: Material(
+            color: on
+                ? HuntrColors.orange.withValues(alpha: 0.16)
+                : HuntrColors.surfaceHigh,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+              side: BorderSide(
+                  color: on ? HuntrColors.orange : Colors.transparent,
+                  width: 1.4),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              key: Key('photoTool-${which.name}'),
+              onTap: () => setState(() => _tool = which),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(icon,
+                      size: 24, color: on ? HuntrColors.orange : Colors.white),
+                  const SizedBox(height: 5),
+                  Text(label,
+                      style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: on ? HuntrColors.orange : Colors.white)),
+                ]),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    final size = _tool == _Tool.draw ? _drawSize : _blurSize;
+    return Column(mainAxisSize: MainAxisSize.min, children: [
+      Row(children: [
+        tool(_Tool.move, Icons.open_with_rounded, 'Move'),
+        tool(_Tool.draw, Icons.brush_rounded, 'Draw'),
+        tool(_Tool.blur, Icons.blur_on_rounded, 'Blur'),
+        const SizedBox(width: 3),
+        IconButton(
+          key: const Key('photoEditUndo'),
+          tooltip: 'Undo',
+          onPressed: _strokes.isEmpty ? null : _undo,
+          icon: const Icon(Icons.undo_rounded),
+        ),
+      ]),
+      if (_tool != _Tool.move) ...[
+        const SizedBox(height: 16),
+        if (_tool == _Tool.draw)
+          SizedBox(
+            height: 40,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              children: [
+                for (final color in _drawColors)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 5),
+                    child: Semantics(
+                      button: true,
+                      selected: color == _color,
+                      label: 'Colour',
+                      child: GestureDetector(
+                        onTap: () => setState(() => _color = color),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 150),
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            color: color,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                                color: color == _color
+                                    ? HuntrColors.orange
+                                    : Colors.white24,
+                                width: color == _color ? 3 : 1),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        if (_tool == _Tool.draw) const SizedBox(height: 10),
+        Row(children: [
+          const Text('Brush size',
+              style: TextStyle(color: HuntrColors.muted, fontSize: 13)),
+          Expanded(
+            child: Slider(
+              key: const Key('photoBrushSize'),
+              value: size,
+              min: _tool == _Tool.draw ? 3 : 14,
+              max: _tool == _Tool.draw ? 30 : 90,
+              onChanged: (v) => setState(() {
+                if (_tool == _Tool.draw) {
+                  _drawSize = v;
+                } else {
+                  _blurSize = v;
+                }
+              }),
+            ),
+          ),
+          // the brush as it paints
+          SizedBox.square(
+            dimension: 40,
+            child: Center(
+              child: Container(
+                width: math.min(size, 40),
+                height: math.min(size, 40),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: _tool == _Tool.draw
+                      ? _color
+                      : Colors.white.withValues(alpha: 0.35),
+                  border: Border.all(color: Colors.white38),
+                ),
+              ),
+            ),
+          ),
+        ]),
+      ],
+    ]);
   }
 }
 
