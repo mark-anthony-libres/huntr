@@ -20,29 +20,11 @@ class Place {
   final String? detail;
   final double latitude;
   final double longitude;
-
-  Map<String, dynamic> toJson() => {
-        'name': name,
-        if (detail != null) 'detail': detail,
-        'lat': latitude,
-        'lng': longitude,
-      };
-
-  static Place? fromJson(Object? json) {
-    if (json is! Map<String, dynamic>) return null;
-    final lat = json['lat'], lng = json['lng'], name = json['name'];
-    if (lat is! num || lng is! num || name is! String) return null;
-    return Place(
-        name: name,
-        detail: json['detail'] as String?,
-        latitude: lat.toDouble(),
-        longitude: lng.toDouble());
-  }
 }
 
-/// Finding places for Roam, as you type, and the name of a spot picked on
-/// the map: MapTiler's place search (the same key as the map's tiles); with
-/// no key, or once MapTiler refuses it (for the rest of the session),
+/// Naming a spot picked on Roam's map (its area: "Aliw, Pasig, Metro
+/// Manila"): MapTiler's place search (the same key as the map's tiles);
+/// with no key, or once MapTiler refuses it (for the rest of the session),
 /// Photon's (OpenStreetMap's places, free, no key).
 class PlaceSearch {
   PlaceSearch({String? key, http.Client? client})
@@ -56,25 +38,6 @@ class PlaceSearch {
   static bool _mapTilerRefused = false;
 
   bool get _useMapTiler => _key.isNotEmpty && !_mapTilerRefused;
-
-  /// There's always a search (Photon needs no key).
-  bool get available => true;
-
-  /// Places matching what's typed (2 letters or more), best first.
-  Future<List<Place>> search(String query) async {
-    final q = query.trim();
-    if (q.length < 2) return const [];
-    if (_useMapTiler) {
-      try {
-        return await _get('/geocoding/${Uri.encodeComponent(q)}.json',
-            {'autocomplete': 'true', 'limit': '6', 'fuzzyMatch': 'true'});
-      } on PlaceSearchFailed catch (error) {
-        if (!error.refused) rethrow;
-        _mapTilerRefused = true;
-      }
-    }
-    return _photon('/api/', {'q': q, 'limit': '8', 'lang': 'en'});
-  }
 
   /// What's at this spot (null: nothing known).
   Future<Place?> at(double latitude, double longitude) async {
@@ -103,17 +66,6 @@ class PlaceSearch {
       Uri.https('api.maptiler.com', path, {...query, 'key': _key}), _place);
 
   // ---- Photon (photon.komoot.io) ----
-
-  Future<List<Place>> _photon(String path, Map<String, String> query) async {
-    final found =
-        await _fetch(Uri.https('photon.komoot.io', path, query), _photonPlace);
-    // the same place more than once (a district and its station...): once
-    final seen = <String>{};
-    return [
-      for (final place in found)
-        if (seen.add('${place.name}|${place.detail}')) place
-    ].take(6).toList();
-  }
 
   /// The area at a spot (its neighbourhood or town, not the street).
   Future<Place?> _photonAt(double latitude, double longitude) async {

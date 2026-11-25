@@ -5,26 +5,25 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../models/models.dart';
-import '../services/huntr_backend.dart' show SessionRejectedException;
+import '../services/huntr_backend.dart'
+    show BackendException, SessionRejectedException;
 import '../services/place_search.dart';
 import '../services/services_scope.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/huntr_map.dart';
 import '../widgets/map_controls.dart'
-    show defaultMapReachKm, mapFloating, reachBounds;
+    show MapButton, defaultMapReachKm, reachBounds;
 import '../widgets/roam/roaming.dart';
 
-/// Makes the place search Roam uses (tests put a fake one here).
+/// Makes the place naming Roam uses (tests put a fake one here).
 PlaceSearch Function() newPlaceSearch = PlaceSearch.new;
 
-/// How many places Recent keeps.
-const _recentKept = 5;
-
-/// Roam: pick anywhere to look around - search a place (a list of matches
-/// as you type, and the places roamed last), or move the map under the pin
-/// - then Roam here. While roaming, Back to my location ends it. Pops with
-/// true when roaming changed.
+/// Roam: look around somewhere near - within the reach (as far as Explore's
+/// map goes, 50 km) around where I am, drawn as a circle. Move the map under
+/// the pin (let go outside the circle: back to its edge), then Roam here.
+/// While roaming, Back to my location ends it. Pops with true when roaming
+/// changed.
 class RoamScreen extends StatefulWidget {
   const RoamScreen({super.key});
 
@@ -34,41 +33,14 @@ class RoamScreen extends StatefulWidget {
 
 class _RoamScreenState extends State<RoamScreen> {
   final _map = MapController();
-  final _query = TextEditingController();
-  final _focus = FocusNode();
   late final PlaceSearch _places = newPlaceSearch();
-
-  Timer? _typing;
   Timer? _settling;
-  List<Place> _results = const [];
-  List<Place> _recent = const [];
-  bool _searching = false;
-  String? _searchProblem;
 
-  /// The place to roam: picked from the list, or named where the map
-  /// stopped (null: still finding out).
+  /// The place to roam: named where the map stopped (null: still finding
+  /// out).
   Place? _picked;
   bool _naming = false;
   bool _saving = false;
-
-  /// The map's middle place: it moves (and zooms out) only within the
-  /// reach around it, like Explore's map; search moves it somewhere else.
-  LatLng? _anchor;
-
-  /// Going to a place searched for: no reach for that moment (the map is
-  /// outside the new one until it gets there).
-  bool _relocating = false;
-
-  /// Which search is the latest (an older answer is dropped).
-  int _searchNumber = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    _focus.addListener(() => setState(() {}));
-    _query.addListener(_typed);
-    unawaited(_loadRecent());
-  }
 
   @override
   void didChangeDependencies() {
@@ -85,125 +57,47 @@ class _RoamScreenState extends State<RoamScreen> {
 
   @override
   void dispose() {
-    _typing?.cancel();
     _settling?.cancel();
-    _query.dispose();
-    _focus.dispose();
     _map.dispose();
     super.dispose();
   }
 
-  Future<void> _loadRecent() async {
-    final prefs = AppScope.read(context).devicePreferences;
-    if (prefs == null) return;
-    try {
-      final saved = await prefs.readRecentRoams();
-      if (!mounted) return;
-      setState(() => _recent = [
-            for (final json in saved)
-              if (Place.fromJson(json) case final place?) place
-          ]);
-    } catch (error) {
-      debugPrint('Recent roams not loaded: $error');
-    }
+  /// Where I am (the circle's middle); null when not known.
+  LatLng? get _me {
+    final mine = AppScope.read(context).myLocation;
+    return mine == null ? null : LatLng(mine.latitude, mine.longitude);
   }
 
-  void _remember(Place place) {
-    final prefs = AppScope.read(context).devicePreferences;
-    final kept = [
-      place,
-      for (final p in _recent)
-        if (p.name != place.name || p.detail != place.detail) p
-    ].take(_recentKept).toList();
-    _recent = kept;
-    unawaited(prefs
-        ?.saveRecentRoams([for (final p in kept) p.toJson()]).catchError(
-            (Object error) => debugPrint('Recent roams not saved: $error')));
-  }
+  double get _reachKm => AppScope.read(context).mapReachKm ?? defaultMapReachKm;
 
-  /// Searches a moment after typing stops.
-  void _typed() {
-    _typing?.cancel();
-    final q = _query.text.trim();
-    if (q.length < 2) {
-      setState(() {
-        _results = const [];
-        _searching = false;
-        _searchProblem = null;
-      });
-      return;
-    }
-    _typing = Timer(const Duration(milliseconds: 300), () => _search(q));
-  }
-
-  Future<void> _search(String q) async {
-    if (!_places.available) {
-      setState(() => _searchProblem =
-          'Search isn\'t available. Move the map to choose a spot.');
-      return;
-    }
-    final number = ++_searchNumber;
-    setState(() {
-      _searching = true;
-      _searchProblem = null;
-    });
-    try {
-      final found = await _places.search(q);
-      if (!mounted || number != _searchNumber) return;
-      setState(() {
-        _results = found;
-        _searching = false;
-        _searchProblem = found.isEmpty ? 'No places found.' : null;
-      });
-    } catch (error) {
-      debugPrint('Place search failed: $error');
-      if (!mounted || number != _searchNumber) return;
-      setState(() {
-        _searching = false;
-        _searchProblem = 'Search didn\'t work. Please try again.';
-      });
-    }
-  }
-
-  /// A place from the list (or Recent): the map goes there, and its reach
-  /// with it.
-  void _choose(Place place) {
-    _focus.unfocus();
-    _settling?.cancel();
-    final there = LatLng(place.latitude, place.longitude);
-    // no reach while it goes there, then the reach around there
-    setState(() {
-      _picked = place;
-      _naming = false;
-      _results = const [];
-      _relocating = true;
-    });
-    _query.removeListener(_typed);
-    _query.clear();
-    _query.addListener(_typed);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      _map.move(there, 13);
-      setState(() {
-        _anchor = there;
-        _relocating = false;
-      });
-    });
-  }
-
-  /// The map was moved by hand: the spot under the pin is named once it
-  /// settles.
+  /// The map was moved by hand: let go outside the circle, the pin goes
+  /// back to its edge; then the spot under it is named once it settles.
   void _mapEvent(MapEvent event) {
     if (event is! MapEventMoveEnd && event is! MapEventFlingAnimationEnd) {
       return;
     }
     if (event.source == MapEventSource.mapController) return;
+    _keepInCircle();
     _settling?.cancel();
     setState(() {
       _picked = null;
       _naming = true;
     });
     _settling = Timer(const Duration(milliseconds: 450), _nameTheSpot);
+  }
+
+  /// The pin back inside the circle (to the nearest point of its edge).
+  void _keepInCircle() {
+    final me = _me;
+    if (me == null) return;
+    final camera = _map.camera;
+    const distance = Distance();
+    final metres = distance.as(LengthUnit.Meter, me, camera.center);
+    final reach = _reachKm * 1000;
+    if (metres <= reach) return;
+    final edge =
+        distance.offset(me, reach, distance.bearing(me, camera.center));
+    _map.move(edge, camera.zoom);
   }
 
   Future<void> _nameTheSpot() async {
@@ -247,7 +141,6 @@ class _RoamScreenState extends State<RoamScreen> {
           place: place.name,
           detail: place.detail);
       app.setMyRoam(roam);
-      _remember(place);
       if (mounted) Navigator.pop(context, true);
     } on SessionRejectedException {
       app.endSession();
@@ -255,8 +148,10 @@ class _RoamScreenState extends State<RoamScreen> {
       debugPrint('Roaming failed: $error');
       if (!mounted) return;
       setState(() => _saving = false);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text("Couldn't roam there. Please try again.")));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(error is BackendException
+              ? error.message
+              : "Couldn't roam there. Please try again.")));
     }
   }
 
@@ -285,42 +180,77 @@ class _RoamScreenState extends State<RoamScreen> {
   Widget build(BuildContext context) {
     final app = AppScope.of(context);
     final roam = app.myRoam;
-    final me = app.myLocation;
+    final me = _me;
+    final reachKm = _reachKm;
     final start = roam != null
         ? LatLng(roam.latitude, roam.longitude)
-        : me != null
-            ? LatLng(me.latitude, me.longitude)
-            : const LatLng(20, 0);
-    final anchor = _anchor ??= start;
-    final reachKm = app.mapReachKm ?? defaultMapReachKm;
-    final typing = _focus.hasFocus;
-    final showList = typing && _query.text.trim().length >= 2;
-    final showRecent = typing && !showList && _recent.isNotEmpty;
+        : me ?? const LatLng(20, 0);
     final top = MediaQuery.paddingOf(context).top;
     return Scaffold(
       backgroundColor: HuntrColors.night,
-      resizeToAvoidBottomInset: false,
       // the map, and below it (not over it: its credits stay in view) the
       // place card
       body: Column(children: [
         Expanded(
-          // the shared map (its zoom card, Explore's zoom range), the pin
-          // and the search over it
           child: HuntrMap(
             key: const Key('roamMap'),
             controller: _map,
-            center: anchor,
-            zoom: 12,
-            // like Explore's map: only so far around the place (search
-            // for somewhere else)
-            cameraConstraint: _relocating
-                ? const CameraConstraint.unconstrained()
-                // the pin (the map's middle) reaches the whole reach, up to
-                // its edge (not just what fits on screen inside it)
+            center: start,
+            zoom: 11,
+            // opens on the whole circle (out far enough to see all of it)
+            minZoom: 7,
+            fit: me == null
+                ? null
+                : CameraFit.bounds(
+                    bounds: reachBounds(me, reachKm),
+                    padding: const EdgeInsets.fromLTRB(16, 80, 16, 16)),
+            // not far past the circle while dragging (the pin comes back
+            // inside it when let go)
+            cameraConstraint: me == null
+                ? null
                 : CameraConstraint.containCenter(
-                    bounds: reachBounds(anchor, reachKm)),
+                    bounds: reachBounds(me, reachKm)),
             onEvent: _mapEvent,
-            onTap: _focus.unfocus,
+            layers: [
+              if (me != null) ...[
+                // where I can roam: the reach around where I am
+                CircleLayer(circles: [
+                  CircleMarker(
+                    key: const Key('roamCircle'),
+                    point: me,
+                    radius: reachKm * 1000,
+                    useRadiusInMeter: true,
+                    color: HuntrColors.orange.withValues(alpha: 0.06),
+                    borderColor: HuntrColors.orange.withValues(alpha: 0.7),
+                    borderStrokeWidth: 2,
+                  ),
+                ]),
+                // and where I am
+                MarkerLayer(markers: [
+                  Marker(
+                    point: me,
+                    width: 18,
+                    height: 18,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: HuntrColors.active,
+                        border: Border.all(color: Colors.white, width: 3),
+                      ),
+                    ),
+                  ),
+                ]),
+              ],
+            ],
+            buttons: [
+              if (me != null)
+                MapButton(
+                  key: const Key('roamMe'),
+                  tooltip: 'Where I am',
+                  icon: Icons.my_location_rounded,
+                  onPressed: () => _map.move(me, _map.camera.zoom),
+                ),
+            ],
             overlays: [
               // the pin: where Roam here roams (the middle of the map)
               IgnorePointer(
@@ -336,214 +266,62 @@ class _RoamScreenState extends State<RoamScreen> {
                   ),
                 ),
               ),
-
-              // search, and what it found: one tap region with the box, so a
-              // tap on a place isn't a tap outside it (which closes the list
-              // first, on the web)
+              // back, and what the circle is
               Positioned(
                 left: 12,
                 right: 12,
                 top: top + 12,
-                child: TextFieldTapRegion(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Row(children: [
-                        IconButton.filled(
-                          tooltip: 'Back',
-                          style: IconButton.styleFrom(
-                            backgroundColor: HuntrColors.surface,
-                            foregroundColor: Colors.white,
-                            minimumSize: const Size(48, 48),
-                            side: const BorderSide(color: HuntrColors.border),
-                          ),
-                          onPressed: () => Navigator.pop(context),
-                          icon: const Icon(Icons.arrow_back_rounded),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: TextField(
-                            key: const Key('roamSearch'),
-                            controller: _query,
-                            focusNode: _focus,
-                            textInputAction: TextInputAction.search,
-                            onSubmitted: (_) {
-                              if (_results.isNotEmpty) _choose(_results.first);
-                            },
-                            decoration: InputDecoration(
-                              hintText: 'Search a city or area',
-                              filled: true,
-                              fillColor: HuntrColors.surface,
-                              prefixIcon: const Icon(Icons.search_rounded),
-                              suffixIcon: _query.text.isEmpty
-                                  ? null
-                                  : IconButton(
-                                      tooltip: 'Clear search',
-                                      icon: const Icon(Icons.close_rounded),
-                                      onPressed: _query.clear,
-                                    ),
-                              contentPadding:
-                                  const EdgeInsets.symmetric(vertical: 12),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(24),
-                                borderSide:
-                                    const BorderSide(color: HuntrColors.border),
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(24),
-                                borderSide:
-                                    const BorderSide(color: HuntrColors.border),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(24),
-                                borderSide: BorderSide(
-                                    color: HuntrColors.orange, width: 1.4),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ]),
-                      if (typing) ...[
-                        const SizedBox(height: 8),
-                        _ReachNote(km: reachKm),
-                      ],
-                      if (showList || showRecent) const SizedBox(height: 8),
-                      if (showList)
-                        _Card(
-                          child: _searching && _results.isEmpty
-                              ? const Padding(
-                                  padding: EdgeInsets.all(20),
-                                  child: Center(
-                                      child: SizedBox.square(
-                                          dimension: 22,
-                                          child: CircularProgressIndicator(
-                                              strokeWidth: 2.5))),
-                                )
-                              : _searchProblem != null && _results.isEmpty
-                                  ? Padding(
-                                      padding: const EdgeInsets.all(16),
-                                      child: Text(_searchProblem!,
-                                          key: const Key('roamSearchProblem'),
-                                          style: const TextStyle(
-                                              color: HuntrColors.muted)),
-                                    )
-                                  : Column(children: [
-                                      for (final (i, place) in _results.indexed)
-                                        _PlaceRow(
-                                          key: Key('roamResult-$i'),
-                                          place: place,
-                                          onTap: () => _choose(place),
-                                        ),
-                                    ]),
-                        ),
-                      if (showRecent)
-                        _Card(
-                          child: Padding(
-                            padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text('RECENT',
-                                    style: TextStyle(
-                                        color: HuntrColors.muted,
-                                        fontSize: 12,
-                                        letterSpacing: 0.5,
-                                        fontWeight: FontWeight.w700)),
-                                const SizedBox(height: 8),
-                                Wrap(spacing: 8, runSpacing: 8, children: [
-                                  for (final place in _recent)
-                                    ActionChip(
-                                      avatar: const Icon(Icons.history_rounded,
-                                          size: 16),
-                                      label: Text(place.name),
-                                      onPressed: () => _choose(place),
-                                    ),
-                                ]),
-                              ],
-                            ),
-                          ),
-                        ),
-                    ],
+                child: Row(children: [
+                  IconButton.filled(
+                    tooltip: 'Back',
+                    style: IconButton.styleFrom(
+                      backgroundColor: HuntrColors.surface,
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size(48, 48),
+                      side: const BorderSide(color: HuntrColors.border),
+                    ),
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.arrow_back_rounded),
                   ),
-                ),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Container(
+                      key: const Key('roamReachNote'),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: HuntrColors.surface.withValues(alpha: 0.94),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: HuntrColors.border),
+                      ),
+                      child: Text(
+                          me == null
+                              ? 'Share your location to roam around it.'
+                              : 'Roam anywhere in the circle: up to '
+                                  '${reachKm.round()} km from you.',
+                          style: const TextStyle(
+                              fontSize: 13, fontWeight: FontWeight.w600)),
+                    ),
+                  ),
+                ]),
               ),
             ],
           ),
         ),
 
         // the place, and Roam here
-        if (!typing)
-          _PlaceCard(
-            place: _picked,
-            naming: _naming,
-            me: me,
-            saving: _saving,
-            roaming: roam != null,
-            onRoam: _roamHere,
-            onHome: _goHome,
-          ),
+        _PlaceCard(
+          place: _picked,
+          naming: _naming,
+          me: app.myLocation,
+          saving: _saving,
+          roaming: roam != null,
+          onRoam: _roamHere,
+          onHome: _goHome,
+        ),
       ]),
     );
   }
-}
-
-/// A card over the map (the search's places, Recent): the same floating
-/// look as the map's controls ([mapFloating]).
-class _Card extends StatelessWidget {
-  const _Card({required this.child});
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) => Container(
-        clipBehavior: Clip.antiAlias,
-        decoration: mapFloating(radius: 18),
-        child: Material(type: MaterialType.transparency, child: child),
-      );
-}
-
-class _PlaceRow extends StatelessWidget {
-  const _PlaceRow({super.key, required this.place, required this.onTap});
-
-  final Place place;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) => InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-          child: Row(children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: HuntrColors.surfaceHigh,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(Icons.place_outlined,
-                  size: 19, color: HuntrColors.orange),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(place.name,
-                      style: const TextStyle(
-                          fontSize: 15, fontWeight: FontWeight.w700)),
-                  if (place.detail != null)
-                    Text(place.detail!,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                            color: HuntrColors.muted, fontSize: 12.5)),
-                ],
-              ),
-            ),
-          ]),
-        ),
-      );
 }
 
 /// The bottom card: the place under the pin (how far from me), what roaming
@@ -688,31 +466,4 @@ class _PlaceCard extends StatelessWidget {
       ),
     );
   }
-}
-
-/// What the search is for: the map only goes so far around a place.
-class _ReachNote extends StatelessWidget {
-  const _ReachNote({required this.km});
-
-  final double km;
-
-  @override
-  Widget build(BuildContext context) => _Card(
-        child: Padding(
-          key: const Key('roamReachNote'),
-          padding: const EdgeInsets.fromLTRB(14, 11, 14, 11),
-          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Icon(Icons.info_outline_rounded,
-                size: 18, color: HuntrColors.orange),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                  'The map moves up to ${km.round()} km around a place, as on '
-                  'Explore. Search to roam somewhere else.',
-                  style: const TextStyle(
-                      color: HuntrColors.muted, fontSize: 13, height: 1.35)),
-            ),
-          ]),
-        ),
-      );
 }
