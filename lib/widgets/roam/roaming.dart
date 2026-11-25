@@ -22,7 +22,7 @@ class RoamingTag extends StatelessWidget {
   final String? label;
 
   /// Its text, sized to what fits: [label] in full, else "Roaming", else
-  /// none (then no tag at all: a narrow tile or header).
+  /// none (then only the globe, or nothing when even that doesn't fit).
   String? _fitting(BuildContext context, double width) {
     final style = _style;
     // the globe, the gaps and the arrow around the text
@@ -50,8 +50,22 @@ class RoamingTag extends StatelessWidget {
   Widget build(BuildContext context) {
     final tag = LayoutBuilder(builder: (context, box) {
       final text = _fitting(context, box.maxWidth);
-      // no room for "Roaming": nothing (the profile says it)
-      if (text == null) return const SizedBox.shrink();
+      // no room for "Roaming": the globe alone (nothing if even that won't fit)
+      if (text == null) {
+        final size = small ? 20.0 : 30.0;
+        if (box.maxWidth < size) return const SizedBox.shrink();
+        return Tooltip(
+          message: 'Roaming',
+          child: Container(
+            key: const Key('roamingTag'),
+            width: size,
+            height: size,
+            decoration: BoxDecoration(
+                color: HuntrColors.orange, shape: BoxShape.circle),
+            child: Icon(roamIcon, size: small ? 13 : 17, color: Colors.black),
+          ),
+        );
+      }
       return Container(
         key: const Key('roamingTag'),
         height: small ? 20 : 30,

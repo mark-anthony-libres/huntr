@@ -84,37 +84,44 @@ class ProfileTile extends StatelessWidget {
                   ),
                 ),
 
-              // ---- top corners: status (and roaming), then badges ----
-              if (profile.online || profile.roaming != null)
-                Positioned(
-                    top: inset,
-                    left: inset,
-                    right: inset + 30,
-                    child: Wrap(spacing: 4, runSpacing: 4, children: [
-                      if (profile.online)
-                        compact ? const _OnlineMark() : const _OnlinePill(),
-                      // somewhere else, looking around here
-                      if (profile.roaming != null) RoamingTag(small: compact),
-                    ])),
+              // ---- top corners: status (and roaming), then badges, in one
+              // row: the left ones get only the room the badges leave ----
               Positioned(
                 top: inset,
+                left: inset,
                 right: inset,
-                child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  if (favorite)
-                    Container(
-                      margin: const EdgeInsets.only(right: 4),
-                      padding: EdgeInsets.all(compact ? 2 : 6),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.5),
-                        shape: BoxShape.circle,
+                child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Wrap(spacing: 4, runSpacing: 4, children: [
+                          if (profile.online)
+                            compact ? const _OnlineMark() : const _OnlinePill(),
+                          // somewhere else, looking around here
+                          if (profile.roaming != null)
+                            RoamingTag(small: compact),
+                        ]),
                       ),
-                      child: Icon(Icons.star_rounded,
-                          size: compact ? 16 : 20, color: HuntrColors.orange),
-                    ),
-                  if (profile.isNew)
-                    NewBadge(
-                        key: Key('newBadge-${profile.id}'), small: compact),
-                ]),
+                      const SizedBox(width: 4),
+                      Row(mainAxisSize: MainAxisSize.min, children: [
+                        if (favorite)
+                          Container(
+                            margin: const EdgeInsets.only(right: 4),
+                            padding: EdgeInsets.all(compact ? 2 : 6),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.5),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(Icons.star_rounded,
+                                size: compact ? 16 : 20,
+                                color: HuntrColors.orange),
+                          ),
+                        if (profile.isNew)
+                          NewBadge(
+                              key: Key('newBadge-${profile.id}'),
+                              small: compact),
+                      ]),
+                    ]),
               ),
 
               // ---- bottom: who and how far ----
