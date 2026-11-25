@@ -21,6 +21,11 @@ abstract class DevicePreferences {
   /// changed.
   Future<List<String>?> readQuickReactions();
   Future<void> saveQuickReactions(List<String> reactions);
+
+  /// The voice messages I received and played here (their ids, oldest
+  /// first); empty until one was played.
+  Future<List<int>> readPlayedVoices();
+  Future<void> savePlayedVoices(List<int> messageIds);
 }
 
 /// Kept in the platform's secure storage, like the session token (the one
@@ -32,6 +37,7 @@ class SecureDevicePreferences implements DevicePreferences {
   static const _notificationsOfferedKey = 'huntr_notifications_offered';
   static const _exploreLayoutKey = 'huntr_explore_layout';
   static const _quickReactionsKey = 'huntr_quick_reactions';
+  static const _playedVoicesKey = 'huntr_played_voices';
   static const _storage = FlutterSecureStorage();
 
   @override
@@ -70,4 +76,19 @@ class SecureDevicePreferences implements DevicePreferences {
   @override
   Future<void> saveQuickReactions(List<String> reactions) =>
       _storage.write(key: _quickReactionsKey, value: jsonEncode(reactions));
+
+  @override
+  Future<List<int>> readPlayedVoices() async {
+    final saved = await _storage.read(key: _playedVoicesKey);
+    if (saved == null) return const [];
+    try {
+      return [for (final id in jsonDecode(saved) as List) id as int];
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  @override
+  Future<void> savePlayedVoices(List<int> messageIds) =>
+      _storage.write(key: _playedVoicesKey, value: jsonEncode(messageIds));
 }

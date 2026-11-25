@@ -1230,8 +1230,8 @@ class MessagingState extends ChangeNotifier {
         : _deliver(pending, recipient.backendId!);
   }
 
-  /// Shows my photo or video at once (with its upload progress), then sends
-  /// it; the backend processes it.
+  /// Shows my photo, video or voice message at once (with its upload
+  /// progress), then sends it; the backend processes it.
   Future<void> sendMedia(
       int conversationId, Profile recipient, LocalUpload upload) {
     if (recipient.backendId == null) return Future.value();
@@ -1242,7 +1242,11 @@ class MessagingState extends ChangeNotifier {
       body: '',
       sentAt: DateTime.now(),
       clientId: newClientId(),
-      type: upload.isVideo ? ChatMessageType.video : ChatMessageType.image,
+      type: upload.isVoice
+          ? ChatMessageType.voice
+          : upload.isVideo
+              ? ChatMessageType.video
+              : ChatMessageType.image,
       upload: upload,
       replyTo: _takeReply(conversationId),
     );
@@ -1292,13 +1296,14 @@ class MessagingState extends ChangeNotifier {
     }
 
     try {
-      final saved = await _call((t) => service.sendMedia(t,
-          recipientId: recipientId,
-          bytes: upload.bytes,
-          filename: upload.filename,
-          clientId: pending.clientId!,
-          replyToId: pending.replyTo?.id,
-          onProgress: progress));
+      final saved = await _call((t) =>
+          (upload.isVoice ? service.sendVoice : service.sendMedia)(t,
+              recipientId: recipientId,
+              bytes: upload.bytes,
+              filename: upload.filename,
+              clientId: pending.clientId!,
+              replyToId: pending.replyTo?.id,
+              onProgress: progress));
       if (saved == null) return;
       thread.confirm(pending.clientId!, saved);
       final current = summary(pending.conversationId);
@@ -1319,6 +1324,10 @@ class MessagingState extends ChangeNotifier {
     }
     notifyListeners();
   }
+
+  /// A short-lived link to play a voice message (null when signed out).
+  Future<({String url, Duration lasts})?> voiceLink(int messageId) =>
+      _call((t) => service.voiceLink(t, messageId));
 
   /// Offers one of my albums; the trade card appears in the chat. Throws
   /// what the backend says (e.g. not my album) for the trade flow to show.

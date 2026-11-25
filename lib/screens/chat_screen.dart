@@ -32,6 +32,8 @@ import '../widgets/chat/story_reply_label.dart';
 import '../widgets/chat/gif_picker.dart';
 import '../widgets/chat/sticker_bubble.dart';
 import '../widgets/chat/media_bubble.dart';
+import '../widgets/chat/voice_bubble.dart';
+import '../widgets/chat/voice_recorder.dart';
 import '../widgets/chat/trade_card.dart';
 import 'chat_media_viewer_screen.dart';
 import 'traded_album_viewer_screen.dart';
@@ -81,6 +83,9 @@ class ChatScreen extends StatefulWidget {
 
 class _ChatScreenState extends State<ChatScreen> {
   final _input = TextEditingController();
+
+  /// Recording a voice message: the recording bar replaces the message box.
+  bool _recordingVoice = false;
   final _scroll = ScrollController();
   AppState? _appRef;
 
@@ -668,7 +673,8 @@ class _ChatScreenState extends State<ChatScreen> {
           onCancel: _cancelReply,
         )
       // ---- quick replies keep the first message low-effort ----
-      else if (_input.text.isEmpty)
+      // (not while recording a voice message)
+      else if (_input.text.isEmpty && !_recordingVoice)
         SizedBox(
           height: 46,
           child: ListView.separated(
@@ -682,99 +688,157 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
           ),
         ),
-      SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 6, 8, 10),
-          child: Row(children: [
-            // typing: the + (and GIF) buttons slide away, giving the text
-            // room; they come back when the box is empty
-            AnimatedSize(
-              duration: const Duration(milliseconds: 180),
-              curve: Curves.easeOut,
-              child: _input.text.isNotEmpty
-                  ? const SizedBox.shrink()
-                  : Row(mainAxisSize: MainAxisSize.min, children: [
-                      // no photos, videos, albums or locations in an anonymous chat
-                      if (_conversationId != null && !anonymous) ...[
-                        IconButton(
-                          key: const Key('attachButton'),
-                          tooltip: 'Photo, video or album trade',
-                          style: IconButton.styleFrom(
-                            backgroundColor: HuntrColors.surfaceHigh,
-                            minimumSize: const Size(44, 44),
-                          ),
-                          icon: Icon(Icons.add_rounded,
-                              color: HuntrColors.orange),
-                          onPressed: () => showAttachMenu(context,
-                              conversationId: _conversationId!,
-                              recipient: p,
-                              // on a phone GIFs are in this menu
-                              onGif: wideComposer ? null : () => _pickGif(p)),
-                        ),
-                        const SizedBox(width: 6),
-                      ],
-                      // GIFs and stickers: their own button on wide screens, and in
-                      // anonymous chats (which have no + menu); on a phone in a
-                      // direct chat they're in the + menu
-                      if (_conversationId != null &&
-                          (anonymous || wideComposer)) ...[
-                        IconButton(
-                          key: const Key('gifButton'),
-                          tooltip: 'GIF or sticker',
-                          style: IconButton.styleFrom(
-                            backgroundColor: HuntrColors.surfaceHigh,
-                            minimumSize: const Size(44, 44),
-                          ),
-                          icon: Icon(Icons.gif_box_outlined,
-                              color: HuntrColors.orange),
-                          onPressed: () => _pickGif(p),
-                        ),
-                        const SizedBox(width: 6),
-                      ],
-                    ]),
-            ),
-            Expanded(
-              // Enter sends; Shift+Enter adds a new line
-              child: Focus(
-                onKeyEvent: (_, event) => _enterSends(event, p),
-                child: TextField(
-                  key: const Key('messageInput'),
-                  controller: _input,
-                  focusNode: _inputFocus,
-                  minLines: 1,
-                  maxLines: 5,
-                  textCapitalization: TextCapitalization.sentences,
-                  inputFormatters: const [EmoticonFormatter()],
-                  decoration: InputDecoration(hintText: 'Message ${p.name}…'),
-                  onSubmitted: (v) => _send(p, v),
+      // the message box and the recording bar cross-fade (the bar rises in)
+      AnimatedSwitcher(
+        duration: const Duration(milliseconds: 220),
+        switchInCurve: Curves.easeOutCubic,
+        switchOutCurve: Curves.easeIn,
+        transitionBuilder: (child, animation) => FadeTransition(
+          opacity: animation,
+          child: SlideTransition(
+            position: Tween(begin: const Offset(0, 0.25), end: Offset.zero)
+                .animate(animation),
+            child: child,
+          ),
+        ),
+        child: _recordingVoice && _conversationId != null && !anonymous
+            ? SafeArea(
+                key: const ValueKey('voiceRecorderBox'),
+                top: false,
+                child: VoiceRecorderBar(
+                  onSend: (recording) {
+                    _messaging?.sendMedia(_conversationId!, p, recording);
+                    _scrollToNewest();
+                  },
+                  onDone: () {
+                    if (mounted) setState(() => _recordingVoice = false);
+                  },
+                  onProblem: (message) {
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context)
+                      ..hideCurrentSnackBar()
+                      ..showSnackBar(SnackBar(content: Text(message)));
+                  },
                 ),
-              ),
-            ),
-            // Send only once there's something to send (the box takes the
-            // room until then)
-            AnimatedSize(
-              duration: const Duration(milliseconds: 150),
-              curve: Curves.easeOut,
-              child: _input.text.trim().isEmpty
-                  ? const SizedBox(height: 48)
-                  : Padding(
-                      padding: const EdgeInsets.only(left: 6),
-                      child: IconButton.filled(
-                        key: const Key('sendButton'),
-                        tooltip: 'Send',
-                        style: IconButton.styleFrom(
-                          backgroundColor: HuntrColors.orange,
-                          foregroundColor: Colors.black,
-                          minimumSize: const Size(48, 48),
+              )
+            : SafeArea(
+                key: const ValueKey('messageBox'),
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 6, 8, 10),
+                  child: Row(children: [
+                    // typing: the + (and GIF) buttons slide away, giving the text
+                    // room; they come back when the box is empty
+                    AnimatedSize(
+                      duration: const Duration(milliseconds: 180),
+                      curve: Curves.easeOut,
+                      child: _input.text.isNotEmpty
+                          ? const SizedBox.shrink()
+                          : Row(mainAxisSize: MainAxisSize.min, children: [
+                              // no photos, videos, albums or locations in an anonymous chat
+                              if (_conversationId != null && !anonymous) ...[
+                                IconButton(
+                                  key: const Key('attachButton'),
+                                  tooltip: 'Photo, video or album trade',
+                                  style: IconButton.styleFrom(
+                                    backgroundColor: HuntrColors.surfaceHigh,
+                                    minimumSize: const Size(44, 44),
+                                  ),
+                                  icon: Icon(Icons.add_rounded,
+                                      color: HuntrColors.orange),
+                                  onPressed: () => showAttachMenu(context,
+                                      conversationId: _conversationId!,
+                                      recipient: p,
+                                      // on a phone GIFs are in this menu
+                                      onGif: wideComposer
+                                          ? null
+                                          : () => _pickGif(p)),
+                                ),
+                                const SizedBox(width: 6),
+                              ],
+                              // GIFs and stickers: their own button on wide screens, and in
+                              // anonymous chats (which have no + menu); on a phone in a
+                              // direct chat they're in the + menu
+                              if (_conversationId != null &&
+                                  (anonymous || wideComposer)) ...[
+                                IconButton(
+                                  key: const Key('gifButton'),
+                                  tooltip: 'GIF or sticker',
+                                  style: IconButton.styleFrom(
+                                    backgroundColor: HuntrColors.surfaceHigh,
+                                    minimumSize: const Size(44, 44),
+                                  ),
+                                  icon: Icon(Icons.gif_box_outlined,
+                                      color: HuntrColors.orange),
+                                  onPressed: () => _pickGif(p),
+                                ),
+                                const SizedBox(width: 6),
+                              ],
+                            ]),
+                    ),
+                    Expanded(
+                      // Enter sends; Shift+Enter adds a new line
+                      child: Focus(
+                        onKeyEvent: (_, event) => _enterSends(event, p),
+                        child: TextField(
+                          key: const Key('messageInput'),
+                          controller: _input,
+                          focusNode: _inputFocus,
+                          minLines: 1,
+                          maxLines: 5,
+                          textCapitalization: TextCapitalization.sentences,
+                          inputFormatters: const [EmoticonFormatter()],
+                          decoration:
+                              InputDecoration(hintText: 'Message ${p.name}…'),
+                          onSubmitted: (v) => _send(p, v),
                         ),
-                        icon: const Icon(Icons.send_rounded),
-                        onPressed: () => _send(p, _input.text),
                       ),
                     ),
-            ),
-          ]),
-        ),
+                    // Send only once there's something to send (the box takes the
+                    // room until then)
+                    AnimatedSize(
+                      duration: const Duration(milliseconds: 150),
+                      curve: Curves.easeOut,
+                      child: _input.text.trim().isEmpty
+                          // an empty box: a voice message instead (direct chats
+                          // only: a voice can tell who someone is)
+                          ? _conversationId != null && !anonymous
+                              ? Padding(
+                                  padding: const EdgeInsets.only(left: 6),
+                                  child: IconButton(
+                                    key: const Key('voiceButton'),
+                                    tooltip: 'Record a voice message',
+                                    style: IconButton.styleFrom(
+                                      backgroundColor: HuntrColors.surfaceHigh,
+                                      minimumSize: const Size(48, 48),
+                                    ),
+                                    icon: Icon(Icons.mic_none_rounded,
+                                        color: HuntrColors.orange),
+                                    onPressed: () {
+                                      _inputFocus.unfocus();
+                                      setState(() => _recordingVoice = true);
+                                    },
+                                  ),
+                                )
+                              : const SizedBox(height: 48)
+                          : Padding(
+                              padding: const EdgeInsets.only(left: 6),
+                              child: IconButton.filled(
+                                key: const Key('sendButton'),
+                                tooltip: 'Send',
+                                style: IconButton.styleFrom(
+                                  backgroundColor: HuntrColors.orange,
+                                  foregroundColor: Colors.black,
+                                  minimumSize: const Size(48, 48),
+                                ),
+                                icon: const Icon(Icons.send_rounded),
+                                onPressed: () => _send(p, _input.text),
+                              ),
+                            ),
+                    ),
+                  ]),
+                ),
+              ),
       ),
     ];
   }
@@ -1554,6 +1618,38 @@ class _ChatScreenState extends State<ChatScreen> {
                                                 onUndo: blocked
                                                     ? null
                                                     : () => _undoSticker(m)),
+                                          ),
+                                        // voice messages: play / pause and their waveform
+                                        ChatMessageType.voice => Reactable(
+                                            message: m,
+                                            enabled: !blocked,
+                                            onUnsend: m.canUnsend
+                                                ? () => _unsendMessage(m)
+                                                : null,
+                                            onReact: (e) => _react(m, e),
+                                            onReply: () => _startReply(m),
+                                            otherName: p.name,
+                                            onQuoteTap: _jumpTo,
+                                            highlighted: _highlight == m.id,
+                                            below: showStatus
+                                                ? MessageStatusLine(
+                                                    status: asMessage(m).status,
+                                                    detail: m.failed
+                                                        ? m.error
+                                                        : null)
+                                                : null,
+                                            child: VoiceBubble(
+                                                message: m,
+                                                link: () =>
+                                                    messaging.voiceLink(m.id!),
+                                                // when it ends, the voice
+                                                // message right after it plays
+                                                nextVoiceId: newer?.type ==
+                                                            ChatMessageType
+                                                                .voice &&
+                                                        !newer!.unsent
+                                                    ? newer.id
+                                                    : null),
                                           ),
                                         // photos, videos and GIFs
                                         _ => Reactable(

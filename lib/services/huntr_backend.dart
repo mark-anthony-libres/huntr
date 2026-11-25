@@ -1397,7 +1397,10 @@ enum ChatMessageType {
 
   /// One of HUNTR's stickers ([ChatMessage.sticker]); it counts on its
   /// recipient's profile until its sender undoes it.
-  sticker;
+  sticker,
+
+  /// A recorded voice message ([ChatMessage.voice]), in a direct chat only.
+  voice;
 
   static ChatMessageType parse(String? value) => switch (value) {
         'gif' => gif,
@@ -1408,6 +1411,7 @@ enum ChatMessageType {
         'reveal_request' => revealRequest,
         'image' => image,
         'video' => video,
+        'voice' => voice,
         'album_trade' => albumTrade,
         'album_trade_return' => albumTradeReturn,
         'album_interest' => albumInterest,
@@ -1433,6 +1437,7 @@ class ChatMessage {
     this.read = false,
     this.type = ChatMessageType.text,
     this.attachment,
+    this.voice,
     this.trade,
     this.upload,
     this.error,
@@ -1469,6 +1474,9 @@ class ChatMessage {
             ? null
             : ChatAttachment.fromJson(
                 json['attachment'] as Map<String, dynamic>),
+        voice: json['voice'] == null
+            ? null
+            : ChatVoice.fromJson(json['voice'] as Map<String, dynamic>),
         trade: json['trade'] == null
             ? null
             : AlbumTrade.fromJson(json['trade'] as Map<String, dynamic>),
@@ -1543,7 +1551,8 @@ class ChatMessage {
       editableUntil != null &&
       !DateTime.now().isAfter(editableUntil!);
 
-  /// My sent text, story reply, GIF, photo or video can be unsent, once
+  /// My sent text, story reply, GIF, photo, video or voice message can be
+  /// unsent, once
   /// (stickers have their own undo; trades and locations their own cancel
   /// or stop).
   bool get canUnsend =>
@@ -1555,7 +1564,8 @@ class ChatMessage {
           type == ChatMessageType.photoReply ||
           type == ChatMessageType.gif ||
           type == ChatMessageType.image ||
-          type == ChatMessageType.video);
+          type == ChatMessageType.video ||
+          type == ChatMessageType.voice);
 
   /// What Copy copies: the text of a text or story reply (nothing else).
   String? get copyableText => unsent
@@ -1600,6 +1610,10 @@ class ChatMessage {
   /// A tap card: answers to questions, on taps sent while Tap had them.
   final List<TapAnswer> tapAnswers;
   final ChatAttachment? attachment;
+
+  /// A voice message's length and waveform (none while mine is uploading,
+  /// nor once unsent).
+  final ChatVoice? voice;
   final AlbumTrade? trade;
 
   /// A shared location (its position is only ever relayed live).
@@ -1614,7 +1628,7 @@ class ChatMessage {
   /// The message this one replies to (what its quote shows).
   final ReplyPreview? replyTo;
 
-  /// Their text, photos, videos and GIFs take my reactions (not trades or
+  /// Their text, photos, videos, GIFs and voice messages take my reactions (not trades or
   /// locations, and never my own messages), once they're sent.
   bool get canReact =>
       id != null &&
@@ -1624,7 +1638,8 @@ class ChatMessage {
           type == ChatMessageType.image ||
           type == ChatMessageType.video ||
           type == ChatMessageType.gif ||
-          type == ChatMessageType.sticker);
+          type == ChatMessageType.sticker ||
+          type == ChatMessageType.voice);
 
   /// My reaction, if I reacted.
   String? get myReaction =>
@@ -1671,6 +1686,7 @@ class ChatMessage {
           read: read ?? this.read,
           type: type,
           attachment: attachment,
+          voice: voice,
           trade: trade,
           location: location,
           liveLocation: liveLocation,
@@ -1718,6 +1734,7 @@ class ChatMessage {
         ChatMessageType.albumInterest =>
           fromMe ? 'You said you’re interested' : 'Interested in your album',
         ChatMessageType.sticker => '${sticker?.name ?? 'Sticker'} sticker',
+        ChatMessageType.voice => '🎤 Voice message',
       };
 }
 
@@ -1886,6 +1903,7 @@ class ReplyPreview {
         ChatMessageType.storyReply || ChatMessageType.photoReply => '↩ $body',
         ChatMessageType.albumInterest => 'Interested in an album',
         ChatMessageType.sticker => body.isEmpty ? 'Sticker' : '$body sticker',
+        ChatMessageType.voice => '🎤 Voice message',
       };
 }
 
@@ -2067,15 +2085,43 @@ class LocalUpload {
       {required this.bytes,
       required this.filename,
       required this.isVideo,
+      this.voiceLength,
       this.progress = 0});
 
   final List<int> bytes;
   final String filename;
   final bool isVideo;
+
+  /// A voice message I recorded: how long it is (null for photos and
+  /// videos).
+  final Duration? voiceLength;
   final double progress;
 
+  bool get isVoice => voiceLength != null;
+
   LocalUpload withProgress(double progress) => LocalUpload(
-      bytes: bytes, filename: filename, isVideo: isVideo, progress: progress);
+      bytes: bytes,
+      filename: filename,
+      isVideo: isVideo,
+      voiceLength: voiceLength,
+      progress: progress);
+}
+
+/// A voice message's length and how loud it is along it ([waveform]: 0-100
+/// values, for the bars the bubble draws).
+class ChatVoice {
+  const ChatVoice({required this.duration, this.waveform = const []});
+
+  factory ChatVoice.fromJson(Map<String, dynamic> json) => ChatVoice(
+        duration: Duration(milliseconds: json['duration_ms'] as int? ?? 0),
+        waveform: [
+          for (final v in json['waveform'] as List<dynamic>? ?? const [])
+            (v as num).toInt(),
+        ],
+      );
+
+  final Duration duration;
+  final List<int> waveform;
 }
 
 /// An album in a trade card: its name, what it holds, its blurred previews
@@ -3202,6 +3248,56 @@ Future<ChatMessage> sendChatMedia({
         return _sendCountingProgress(httpClient, multipart, onProgress);
       },
       ChatMessage.fromJson,
+    );
+
+/// POST {backendUrl}/messages/voice: a recorded voice message, saved once
+/// per [clientId] (the backend converts it). [onProgress] gets the share of
+/// the recording sent so far (0-1).
+Future<ChatMessage> sendChatVoice({
+  required String backendUrl,
+  required String token,
+  required int recipientId,
+  required List<int> bytes,
+  required String filename,
+  required String clientId,
+  int? replyToId,
+  void Function(double sent)? onProgress,
+  http.Client? client,
+}) =>
+    _sendAuthorized(
+      client,
+      (httpClient) async {
+        final uri = _endpoint(backendUrl, '/messages/voice');
+        final multipart = http.MultipartRequest('POST', uri)
+          ..headers.addAll(_authorization(token))
+          ..fields.addAll({
+            'recipient_id': '$recipientId',
+            'client_id': clientId,
+            if (replyToId != null) 'reply_to_id': '$replyToId',
+          })
+          ..files.add(
+              http.MultipartFile.fromBytes('file', bytes, filename: filename));
+        return _sendCountingProgress(httpClient, multipart, onProgress);
+      },
+      ChatMessage.fromJson,
+    );
+
+/// GET {backendUrl}/messages/{id}/voice: a short-lived link to play a voice
+/// message, and how long it lasts.
+Future<({String url, Duration lasts})> fetchVoiceLink(
+        {required String backendUrl,
+        required String token,
+        required int messageId,
+        http.Client? client}) =>
+    _sendAuthorized(
+      client,
+      (httpClient) => httpClient.get(
+          _endpoint(backendUrl, '/messages/$messageId/voice'),
+          headers: _authorization(token)),
+      (data) => (
+        url: data['url'] as String,
+        lasts: Duration(seconds: data['expires_in'] as int? ?? 300)
+      ),
     );
 
 /// Sends [multipart] with its body going through a counter, for a progress

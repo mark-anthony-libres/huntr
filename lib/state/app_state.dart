@@ -490,6 +490,27 @@ class AppState extends ChangeNotifier {
       a.length == b.length &&
       [for (var i = 0; i < a.length; i++) a[i] == b[i]].every((same) => same);
 
+  /// How many played voice messages this device remembers (the oldest are
+  /// forgotten first).
+  static const _playedVoicesKept = 500;
+
+  /// The voice messages I received and played on this device, oldest first:
+  /// the others show as not played yet.
+  final _playedVoices = <int>{};
+
+  bool voicePlayed(int messageId) => _playedVoices.contains(messageId);
+
+  void markVoicePlayed(int messageId) {
+    if (!_playedVoices.add(messageId)) return;
+    while (_playedVoices.length > _playedVoicesKept) {
+      _playedVoices.remove(_playedVoices.first);
+    }
+    unawaited(devicePreferences
+        ?.savePlayedVoices(_playedVoices.toList())
+        .catchError((Object error) =>
+            debugPrint('Played voice messages not saved: $error')));
+  }
+
   /// What this device remembers, when the app starts.
   Future<void> loadDevicePreferences() async {
     try {
@@ -501,6 +522,7 @@ class AppState extends ChangeNotifier {
             List.unmodifiable(reactions.toSet().take(maxQuickReactions));
         notifyListeners();
       }
+      _playedVoices.addAll(await devicePreferences?.readPlayedVoices() ?? []);
       final layout =
           ExploreLayout.fromName(await devicePreferences?.readExploreLayout());
       if (layout != null && layout != _exploreLayout) {

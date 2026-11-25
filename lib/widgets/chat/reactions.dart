@@ -209,7 +209,8 @@ class _ReactableState extends State<Reactable> {
       onLongPress: menu ? _pick : null,
       onDoubleTap: can &&
               m.type != ChatMessageType.image &&
-              m.type != ChatMessageType.video
+              m.type != ChatMessageType.video &&
+              m.type != ChatMessageType.voice
           ? _doubleTapped
           : null,
       onSecondaryTap: menu ? _pick : null,

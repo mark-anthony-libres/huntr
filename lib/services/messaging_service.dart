@@ -227,6 +227,29 @@ class MessagingService {
           replyToId: replyToId,
           onProgress: onProgress);
 
+  Future<ChatMessage> sendVoice(String token,
+          {required int recipientId,
+          required List<int> bytes,
+          required String filename,
+          required String clientId,
+          int? replyToId,
+          void Function(double sent)? onProgress}) async =>
+      backend.sendChatVoice(
+          backendUrl: await _url(),
+          token: token,
+          recipientId: recipientId,
+          bytes: bytes,
+          filename: filename,
+          clientId: clientId,
+          replyToId: replyToId,
+          onProgress: onProgress);
+
+  /// A short-lived link to play a voice message.
+  Future<({String url, Duration lasts})> voiceLink(
+          String token, int messageId) async =>
+      backend.fetchVoiceLink(
+          backendUrl: await _url(), token: token, messageId: messageId);
+
   /// Access to the actual photo or video (starts the recipient's countdown).
   Future<MediaAccess> openMedia(String token, int attachmentId) async =>
       backend.openChatMedia(
