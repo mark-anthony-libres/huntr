@@ -85,5 +85,12 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<!-- Share to story (Guest link): whether Instagram's or Facebook's
+	     story editor can be opened -->
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>instagram-stories</string>
+		<string>facebook-stories</string>
+	</array>
 </dict>
 </plist>

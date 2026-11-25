@@ -8,6 +8,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../flows/chat_attachments.dart' show ChatMediaPicker;
 import '../services/save_image.dart';
+import '../services/story_share.dart';
 import '../state/guest_chats_state.dart';
 import '../theme.dart';
 import '../widgets/anonymous_avatar.dart';
@@ -196,12 +197,15 @@ class _GuestLinkScreenState extends State<GuestLinkScreen> {
       await _writeOwn();
       if (_ownWords.isEmpty || !mounted) return;
     }
-    final share = await Navigator.of(context).push<bool>(MaterialPageRoute(
+    final app = await Navigator.of(context).push<StoryApp>(MaterialPageRoute(
         builder: (_) => GuestStoryHowToScreen(url: url, sharing: true)));
-    if (share == true && mounted) await _share(url);
+    if (app != null && mounted) await _share(url, app);
   }
 
-  Future<void> _share(String url) async {
+  /// The card to [app]'s story editor (the phone app: Instagram or
+  /// Facebook, whichever is there), else the share sheet; the link copied
+  /// either way, for the link sticker.
+  Future<void> _share(String url, StoryApp app) async {
     if (_sharing) return;
     if (_onOwnWords && _ownWords.isEmpty) {
       await _writeOwn();
@@ -212,6 +216,10 @@ class _GuestLinkScreenState extends State<GuestLinkScreen> {
       await _copy(url, quiet: true);
       final png = await _picture();
       if (png == null) return;
+      if (await StoryShare.open(png, first: app)) {
+        if (mounted) _say('Your link is copied. Add it with the link sticker.');
+        return;
+      }
       await SharePlus.instance.share(ShareParams(
         files: [
           XFile.fromData(png,

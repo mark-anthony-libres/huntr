@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../services/story_share.dart' show StoryApp;
 import '../theme.dart';
 import '../widgets/pill_tabs.dart';
 
@@ -13,7 +14,8 @@ class GuestStoryHowToScreen extends StatefulWidget {
   final String url;
 
   /// Opened from Share to story: the last step shares the card (the
-  /// screen closes returning true), instead of Got it.
+  /// screen closes returning the app picked: My Day or Instagram), instead
+  /// of Got it.
   final bool sharing;
 
   @override
@@ -167,7 +169,12 @@ class _GuestStoryHowToScreenState extends State<GuestStoryHowToScreen> {
                             fontSize: 17,
                             fontWeight: FontWeight.w800)),
                     onPressed: () => last
-                        ? Navigator.of(context).pop(widget.sharing)
+                        // sharing: on to the app picked here
+                        ? Navigator.of(context).pop(widget.sharing
+                            ? (_instagram
+                                ? StoryApp.instagram
+                                : StoryApp.facebook)
+                            : null)
                         : setState(() => _step++),
                     child: Text(last
                         ? (widget.sharing ? 'Share to story' : 'Got it')

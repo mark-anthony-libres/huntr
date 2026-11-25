@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The story card shared to Instagram or Facebook (MainActivity's
+     huntr/story_share): only this folder of the app's cache. -->
+<paths>
+    <cache-path name="story" path="story/" />
+</paths>

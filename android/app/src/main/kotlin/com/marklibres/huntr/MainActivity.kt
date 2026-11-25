@@ -5,6 +5,7 @@ import android.app.NotificationManager
 import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.ApplicationInfo
+import java.io.File
 import android.content.pm.PackageManager
 import android.media.AudioAttributes
 import android.media.RingtoneManager
@@ -13,6 +14,7 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.view.WindowManager
+import androidx.core.content.FileProvider
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -54,6 +56,24 @@ class MainActivity : FlutterActivity() {
                 }
             }
 
+        // Share to story (Guest link): the card straight into Instagram's or
+        // Facebook's story editor.
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "huntr/story_share")
+            .setMethodCallHandler { call, result ->
+                if (call.method != "share") {
+                    result.notImplemented()
+                    return@setMethodCallHandler
+                }
+                val target = call.argument<String>("target") ?: "instagram"
+                val png = call.argument<ByteArray>("png")
+                val appId = call.argument<String>("appId")
+                if (png == null || appId == null) {
+                    result.error("bad_args", "png and appId are needed", null)
+                } else {
+                    result.success(shareToStory(target, png, appId))
+                }
+            }
+
         // Notification sounds (Settings > Notifications > Sound): on Android
         // 8+ a channel's sound is fixed once it exists, so there's a channel
         // per sound and each push names the user's (the backend's
@@ -79,6 +99,37 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+    }
+
+    /** Opens [target]'s story editor ("instagram" or "facebook") with the PNG
+     *  [png] as the story, for Meta app [appId]; false when that app isn't
+     *  there (the Dart side then tries the other, then the share sheet). */
+    private fun shareToStory(target: String, png: ByteArray, appId: String): Boolean {
+        val folder = File(cacheDir, "story").apply { mkdirs() }
+        val file = File(folder, "huntr-story.png")
+        file.writeBytes(png)
+        val uri = FileProvider.getUriForFile(this, "$packageName.story", file)
+        val (action, pkg) = when (target) {
+            "instagram" -> "com.instagram.share.ADD_TO_STORY" to "com.instagram.android"
+            else -> "com.facebook.stories.ADD_TO_STORY" to "com.facebook.katana"
+        }
+        val intent = Intent(action).apply {
+            setDataAndType(uri, "image/png")
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            if (target == "instagram") {
+                putExtra("source_application", appId)
+            } else {
+                putExtra("com.facebook.platform.extra.APPLICATION_ID", appId)
+            }
+        }
+        if (intent.resolveActivity(packageManager) == null) return false
+        grantUriPermission(pkg, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        return try {
+            startActivity(intent)
+            true
+        } catch (_: Exception) {
+            false
+        }
     }
 
     private fun soundChannelId(sound: String) = "huntr_$sound"
