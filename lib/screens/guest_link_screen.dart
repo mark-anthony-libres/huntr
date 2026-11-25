@@ -10,6 +10,7 @@ import '../services/save_image.dart';
 import '../state/guest_chats_state.dart';
 import '../theme.dart';
 import '../widgets/anonymous_avatar.dart';
+import '../widgets/photos/viewer_controls.dart' show SwipeAnyDevice;
 import 'guest_story_how_to_screen.dart';
 
 /// The words a story card can say.
@@ -41,6 +42,10 @@ class GuestLinkScreen extends StatefulWidget {
 class _GuestLinkScreenState extends State<GuestLinkScreen> {
   final _card = GlobalKey();
   int _prompt = 0;
+
+  /// The story cards, swiped for other words.
+  PageController? _pages;
+  static const _cardWidth = 236.0;
   int _look = 0;
   bool _loading = true;
   bool _sharing = false;
@@ -50,6 +55,12 @@ class _GuestLinkScreenState extends State<GuestLinkScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+  }
+
+  @override
+  void dispose() {
+    _pages?.dispose();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -209,32 +220,72 @@ class _GuestLinkScreenState extends State<GuestLinkScreen> {
                           _OffNotice(onTurnOn: () => state!.setLinkOn(true)),
                         ],
                         const SizedBox(height: 24),
-                        Center(
-                          child: SizedBox(
-                            width: 236,
-                            child: RepaintBoundary(
-                              key: _card,
-                              child: GuestStoryCard(
-                                animal: link.avatar,
-                                prompt: guestStoryPrompts[_prompt],
-                                colors: guestStoryLooks[_look],
-                                url: url,
+                        // swipe the card for other words (the next one
+                        // peeks at the side)
+                        LayoutBuilder(builder: (context, box) {
+                          _pages ??= PageController(
+                              viewportFraction:
+                                  ((_cardWidth + 24) / box.maxWidth)
+                                      .clamp(0.3, 1.0));
+                          return SizedBox(
+                            height: _cardWidth * 16 / 9,
+                            child: SwipeAnyDevice(
+                              child: PageView.builder(
+                                key: const Key('guestStoryCards'),
+                                controller: _pages,
+                                itemCount: guestStoryPrompts.length,
+                                onPageChanged: (i) =>
+                                    setState(() => _prompt = i),
+                                itemBuilder: (_, i) => Center(
+                                  child: SizedBox(
+                                    width: _cardWidth,
+                                    // the one shown is the one shared
+                                    child: RepaintBoundary(
+                                      key: i == _prompt ? _card : null,
+                                      child: GuestStoryCard(
+                                        animal: link.avatar,
+                                        prompt: guestStoryPrompts[i],
+                                        colors: guestStoryLooks[_look],
+                                        url: url,
+                                      ),
+                                    ),
+                                  ),
+                                ),
                               ),
                             ),
-                          ),
+                          );
+                        }),
+                        const SizedBox(height: 14),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            for (var i = 0; i < guestStoryPrompts.length; i++)
+                              GestureDetector(
+                                onTap: () => _pages?.animateToPage(i,
+                                    duration: const Duration(milliseconds: 250),
+                                    curve: Curves.easeOut),
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 200),
+                                  margin:
+                                      const EdgeInsets.symmetric(horizontal: 4),
+                                  width: i == _prompt ? 22 : 8,
+                                  height: 8,
+                                  decoration: BoxDecoration(
+                                    color: i == _prompt
+                                        ? HuntrColors.orange
+                                        : HuntrColors.border,
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                ),
+                              ),
+                          ],
                         ),
-                        const SizedBox(height: 32),
-                        const _Label('WHAT IT SAYS'),
-                        const SizedBox(height: 12),
-                        for (var i = 0; i < guestStoryPrompts.length; i++) ...[
-                          _Choice(
-                            text: guestStoryPrompts[i],
-                            selected: i == _prompt,
-                            onTap: () => setState(() => _prompt = i),
-                          ),
-                          const SizedBox(height: 10),
-                        ],
-                        const SizedBox(height: 18),
+                        const SizedBox(height: 8),
+                        const Text('Swipe the card for other words',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                                color: HuntrColors.muted, fontSize: 13)),
+                        const SizedBox(height: 28),
                         const _Label('COLOUR'),
                         const SizedBox(height: 12),
                         Row(
@@ -433,47 +484,6 @@ class _Label extends StatelessWidget {
           fontSize: 12,
           letterSpacing: 1.1,
           fontWeight: FontWeight.w800));
-}
-
-class _Choice extends StatelessWidget {
-  const _Choice(
-      {required this.text, required this.selected, required this.onTap});
-
-  final String text;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) => Material(
-        color: selected
-            ? HuntrColors.orange.withValues(alpha: 0.12)
-            : HuntrColors.surface,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: BorderSide(
-              color: selected ? HuntrColors.orange : HuntrColors.border,
-              width: 1.5),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: Container(
-            constraints: const BoxConstraints(minHeight: 52),
-            padding: const EdgeInsets.symmetric(horizontal: 18),
-            child: Row(children: [
-              Expanded(
-                child: Text(text,
-                    style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: selected ? HuntrColors.orange : Colors.white)),
-              ),
-              if (selected)
-                Icon(Icons.check_rounded, color: HuntrColors.orange),
-            ]),
-          ),
-        ),
-      );
 }
 
 class _Swatch extends StatelessWidget {
