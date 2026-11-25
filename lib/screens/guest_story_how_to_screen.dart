@@ -5,7 +5,7 @@ import '../widgets/pill_tabs.dart';
 
 /// How to add the guest link to a story, step by step, for My Day or
 /// Instagram (Instagram's link sticker is everyone's; on Facebook not every
-/// account has one, so the link is printed on the card too).
+/// account has one: then the link goes in as text).
 class GuestStoryHowToScreen extends StatefulWidget {
   const GuestStoryHowToScreen({super.key, required this.url});
 
@@ -26,14 +26,15 @@ class _GuestStoryHowToScreenState extends State<GuestStoryHowToScreen> {
     ),
     (
       'Tap the sticker button and choose Link',
-      'Not every account has it. If you don’t see Link, skip to step 4.'
+      'Not every account has it. If you don’t see Link, use the text '
+          'button instead.'
     ),
-    ('Paste your link', 'It’s already copied from step 1.'),
     (
-      'Place it on the card and post',
-      'No Link sticker? Your link is printed at the bottom of the card, so '
-          'people can still type it.'
+      'Paste your link',
+      'It’s already copied from step 1. As text, people copy it from your '
+          'story.'
     ),
+    ('Place it on the card and post', 'People tap your link to chat.'),
   ];
 
   static const _ig = [
@@ -303,11 +304,6 @@ class _Picture extends StatelessWidget {
                       fontSize: 14)),
               const Spacer(),
               _pill('HUNTR.ONLINE/G/…', color: const Color(0xFF3B82F6)),
-              const SizedBox(height: 6),
-              Text(url.replaceFirst('https://', ''),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: Colors.white, fontSize: 9)),
             ]),
           ),
         );

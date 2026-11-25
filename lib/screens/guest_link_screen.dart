@@ -292,35 +292,50 @@ class _GuestLinkScreenState extends State<GuestLinkScreen> {
                     ]),
                   ),
                 )
-              : Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 560),
-                    child: ListView(
-                      key: const Key('guestLinkScreen'),
-                      padding: const EdgeInsets.fromLTRB(20, 4, 20, 40),
-                      children: [
-                        const Text(
-                            'Post this on your My Day or story. People tap '
-                            'your link and chat with you anonymously, no '
-                            'account needed.',
-                            style: TextStyle(
-                                color: HuntrColors.muted,
-                                fontSize: 14.5,
-                                height: 1.5)),
-                        if (!link.isOn) ...[
-                          const SizedBox(height: 16),
-                          _OffNotice(onTurnOn: () => state!.setLinkOn(true)),
-                        ],
-                        const SizedBox(height: 24),
-                        // swipe the card for other words (the next one
-                        // peeks at the side)
-                        LayoutBuilder(builder: (context, box) {
-                          _pages ??= PageController(
-                              viewportFraction:
-                                  ((_cardWidth + 24) / box.maxWidth)
-                                      .clamp(0.3, 1.0));
-                          return SizedBox(
-                            height: _cardWidth * 16 / 9,
+              : ListView(
+                  key: const Key('guestLinkScreen'),
+                  padding: const EdgeInsets.fromLTRB(0, 4, 0, 48),
+                  children: [
+                    _Column(
+                      child: const Text(
+                          'Post this on your My Day or story. People tap '
+                          'your link and chat with you anonymously, no '
+                          'account needed.',
+                          style: TextStyle(
+                              color: HuntrColors.muted,
+                              fontSize: 14.5,
+                              height: 1.5)),
+                    ),
+                    if (!link.isOn)
+                      _Column(
+                        top: 16,
+                        child:
+                            _OffNotice(onTurnOn: () => state!.setLinkOn(true)),
+                      ),
+                    const SizedBox(height: 28),
+                    // the cards across the whole width: swipe for other
+                    // words, the next one peeking at the side
+                    LayoutBuilder(builder: (context, box) {
+                      final width = box.maxWidth.clamp(0.0, 720.0);
+                      _pages ??= PageController(
+                          viewportFraction:
+                              ((_cardWidth + 28) / width).clamp(0.3, 1.0));
+                      return Center(
+                        child: SizedBox(
+                          width: width,
+                          height: _cardWidth * 16 / 9,
+                          // the cards fade out at the strip's ends
+                          child: ShaderMask(
+                            shaderCallback: (rect) => const LinearGradient(
+                              colors: [
+                                Colors.transparent,
+                                Colors.black,
+                                Colors.black,
+                                Colors.transparent,
+                              ],
+                              stops: [0, 0.06, 0.94, 1],
+                            ).createShader(rect),
+                            blendMode: BlendMode.dstIn,
                             child: SwipeAnyDevice(
                               child: PageView.builder(
                                 key: const Key('guestStoryCards'),
@@ -347,7 +362,6 @@ class _GuestLinkScreenState extends State<GuestLinkScreen> {
                                           photo: _look < 0 && _photo != null
                                               ? MemoryImage(_photo!)
                                               : null,
-                                          url: url,
                                         ),
                                       ),
                                     ),
@@ -355,176 +369,186 @@ class _GuestLinkScreenState extends State<GuestLinkScreen> {
                                 ),
                               ),
                             ),
-                          );
-                        }),
-                        const SizedBox(height: 14),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            for (var i = 0; i <= guestStoryPrompts.length; i++)
-                              GestureDetector(
-                                onTap: () => _pages?.animateToPage(i,
-                                    duration: const Duration(milliseconds: 250),
-                                    curve: Curves.easeOut),
-                                child: AnimatedContainer(
-                                  duration: const Duration(milliseconds: 200),
-                                  margin:
-                                      const EdgeInsets.symmetric(horizontal: 4),
-                                  width: i == _prompt ? 22 : 8,
-                                  height: 8,
-                                  decoration: BoxDecoration(
-                                    color: i == _prompt
-                                        ? HuntrColors.orange
-                                        : HuntrColors.border,
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        _onOwnWords
-                            ? Center(
-                                child: TextButton.icon(
-                                  key: const Key('guestStoryEditWords'),
-                                  onPressed: _writeOwn,
-                                  icon:
-                                      const Icon(Icons.edit_rounded, size: 18),
-                                  label: Text(_ownWords.isEmpty
-                                      ? 'Write your own words'
-                                      : 'Change your words'),
-                                ),
-                              )
-                            : const Text('Swipe the card for other words',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                    color: HuntrColors.muted, fontSize: 13)),
-                        const SizedBox(height: 28),
-                        const _Label('BACKGROUND'),
-                        const SizedBox(height: 12),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            _PhotoSwatch(
-                              photo: _photo,
-                              selected: _look < 0,
-                              onTap: _pickPhoto,
-                            ),
-                            for (var i = 0; i < guestStoryLooks.length; i++)
-                              _Swatch(
-                                colors: guestStoryLooks[i],
-                                selected: i == _look,
-                                onTap: () => setState(() => _look = i),
-                              ),
-                          ],
-                        ),
-                        const SizedBox(height: 36),
-                        _Step(
-                          number: 1,
-                          title: 'Copy your link',
-                          child: _LinkField(url: url, onCopy: () => _copy(url)),
-                        ),
-                        const SizedBox(height: 28),
-                        _Step(
-                          number: 2,
-                          title: 'Post it on your story',
-                          detail: 'Pick My Day or Instagram, then add the '
-                              'link sticker. Your link is already copied.',
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              DecoratedBox(
-                                decoration: const BoxDecoration(
-                                  gradient: LinearGradient(colors: [
-                                    Color(0xFFFF5CA8),
-                                    Color(0xFFFF7A1A)
-                                  ]),
-                                  borderRadius:
-                                      BorderRadius.all(Radius.circular(28)),
-                                ),
-                                child: FilledButton.icon(
-                                  key: const Key('shareGuestLink'),
-                                  style: FilledButton.styleFrom(
-                                    backgroundColor: Colors.transparent,
-                                    foregroundColor: Colors.black,
-                                    minimumSize: const Size.fromHeight(56),
-                                    textStyle: const TextStyle(
-                                        fontFamily: huntrFontFamily,
-                                        fontSize: 17,
-                                        fontWeight: FontWeight.w800),
-                                  ),
-                                  onPressed:
-                                      _sharing ? null : () => _share(url),
-                                  icon: _sharing
-                                      ? const SizedBox.square(
-                                          dimension: 18,
-                                          child: CircularProgressIndicator(
-                                              strokeWidth: 2.5,
-                                              color: Colors.black))
-                                      : const Icon(Icons.ios_share_rounded),
-                                  label: const Text('Share to story'),
-                                ),
-                              ),
-                              const SizedBox(height: 10),
-                              Row(children: [
-                                Expanded(
-                                  child: OutlinedButton.icon(
-                                    key: const Key('saveGuestStory'),
-                                    style: OutlinedButton.styleFrom(
-                                        minimumSize: const Size.fromHeight(48),
-                                        shape: const StadiumBorder()),
-                                    onPressed: _save,
-                                    icon: const Icon(Icons.download_rounded,
-                                        size: 18),
-                                    label: const Text('Save image'),
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: OutlinedButton.icon(
-                                    key: const Key('guestStoryHowTo'),
-                                    style: OutlinedButton.styleFrom(
-                                        minimumSize: const Size.fromHeight(48),
-                                        shape: const StadiumBorder()),
-                                    onPressed: () => Navigator.of(context).push(
-                                        MaterialPageRoute(
-                                            builder: (_) =>
-                                                GuestStoryHowToScreen(
-                                                    url: url))),
-                                    icon: const Icon(Icons.help_outline_rounded,
-                                        size: 18),
-                                    label: const Text('How to'),
-                                  ),
-                                ),
-                              ]),
-                            ],
                           ),
                         ),
+                      );
+                    }),
+                    const SizedBox(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        for (var i = 0; i <= guestStoryPrompts.length; i++)
+                          GestureDetector(
+                            onTap: () => _pages?.animateToPage(i,
+                                duration: const Duration(milliseconds: 250),
+                                curve: Curves.easeOut),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              margin: const EdgeInsets.symmetric(horizontal: 4),
+                              width: i == _prompt ? 22 : 8,
+                              height: 8,
+                              decoration: BoxDecoration(
+                                color: i == _prompt
+                                    ? HuntrColors.orange
+                                    : HuntrColors.border,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ),
+                          ),
                       ],
                     ),
-                  ),
+                    const SizedBox(height: 6),
+                    Center(
+                      child: _onOwnWords
+                          ? TextButton.icon(
+                              key: const Key('guestStoryEditWords'),
+                              onPressed: _writeOwn,
+                              icon: const Icon(Icons.edit_rounded, size: 18),
+                              label: Text(_ownWords.isEmpty
+                                  ? 'Write your own words'
+                                  : 'Change your words'),
+                            )
+                          : const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 12),
+                              child: Text('Swipe the card for other words',
+                                  style: TextStyle(
+                                      color: HuntrColors.muted, fontSize: 13)),
+                            ),
+                    ),
+                    // ---- its background ----
+                    _Column(
+                      top: 24,
+                      child: _Panel(
+                        icon: Icons.palette_outlined,
+                        title: 'Background',
+                        child: LayoutBuilder(builder: (context, box) {
+                          // six on one line: as big as fits, up to 52
+                          final size =
+                              ((box.maxWidth - 5 * 12) / 6).clamp(36.0, 52.0);
+                          return Wrap(
+                            spacing: 12,
+                            runSpacing: 12,
+                            children: [
+                              _PhotoSwatch(
+                                size: size,
+                                photo: _photo,
+                                selected: _look < 0,
+                                onTap: _pickPhoto,
+                              ),
+                              for (var i = 0; i < guestStoryLooks.length; i++)
+                                _Swatch(
+                                  size: size,
+                                  colors: guestStoryLooks[i],
+                                  selected: i == _look,
+                                  onTap: () => setState(() => _look = i),
+                                ),
+                            ],
+                          );
+                        }),
+                      ),
+                    ),
+                    // ---- sharing it ----
+                    _Column(
+                      top: 16,
+                      child: _Panel(
+                        icon: Icons.ios_share_rounded,
+                        title: 'Share your link',
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _Step(
+                              number: 1,
+                              title: 'Copy your link',
+                              child: _LinkField(
+                                  url: url, onCopy: () => _copy(url)),
+                            ),
+                            const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 20),
+                              child:
+                                  Divider(height: 1, color: HuntrColors.border),
+                            ),
+                            _Step(
+                                number: 2,
+                                title: 'Post it on your story',
+                                detail:
+                                    'Pick My Day or Instagram, then add the '
+                                    'link sticker. Your link is copied for you.'),
+                            const SizedBox(height: 16),
+                            DecoratedBox(
+                              decoration: BoxDecoration(
+                                gradient: HuntrColors.accentGradient,
+                                borderRadius:
+                                    const BorderRadius.all(Radius.circular(28)),
+                              ),
+                              child: FilledButton.icon(
+                                key: const Key('shareGuestLink'),
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: Colors.transparent,
+                                  foregroundColor: Colors.black,
+                                  minimumSize: const Size.fromHeight(56),
+                                  textStyle: const TextStyle(
+                                      fontFamily: huntrFontFamily,
+                                      fontSize: 16.5,
+                                      fontWeight: FontWeight.w800),
+                                ),
+                                onPressed: _sharing ? null : () => _share(url),
+                                icon: _sharing
+                                    ? const SizedBox.square(
+                                        dimension: 18,
+                                        child: CircularProgressIndicator(
+                                            strokeWidth: 2.5,
+                                            color: Colors.black))
+                                    : const Icon(Icons.ios_share_rounded),
+                                label: const Text('Share to story'),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Row(children: [
+                              Expanded(
+                                child: _SecondaryButton(
+                                  key: const Key('saveGuestStory'),
+                                  icon: Icons.download_rounded,
+                                  label: 'Save image',
+                                  onPressed: _save,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: _SecondaryButton(
+                                  key: const Key('guestStoryHowTo'),
+                                  icon: Icons.help_outline_rounded,
+                                  label: 'How to',
+                                  onPressed: () => Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                          builder: (_) =>
+                                              GuestStoryHowToScreen(url: url))),
+                                ),
+                              ),
+                            ]),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
     );
   }
 }
 
 /// The picture posted to a story (9:16): my animal and the words in the
-/// middle, room for the link sticker, and the link in print
-/// (for stories without a link sticker).
+/// middle, and room for the link sticker at the bottom.
 class GuestStoryCard extends StatelessWidget {
   const GuestStoryCard({
     super.key,
     required this.animal,
     required this.prompt,
     required this.colors,
-    required this.url,
     this.photo,
   });
 
   final String animal;
   final String prompt;
   final List<Color> colors;
-  final String url;
 
   /// A picture of my own behind it (darkened so the words stay readable),
   /// instead of [colors].
@@ -588,37 +612,100 @@ class GuestStoryCard extends StatelessWidget {
                       fontSize: 11,
                       fontWeight: FontWeight.w700)),
             ),
-            const SizedBox(height: 8),
-            Text(url.replaceFirst('https://', ''),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w700)),
           ]),
         ),
       );
 }
 
-class _Label extends StatelessWidget {
-  const _Label(this.text);
-  final String text;
+/// A section's column: centred, at most 560 wide, with room at the sides.
+class _Column extends StatelessWidget {
+  const _Column({required this.child, this.top = 0});
+
+  final Widget child;
+  final double top;
 
   @override
-  Widget build(BuildContext context) => Text(text,
-      style: const TextStyle(
-          color: HuntrColors.muted,
-          fontSize: 12,
-          letterSpacing: 1.1,
-          fontWeight: FontWeight.w800));
+  Widget build(BuildContext context) => Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 560),
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(20, top, 20, 0),
+            child: child,
+          ),
+        ),
+      );
 }
 
-/// The first background: a picture of mine (a + until one is chosen).
+/// A titled group on its own surface (Background, Share your link).
+class _Panel extends StatelessWidget {
+  const _Panel({required this.icon, required this.title, required this.child});
+
+  final IconData icon;
+  final String title;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.fromLTRB(18, 18, 18, 20),
+        decoration: BoxDecoration(
+          color: HuntrColors.surface,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: HuntrColors.border),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(children: [
+              Icon(icon, size: 20, color: HuntrColors.orange),
+              const SizedBox(width: 10),
+              Text(title,
+                  style: const TextStyle(
+                      fontSize: 16.5, fontWeight: FontWeight.w800)),
+            ]),
+            const SizedBox(height: 18),
+            child,
+          ],
+        ),
+      );
+}
+
+/// Save image / How to: equal, quieter than Share.
+class _SecondaryButton extends StatelessWidget {
+  const _SecondaryButton(
+      {super.key,
+      required this.icon,
+      required this.label,
+      required this.onPressed});
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) => FilledButton.tonalIcon(
+        style: FilledButton.styleFrom(
+          minimumSize: const Size.fromHeight(50),
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          backgroundColor: HuntrColors.surfaceHigh,
+          foregroundColor: Colors.white,
+        ),
+        onPressed: onPressed,
+        icon: Icon(icon, size: 18, color: HuntrColors.orange),
+        // one line, however narrow
+        label: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(label, maxLines: 1, softWrap: false)),
+      );
+}
+
 class _PhotoSwatch extends StatelessWidget {
   const _PhotoSwatch(
-      {required this.photo, required this.selected, required this.onTap});
+      {required this.photo,
+      required this.selected,
+      required this.onTap,
+      this.size = 52});
 
+  final double size;
   final Uint8List? photo;
   final bool selected;
   final VoidCallback onTap;
@@ -632,8 +719,8 @@ class _PhotoSwatch extends StatelessWidget {
           key: const Key('guestStoryPhoto'),
           onTap: onTap,
           child: Container(
-            width: 52,
-            height: 52,
+            width: size,
+            height: size,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: HuntrColors.surfaceHigh,
@@ -656,7 +743,12 @@ class _PhotoSwatch extends StatelessWidget {
 
 class _Swatch extends StatelessWidget {
   const _Swatch(
-      {required this.colors, required this.selected, required this.onTap});
+      {required this.colors,
+      required this.selected,
+      required this.onTap,
+      this.size = 52});
+
+  final double size;
 
   final List<Color> colors;
   final bool selected;
@@ -671,8 +763,8 @@ class _Swatch extends StatelessWidget {
           onTap: onTap,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 150),
-            width: 52,
-            height: 52,
+            width: size,
+            height: size,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               gradient: LinearGradient(
@@ -690,15 +782,12 @@ class _Swatch extends StatelessWidget {
 
 class _Step extends StatelessWidget {
   const _Step(
-      {required this.number,
-      required this.title,
-      required this.child,
-      this.detail});
+      {required this.number, required this.title, this.child, this.detail});
 
   final int number;
   final String title;
   final String? detail;
-  final Widget child;
+  final Widget? child;
 
   @override
   Widget build(BuildContext context) => Row(
@@ -735,8 +824,10 @@ class _Step extends StatelessWidget {
                           fontSize: 13.5,
                           height: 1.5)),
                 ],
-                const SizedBox(height: 12),
-                child,
+                if (child != null) ...[
+                  const SizedBox(height: 12),
+                  child!,
+                ],
               ],
             ),
           ),
