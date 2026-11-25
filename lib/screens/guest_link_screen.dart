@@ -558,8 +558,8 @@ class _GuestLinkScreenState extends State<GuestLinkScreen> {
   }
 }
 
-/// The picture posted to a story (9:16): my animal and the words in the
-/// middle, and room for the link sticker at the bottom.
+/// The picture posted to a story (9:16): my animal, the words and room for
+/// the link sticker under them, together in the middle.
 class GuestStoryCard extends StatelessWidget {
   const GuestStoryCard({
     super.key,
@@ -581,8 +581,8 @@ class GuestStoryCard extends StatelessWidget {
   Widget build(BuildContext context) => AspectRatio(
         aspectRatio: 9 / 16,
         child: Container(
+          // square corners: it fills the story edge to edge
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(28),
             image: photo == null
                 ? null
                 : DecorationImage(
@@ -621,7 +621,8 @@ class GuestStoryCard extends StatelessWidget {
                     height: 1.2,
                     fontWeight: FontWeight.w800,
                     shadows: [Shadow(color: Colors.black38, blurRadius: 10)])),
-            const Spacer(),
+            // the link sticker right under the words
+            const SizedBox(height: 20),
             Container(
               height: 40,
               alignment: Alignment.center,
@@ -635,6 +636,7 @@ class GuestStoryCard extends StatelessWidget {
                       fontSize: 11,
                       fontWeight: FontWeight.w700)),
             ),
+            const Spacer(),
           ]),
         ),
       );
