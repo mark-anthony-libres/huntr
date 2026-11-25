@@ -10,7 +10,8 @@ import '../services/place_search.dart';
 import '../services/services_scope.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
-import '../widgets/huntr_tile_layer.dart';
+import '../widgets/huntr_map.dart';
+import '../widgets/map_controls.dart' show mapFloating;
 import '../widgets/roam/roaming.dart';
 
 /// Makes the place search Roam uses (tests put a fake one here).
@@ -281,164 +282,159 @@ class _RoamScreenState extends State<RoamScreen> {
       // place card
       body: Column(children: [
         Expanded(
-          child: Stack(children: [
-            FlutterMap(
-              key: const Key('roamMap'),
-              mapController: _map,
-              options: MapOptions(
-                initialCenter: start,
-                initialZoom: roam != null || me != null ? 12 : 2,
-                minZoom: 2,
-                maxZoom: 17,
-                backgroundColor: HuntrColors.night,
-                interactionOptions: const InteractionOptions(
-                    flags: InteractiveFlag.all & ~InteractiveFlag.rotate),
-                onMapEvent: _mapEvent,
-                onTap: (_, __) => _focus.unfocus(),
-              ),
-              children: const [
-                HuntrTileLayer(creditsAt: AttributionAlignment.bottomRight),
-              ],
-            ),
-
-            // the pin: where Roam here roams (the middle of the map)
-            IgnorePointer(
-              child: Align(
-                alignment: Alignment.center,
-                child: Padding(
-                  // its point, not its middle, on the spot
-                  padding: const EdgeInsets.only(bottom: 46),
-                  child: Icon(Icons.location_on_rounded,
-                      key: const Key('roamPin'),
-                      size: 48,
-                      color: HuntrColors.ember),
+          // the shared map (its zoom card, Explore's zoom range), the pin
+          // and the search over it
+          child: HuntrMap(
+            key: const Key('roamMap'),
+            controller: _map,
+            center: start,
+            zoom: 12,
+            onEvent: _mapEvent,
+            onTap: _focus.unfocus,
+            overlays: [
+              // the pin: where Roam here roams (the middle of the map)
+              IgnorePointer(
+                child: Align(
+                  alignment: Alignment.center,
+                  child: Padding(
+                    // its point, not its middle, on the spot
+                    padding: const EdgeInsets.only(bottom: 46),
+                    child: Icon(Icons.location_on_rounded,
+                        key: const Key('roamPin'),
+                        size: 48,
+                        color: HuntrColors.ember),
+                  ),
                 ),
               ),
-            ),
 
-            // search, and what it found
-            Positioned(
-              left: 12,
-              right: 12,
-              top: top + 12,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(children: [
-                    IconButton.filled(
-                      tooltip: 'Back',
-                      style: IconButton.styleFrom(
-                        backgroundColor: HuntrColors.surface,
-                        foregroundColor: Colors.white,
-                        minimumSize: const Size(48, 48),
-                        side: const BorderSide(color: HuntrColors.border),
-                      ),
-                      onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.arrow_back_rounded),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: TextField(
-                        key: const Key('roamSearch'),
-                        controller: _query,
-                        focusNode: _focus,
-                        textInputAction: TextInputAction.search,
-                        onSubmitted: (_) {
-                          if (_results.isNotEmpty) _choose(_results.first);
-                        },
-                        decoration: InputDecoration(
-                          hintText: 'Search a city or area',
-                          filled: true,
-                          fillColor: HuntrColors.surface,
-                          prefixIcon: const Icon(Icons.search_rounded),
-                          suffixIcon: _query.text.isEmpty
-                              ? null
-                              : IconButton(
-                                  tooltip: 'Clear search',
-                                  icon: const Icon(Icons.close_rounded),
-                                  onPressed: _query.clear,
-                                ),
-                          contentPadding:
-                              const EdgeInsets.symmetric(vertical: 12),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(24),
-                            borderSide:
-                                const BorderSide(color: HuntrColors.border),
+              // search, and what it found: one tap region with the box, so a
+              // tap on a place isn't a tap outside it (which closes the list
+              // first, on the web)
+              Positioned(
+                left: 12,
+                right: 12,
+                top: top + 12,
+                child: TextFieldTapRegion(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(children: [
+                        IconButton.filled(
+                          tooltip: 'Back',
+                          style: IconButton.styleFrom(
+                            backgroundColor: HuntrColors.surface,
+                            foregroundColor: Colors.white,
+                            minimumSize: const Size(48, 48),
+                            side: const BorderSide(color: HuntrColors.border),
                           ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(24),
-                            borderSide:
-                                const BorderSide(color: HuntrColors.border),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(24),
-                            borderSide: BorderSide(
-                                color: HuntrColors.orange, width: 1.4),
+                          onPressed: () => Navigator.pop(context),
+                          icon: const Icon(Icons.arrow_back_rounded),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextField(
+                            key: const Key('roamSearch'),
+                            controller: _query,
+                            focusNode: _focus,
+                            textInputAction: TextInputAction.search,
+                            onSubmitted: (_) {
+                              if (_results.isNotEmpty) _choose(_results.first);
+                            },
+                            decoration: InputDecoration(
+                              hintText: 'Search a city or area',
+                              filled: true,
+                              fillColor: HuntrColors.surface,
+                              prefixIcon: const Icon(Icons.search_rounded),
+                              suffixIcon: _query.text.isEmpty
+                                  ? null
+                                  : IconButton(
+                                      tooltip: 'Clear search',
+                                      icon: const Icon(Icons.close_rounded),
+                                      onPressed: _query.clear,
+                                    ),
+                              contentPadding:
+                                  const EdgeInsets.symmetric(vertical: 12),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(24),
+                                borderSide:
+                                    const BorderSide(color: HuntrColors.border),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(24),
+                                borderSide:
+                                    const BorderSide(color: HuntrColors.border),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(24),
+                                borderSide: BorderSide(
+                                    color: HuntrColors.orange, width: 1.4),
+                              ),
+                            ),
                           ),
                         ),
-                      ),
-                    ),
-                  ]),
-                  if (showList || showRecent) const SizedBox(height: 8),
-                  if (showList)
-                    _Card(
-                      child: _searching && _results.isEmpty
-                          ? const Padding(
-                              padding: EdgeInsets.all(20),
-                              child: Center(
-                                  child: SizedBox.square(
-                                      dimension: 22,
-                                      child: CircularProgressIndicator(
-                                          strokeWidth: 2.5))),
-                            )
-                          : _searchProblem != null && _results.isEmpty
-                              ? Padding(
-                                  padding: const EdgeInsets.all(16),
-                                  child: Text(_searchProblem!,
-                                      key: const Key('roamSearchProblem'),
-                                      style: const TextStyle(
-                                          color: HuntrColors.muted)),
+                      ]),
+                      if (showList || showRecent) const SizedBox(height: 8),
+                      if (showList)
+                        _Card(
+                          child: _searching && _results.isEmpty
+                              ? const Padding(
+                                  padding: EdgeInsets.all(20),
+                                  child: Center(
+                                      child: SizedBox.square(
+                                          dimension: 22,
+                                          child: CircularProgressIndicator(
+                                              strokeWidth: 2.5))),
                                 )
-                              : Column(children: [
-                                  for (final (i, place) in _results.indexed)
-                                    _PlaceRow(
-                                      key: Key('roamResult-$i'),
-                                      place: place,
-                                      onTap: () => _choose(place),
+                              : _searchProblem != null && _results.isEmpty
+                                  ? Padding(
+                                      padding: const EdgeInsets.all(16),
+                                      child: Text(_searchProblem!,
+                                          key: const Key('roamSearchProblem'),
+                                          style: const TextStyle(
+                                              color: HuntrColors.muted)),
+                                    )
+                                  : Column(children: [
+                                      for (final (i, place) in _results.indexed)
+                                        _PlaceRow(
+                                          key: Key('roamResult-$i'),
+                                          place: place,
+                                          onTap: () => _choose(place),
+                                        ),
+                                    ]),
+                        ),
+                      if (showRecent)
+                        _Card(
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('RECENT',
+                                    style: TextStyle(
+                                        color: HuntrColors.muted,
+                                        fontSize: 12,
+                                        letterSpacing: 0.5,
+                                        fontWeight: FontWeight.w700)),
+                                const SizedBox(height: 8),
+                                Wrap(spacing: 8, runSpacing: 8, children: [
+                                  for (final place in _recent)
+                                    ActionChip(
+                                      avatar: const Icon(Icons.history_rounded,
+                                          size: 16),
+                                      label: Text(place.name),
+                                      onPressed: () => _choose(place),
                                     ),
                                 ]),
-                    ),
-                  if (showRecent)
-                    _Card(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('RECENT',
-                                style: TextStyle(
-                                    color: HuntrColors.muted,
-                                    fontSize: 12,
-                                    letterSpacing: 0.5,
-                                    fontWeight: FontWeight.w700)),
-                            const SizedBox(height: 8),
-                            Wrap(spacing: 8, runSpacing: 8, children: [
-                              for (final place in _recent)
-                                ActionChip(
-                                  avatar: const Icon(Icons.history_rounded,
-                                      size: 16),
-                                  label: Text(place.name),
-                                  onPressed: () => _choose(place),
-                                ),
-                            ]),
-                          ],
+                              ],
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                ],
+                    ],
+                  ),
+                ),
               ),
-            ),
-          ]),
+            ],
+          ),
         ),
 
         // the place, and Roam here
@@ -457,22 +453,18 @@ class _RoamScreenState extends State<RoamScreen> {
   }
 }
 
+/// A card over the map (the search's places, Recent): the same floating
+/// look as the map's controls ([mapFloating]).
 class _Card extends StatelessWidget {
   const _Card({required this.child});
 
   final Widget child;
 
   @override
-  Widget build(BuildContext context) => Material(
-        color: HuntrColors.surface,
-        elevation: 8,
-        shadowColor: Colors.black,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(18),
-          side: const BorderSide(color: HuntrColors.border),
-        ),
+  Widget build(BuildContext context) => Container(
         clipBehavior: Clip.antiAlias,
-        child: child,
+        decoration: mapFloating(radius: 18),
+        child: Material(type: MaterialType.transparency, child: child),
       );
 }
 

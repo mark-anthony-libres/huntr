@@ -7,7 +7,7 @@ import 'package:latlong2/latlong.dart' show LatLng;
 import '../../models/models.dart';
 import '../../services/huntr_backend.dart';
 import '../avatar.dart';
-import '../huntr_tile_layer.dart';
+import '../huntr_map.dart';
 import '../../theme.dart';
 import 'media_bubble.dart' show remainingLabel;
 
@@ -33,17 +33,14 @@ class LocationMap extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final point = LatLng(position.latitude, position.longitude);
-    return FlutterMap(
-      mapController: controller,
-      options: MapOptions(
-        initialCenter: point,
-        initialZoom: zoom,
-        interactionOptions: InteractionOptions(
-            flags: interactive ? InteractiveFlag.all : InteractiveFlag.none),
-      ),
-      children: [
-        // the same map as everywhere (credits where it's big enough)
-        HuntrTileLayer(credits: interactive),
+    return HuntrMap(
+      controller: controller,
+      center: point,
+      zoom: zoom,
+      // a location can be anywhere: wider than Explore's
+      minZoom: _chatMinZoom,
+      interactive: interactive,
+      layers: [
         if (position.accuracy != null && position.accuracy! > 0)
           CircleLayer(circles: [
             CircleMarker(
@@ -62,30 +59,19 @@ class LocationMap extends StatelessWidget {
             alignment: Alignment.topCenter,
             child: person == null
                 ? Icon(Icons.location_on_rounded,
-                    key: Key('locationPin'),
+                    key: const Key('locationPin'),
                     size: 40,
                     color: HuntrColors.orange)
                 : PersonPin(person: person!),
           ),
         ]),
-        if (interactive) ...[
-          const RichAttributionWidget(attributions: [
-            TextSourceAttribution('OpenStreetMap contributors'),
-          ]),
-          const MapZoomButtons(),
-        ] else
-          const Align(
-            alignment: Alignment.bottomRight,
-            child: Padding(
-              padding: EdgeInsets.all(4),
-              child: Text('© OpenStreetMap',
-                  style: TextStyle(fontSize: 9, color: Colors.black54)),
-            ),
-          ),
       ],
     );
   }
 }
+
+/// How far out a location in chat can be zoomed (two people far apart).
+const _chatMinZoom = 3.0;
 
 /// A shared location in the chat: a small map (tap for full screen), or
 /// what's known without a position (it's never stored: after a refresh a
@@ -295,46 +281,6 @@ class _NoPosition extends StatelessWidget {
   }
 }
 
-/// + and - (pinch, the mouse wheel and double-tap zoom too).
-class MapZoomButtons extends StatelessWidget {
-  const MapZoomButtons({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    final map = MapController.of(context);
-    final camera = MapCamera.of(context);
-    void zoom(double by) => map.move(camera.center,
-        (camera.zoom + by).clamp(camera.minZoom ?? 2, camera.maxZoom ?? 19));
-    return Align(
-      alignment: Alignment.topRight,
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Material(
-          color: HuntrColors.surfaceHigh,
-          elevation: 3,
-          borderRadius: BorderRadius.circular(14),
-          clipBehavior: Clip.antiAlias,
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            IconButton(
-              key: const Key('zoomIn'),
-              tooltip: 'Zoom in',
-              icon: const Icon(Icons.add_rounded),
-              onPressed: () => zoom(1),
-            ),
-            const SizedBox(width: 32, child: Divider(height: 1)),
-            IconButton(
-              key: const Key('zoomOut'),
-              tooltip: 'Zoom out',
-              icon: const Icon(Icons.remove_rounded),
-              onPressed: () => zoom(-1),
-            ),
-          ]),
-        ),
-      ),
-    );
-  }
-}
-
 /// Their profile photo in an orange ring, pointing at the spot.
 class PersonPin extends StatelessWidget {
   const PersonPin({super.key, required this.person, Color? color})
@@ -429,30 +375,26 @@ class LiveMap extends StatelessWidget {
       );
     }
     final points = [for (final (_, point) in known) point];
-    return FlutterMap(
+    return HuntrMap(
       // the small card frames again whenever someone moves, so both stay in
       // view; the big map is one map, framed by its controller (a new map
       // on the same controller stops loading its tiles)
       key: interactive ? null : ValueKey(Object.hashAll(points)),
-      mapController: controller,
-      options: MapOptions(
-        initialCenter: points.first,
-        initialZoom: 15,
-        initialCameraFit: points.length > 1
-            ? CameraFit.coordinates(
-                coordinates: points,
-                // the pins stand above their point
-                padding: interactive
-                    ? const EdgeInsets.fromLTRB(70, 100, 70, 70)
-                    : const EdgeInsets.fromLTRB(30, 72, 30, 12),
-                maxZoom: 16)
-            : null,
-        interactionOptions: InteractionOptions(
-            flags: interactive ? InteractiveFlag.all : InteractiveFlag.none),
-      ),
-      children: [
-        // the same map as everywhere (credits where it's big enough)
-        HuntrTileLayer(credits: interactive),
+      controller: controller,
+      center: points.first,
+      zoom: 15,
+      minZoom: _chatMinZoom,
+      fit: points.length > 1
+          ? CameraFit.coordinates(
+              coordinates: points,
+              // the pins stand above their point
+              padding: interactive
+                  ? const EdgeInsets.fromLTRB(70, 100, 70, 70)
+                  : const EdgeInsets.fromLTRB(30, 72, 30, 12),
+              maxZoom: 16)
+          : null,
+      interactive: interactive,
+      layers: [
         MarkerLayer(markers: [
           for (final (m, point) in known)
             Marker(
@@ -463,20 +405,6 @@ class LiveMap extends StatelessWidget {
               child: PersonPin(person: m.person, color: m.color),
             ),
         ]),
-        if (interactive) ...[
-          const RichAttributionWidget(attributions: [
-            TextSourceAttribution('OpenStreetMap contributors'),
-          ]),
-          const MapZoomButtons(),
-        ] else
-          const Align(
-            alignment: Alignment.bottomRight,
-            child: Padding(
-              padding: EdgeInsets.all(4),
-              child: Text('© OpenStreetMap',
-                  style: TextStyle(fontSize: 9, color: Colors.black54)),
-            ),
-          ),
       ],
     );
   }

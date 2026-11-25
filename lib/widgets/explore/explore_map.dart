@@ -12,7 +12,8 @@ import '../../state/app_state.dart';
 import '../../theme.dart';
 import '../roam/roaming.dart';
 import '../avatar.dart';
-import '../huntr_tile_layer.dart';
+import '../huntr_map.dart';
+import '../map_controls.dart';
 
 /// Explore's map is hidden unless built with MAP_ENABLED=true (env/*.json):
 /// no Map button, no "Show me on the map" setting.
@@ -155,9 +156,6 @@ class _ExploreMapState extends State<ExploreMap> {
   Timer? _settle;
   int _asked = 0;
 
-  /// How wide the map on screen is, between the zoom buttons ("3 km").
-  String? _across;
-
   /// How far from me the map goes (km, each way) and under how wide it
   /// shows photos (metres): the backend's settings, from its answer (until
   /// then the map isn't held in; the backend keeps to them anyway).
@@ -201,20 +199,11 @@ class _ExploreMapState extends State<ExploreMap> {
         LatLng(me.latitude + lat, me.longitude + lng));
   }
 
-  /// Once the map stops moving: the people in what's on screen. Meanwhile,
-  /// how wide it is.
+  /// Once the map stops moving: the people in what's on screen.
   void _moved(MapCamera camera) {
-    _showAcross(camera);
     _settle?.cancel();
     if (_covered(camera)) return; // the last answer already has it
     _settle = Timer(const Duration(milliseconds: 400), _load);
-  }
-
-  /// How wide the map shown is, between the zoom buttons.
-  void _showAcross(MapCamera camera) {
-    final across = acrossLabel(
-        camera.center.latitude, camera.zoom, camera.nonRotatedSize.width);
-    if (across != _across) setState(() => _across = across);
   }
 
   /// Close enough in for photos (under the backend's width for them).
@@ -343,15 +332,6 @@ class _ExploreMapState extends State<ExploreMap> {
     );
   }
 
-  void _zoomBy(double delta) {
-    final camera = _map.camera;
-    _map.move(
-        camera.center,
-        (camera.zoom + delta)
-            .clamp(ExploreMap.minZoom, ExploreMap.maxZoom)
-            .toDouble());
-  }
-
   /// None of the map's image sources works (the map says so).
   bool _noMap = false;
 
@@ -366,119 +346,95 @@ class _ExploreMapState extends State<ExploreMap> {
     final me = _me;
     // none of the map's sources works: the map says so (people are still on it)
     final noMap = _noMap;
-    return Stack(children: [
-      FlutterMap(
-        key: const Key('exploreMap'),
-        mapController: _map,
-        options: MapOptions(
-          initialCenter: me ?? _fallback,
-          // all of what's shown stays within the backend's reach of me: no
-          // panning past it, and no zooming out wider than it (the backend
-          // cuts any area asked for to it, too)
-          cameraConstraint: switch ((me, _reachKm)) {
-            (final me?, final km?) =>
-              CameraConstraint.contain(bounds: _reach(me, km)),
-            _ => const CameraConstraint.unconstrained(),
-          },
-          initialZoom: ExploreMap.photoZoom,
-          minZoom: ExploreMap.minZoom,
-          maxZoom: ExploreMap.maxZoom,
-          backgroundColor: HuntrColors.night,
-          interactionOptions: const InteractionOptions(
-              flags: InteractiveFlag.all & ~InteractiveFlag.rotate),
-          onMapReady: () {
-            _showAcross(_map.camera);
-            _load();
-          },
-          onPositionChanged: (camera, _) => _moved(camera),
-        ),
-        children: [
-          HuntrTileLayer(
-              tiles: widget.tiles,
-              onUnavailable: () => setState(() => _noMap = true)),
-          if (me != null)
-            MarkerLayer(markers: [
-              Marker(
-                point: me,
-                width: 64,
-                height: 64,
-                child: const _MyDot(),
-              ),
-            ]),
-          _PeopleLayer(
-            people: shown,
-            photosWithinMeters: _photosWithinMeters,
-            onOpen: widget.onOpen,
-            onGroup: _openGroup,
+    return HuntrMap(
+      key: const Key('exploreMap'),
+      controller: _map,
+      center: me ?? _fallback,
+      // all of what's shown stays within the backend's reach of me: no
+      // panning past it, and no zooming out wider than it (the backend cuts
+      // any area asked for to it, too)
+      cameraConstraint: switch ((me, _reachKm)) {
+        (final me?, final km?) =>
+          CameraConstraint.contain(bounds: _reach(me, km)),
+        _ => const CameraConstraint.unconstrained(),
+      },
+      tiles: widget.tiles,
+      onUnavailable: () => setState(() => _noMap = true),
+      onReady: (_) => _load(),
+      onMoved: _moved,
+      controlsBottom: widget.controlsBottom,
+      buttons: [
+        if (me != null)
+          MapButton(
+            key: const Key('mapMe'),
+            tooltip: 'Around me',
+            icon: Icons.my_location_rounded,
+            onPressed: () => _map.move(me, ExploreMap.photoZoom),
           ),
-        ],
-      ),
-
-      // ---- soft edges: the map fades into the header and the tabs ----
-      const Positioned(left: 0, right: 0, top: 0, child: _Fade(fromTop: true)),
-      const Positioned(
-          left: 0, right: 0, bottom: 0, child: _Fade(fromTop: false)),
-
-      // ---- loading, and what the map shows ----
-      if (_loading)
-        Positioned(
-          left: 0,
-          right: 0,
-          top: 0,
-          child:
-              LinearProgressIndicator(minHeight: 2, color: HuntrColors.orange),
-        ),
-      Positioned(
-        left: 12,
-        right: 76,
-        top: 10,
-        child: Align(
-          alignment: Alignment.centerLeft,
-          child: _Note(
-            key: const Key('mapNote'),
-            // the usual note: tap to learn how locations are shown
-            onTap: _error == null && !noMap
-                ? () => showMapLocationsInfo(context)
-                : null,
-            icon: _error != null
-                ? Icons.wifi_off_rounded
-                : noMap
-                    ? Icons.map_outlined
-                    : Icons.blur_on_rounded,
-            text: _error ??
-                (noMap
-                    ? "The map can't be shown right now. People are still on "
-                        'it, or use the list.'
-                    : _more
-                        ? 'Showing the nearest ${shown.length}. Zoom in for more.'
-                        : 'Locations are approximate'),
-            error: _error != null || noMap,
-          ),
-        ),
-      ),
-
-      // ---- controls ----
-      Positioned(
-        right: 12,
-        bottom: widget.controlsBottom,
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          if (me != null) ...[
-            _MapButton(
-              key: const Key('mapMe'),
-              tooltip: 'Around me',
-              icon: Icons.my_location_rounded,
-              onPressed: () => _map.move(me, ExploreMap.photoZoom),
+      ],
+      layers: [
+        if (me != null)
+          MarkerLayer(markers: [
+            Marker(
+              point: me,
+              width: 64,
+              height: 64,
+              child: const _MyDot(),
             ),
-            const SizedBox(height: 10),
-          ],
-          _ZoomCard(
-            across: _across,
-            onZoomIn: () => _zoomBy(1),
-            onZoomOut: () => _zoomBy(-1),
+          ]),
+        _PeopleLayer(
+          people: shown,
+          photosWithinMeters: _photosWithinMeters,
+          onOpen: widget.onOpen,
+          onGroup: _openGroup,
+        ),
+      ],
+      overlays: [
+        // ---- soft edges: the map fades into the header and the tabs ----
+        const Positioned(
+            left: 0, right: 0, top: 0, child: _Fade(fromTop: true)),
+        const Positioned(
+            left: 0, right: 0, bottom: 0, child: _Fade(fromTop: false)),
+
+        // ---- loading, and what the map shows ----
+        if (_loading)
+          Positioned(
+            left: 0,
+            right: 0,
+            top: 0,
+            child: LinearProgressIndicator(
+                minHeight: 2, color: HuntrColors.orange),
           ),
-        ]),
-      ),
-    ]);
+        Positioned(
+          left: 12,
+          right: 76,
+          top: 10,
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: _Note(
+              key: const Key('mapNote'),
+              // the usual note: tap to learn how locations are shown
+              onTap: _error == null && !noMap
+                  ? () => showMapLocationsInfo(context)
+                  : null,
+              icon: _error != null
+                  ? Icons.wifi_off_rounded
+                  : noMap
+                      ? Icons.map_outlined
+                      : Icons.blur_on_rounded,
+              text: _error ??
+                  (noMap
+                      ? "The map can't be shown right now. People are still on "
+                          'it, or use the list.'
+                      : _more
+                          ? 'Showing the nearest ${shown.length}. Zoom in for more.'
+                          : 'Locations are approximate'),
+              error: _error != null || noMap,
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }
 
@@ -952,122 +908,3 @@ class _InfoPoint extends StatelessWidget {
         ]),
       );
 }
-
-/// Metres across a map this [width] (logical pixels) wide at this [zoom]
-/// and [latitude] (the web map's projection).
-double acrossMetres(double latitude, double zoom, double width) =>
-    156543.03392 *
-    math.cos(latitude * math.pi / 180) /
-    math.pow(2, zoom) *
-    width;
-
-/// How far it is across a map this [width] (logical pixels) wide at this
-/// [zoom] and [latitude]: "800 m", "3 km", "25 km".
-String acrossLabel(double latitude, double zoom, double width) {
-  final metres = acrossMetres(latitude, zoom, width);
-  if (metres < 1000) return '${(metres / 10).round() * 10} m';
-  final km = metres / 1000;
-  return km < 10
-      ? '${km.toStringAsFixed(1).replaceAll('.0', '')} km'
-      : '${km.round()} km';
-}
-
-/// Zoom in, how wide the map shown is, zoom out: one card.
-class _ZoomCard extends StatelessWidget {
-  const _ZoomCard(
-      {required this.across, required this.onZoomIn, required this.onZoomOut});
-
-  /// "3.7 km" (null until the map is ready).
-  final String? across;
-  final VoidCallback onZoomIn;
-  final VoidCallback onZoomOut;
-
-  @override
-  Widget build(BuildContext context) {
-    Widget button(Key key, String tooltip, IconData icon, VoidCallback tap) =>
-        IconButton(
-          key: key,
-          tooltip: tooltip,
-          onPressed: tap,
-          style: IconButton.styleFrom(
-            foregroundColor: Colors.white,
-            fixedSize: const Size(46, 42),
-            shape: const RoundedRectangleBorder(),
-          ),
-          icon: Icon(icon, size: 22),
-        );
-    const line = SizedBox(
-        width: 26, child: Divider(height: 1, color: HuntrColors.border));
-    return Container(
-      width: 46,
-      clipBehavior: Clip.antiAlias,
-      decoration: _floating(radius: 23),
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        button(const Key('mapZoomIn'), 'Zoom in', Icons.add_rounded, onZoomIn),
-        if (across case final text?) ...[
-          line,
-          Tooltip(
-            key: const Key('mapAcross'),
-            message: 'Width of the map shown',
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 6),
-              child: Column(children: [
-                FittedBox(
-                  child: Text(text,
-                      style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 11.5)),
-                ),
-                const Text('across',
-                    style: TextStyle(color: HuntrColors.muted, fontSize: 9)),
-              ]),
-            ),
-          ),
-        ],
-        line,
-        button(const Key('mapZoomOut'), 'Zoom out', Icons.remove_rounded,
-            onZoomOut),
-      ]),
-    );
-  }
-}
-
-/// Things floating over the map: the app's surface, a hairline edge and a
-/// soft shadow.
-BoxDecoration _floating({required double radius}) => BoxDecoration(
-      color: HuntrColors.surface.withValues(alpha: 0.94),
-      borderRadius: BorderRadius.circular(radius),
-      border: Border.all(color: HuntrColors.border),
-      boxShadow: const [
-        BoxShadow(color: Colors.black54, blurRadius: 12, offset: Offset(0, 4)),
-      ],
-    );
-
-class _MapButton extends StatelessWidget {
-  const _MapButton(
-      {super.key,
-      required this.tooltip,
-      required this.icon,
-      required this.onPressed});
-
-  final String tooltip;
-  final IconData icon;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) => DecoratedBox(
-        decoration: _floating(radius: 23),
-        child: IconButton(
-          tooltip: tooltip,
-          onPressed: onPressed,
-          style: IconButton.styleFrom(
-            foregroundColor: HuntrColors.orange,
-            fixedSize: const Size(46, 46),
-          ),
-          icon: Icon(icon, size: 22),
-        ),
-      );
-}
-
-

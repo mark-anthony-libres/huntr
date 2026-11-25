@@ -5,7 +5,7 @@ import 'package:latlong2/latlong.dart';
 import '../../models/models.dart';
 import '../../services/nearby_service.dart' show nearbyAgo;
 import '../../theme.dart';
-import '../huntr_tile_layer.dart';
+import '../huntr_map.dart';
 
 /// Roam's globe.
 const roamIcon = Icons.public_rounded;
@@ -135,43 +135,39 @@ class RoamWhereSheet extends StatelessWidget {
               borderRadius: BorderRadius.circular(18),
               child: SizedBox(
                 height: 190,
-                child: IgnorePointer(
-                  child: FlutterMap(
-                    options: MapOptions(
-                      initialCenter: spot,
-                      initialZoom: 11,
-                      backgroundColor: HuntrColors.surface,
-                    ),
-                    children: [
-                      const HuntrTileLayer(),
-                      CircleLayer(circles: [
-                        CircleMarker(
-                          point: spot,
-                          radius: 3000,
-                          useRadiusInMeter: true,
-                          color: HuntrColors.orange.withValues(alpha: 0.14),
-                          borderColor:
-                              HuntrColors.orange.withValues(alpha: 0.6),
-                          borderStrokeWidth: 1.5,
-                        ),
-                      ]),
-                      MarkerLayer(markers: [
-                        Marker(
-                          point: spot,
-                          width: 18,
-                          height: 18,
-                          child: Container(
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: HuntrColors.orange,
-                              border: Border.all(
-                                  color: HuntrColors.night, width: 3),
-                            ),
+                // the shared map, still (only to look at)
+                child: HuntrMap(
+                  center: spot,
+                  zoom: 11,
+                  minZoom: 3,
+                  interactive: false,
+                  layers: [
+                    CircleLayer(circles: [
+                      CircleMarker(
+                        point: spot,
+                        radius: 3000,
+                        useRadiusInMeter: true,
+                        color: HuntrColors.orange.withValues(alpha: 0.14),
+                        borderColor: HuntrColors.orange.withValues(alpha: 0.6),
+                        borderStrokeWidth: 1.5,
+                      ),
+                    ]),
+                    MarkerLayer(markers: [
+                      Marker(
+                        point: spot,
+                        width: 18,
+                        height: 18,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: HuntrColors.orange,
+                            border:
+                                Border.all(color: HuntrColors.night, width: 3),
                           ),
                         ),
-                      ]),
-                    ],
-                  ),
+                      ),
+                    ]),
+                  ],
                 ),
               ),
             ),
