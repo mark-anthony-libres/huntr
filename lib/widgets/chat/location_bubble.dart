@@ -7,12 +7,9 @@ import 'package:latlong2/latlong.dart' show LatLng;
 import '../../models/models.dart';
 import '../../services/huntr_backend.dart';
 import '../avatar.dart';
+import '../huntr_tile_layer.dart';
 import '../../theme.dart';
 import 'media_bubble.dart' show remainingLabel;
-
-/// OpenStreetMap tiles (free, no key). Loaded only while a map is on
-/// screen; the browser or device caches them.
-const _tiles = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 
 /// A map of [position], centred on it, with whose it is as the pin (their
 /// profile photo), and how precise it is.
@@ -45,7 +42,8 @@ class LocationMap extends StatelessWidget {
             flags: interactive ? InteractiveFlag.all : InteractiveFlag.none),
       ),
       children: [
-        TileLayer(urlTemplate: _tiles, userAgentPackageName: 'com.huntr.app'),
+        // the same map as everywhere (credits where it's big enough)
+        HuntrTileLayer(credits: interactive),
         if (position.accuracy != null && position.accuracy! > 0)
           CircleLayer(circles: [
             CircleMarker(
@@ -453,7 +451,8 @@ class LiveMap extends StatelessWidget {
             flags: interactive ? InteractiveFlag.all : InteractiveFlag.none),
       ),
       children: [
-        TileLayer(urlTemplate: _tiles, userAgentPackageName: 'com.huntr.app'),
+        // the same map as everywhere (credits where it's big enough)
+        HuntrTileLayer(credits: interactive),
         MarkerLayer(markers: [
           for (final (m, point) in known)
             Marker(

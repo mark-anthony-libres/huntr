@@ -12,7 +12,7 @@ import '../../state/app_state.dart';
 import '../../theme.dart';
 import '../roam/roaming.dart';
 import '../avatar.dart';
-import '../night_map.dart';
+import '../huntr_tile_layer.dart';
 
 /// Explore's map is hidden unless built with MAP_ENABLED=true (env/*.json):
 /// no Map button, no "Show me on the map" setting.
@@ -352,32 +352,8 @@ class _ExploreMapState extends State<ExploreMap> {
             .toDouble());
   }
 
-  /// Which of the map's image sources is used ([MapTiles.inOrder]); past
-  /// the last one, none (they all kept failing).
-  int _source = 0;
-
-  /// When map images failed lately (since the source last changed).
-  final List<DateTime> _tileFailures = [];
-
-  /// This many failed images within [_failureWindow]: the next source.
-  static const _failuresToSwitch = 6;
-  static const _failureWindow = Duration(seconds: 20);
-
-  /// An image from source [from] failed (late ones from an earlier source
-  /// don't count against the next).
-  void _tileFailed(int from) {
-    if (from != _source) return;
-    final now = DateTime.now();
-    _tileFailures
-      ..add(now)
-      ..removeWhere((at) => now.difference(at) > _failureWindow);
-    if (_tileFailures.length < _failuresToSwitch) return;
-    _tileFailures.clear();
-    // (failures are told while the map draws)
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && _source == from) setState(() => _source = from + 1);
-    });
-  }
+  /// None of the map's image sources works (the map says so).
+  bool _noMap = false;
 
   @override
   Widget build(BuildContext context) {
@@ -388,11 +364,8 @@ class _ExploreMapState extends State<ExploreMap> {
         if (app.showsInExplore(p.profile)) p
     ];
     final me = _me;
-    final sources = (widget.tiles ?? MapTiles.configured).inOrder;
-    final source = _source;
-    final tiles = source < sources.length ? sources[source] : null;
-    // none of them works: the map says so (people are still on it)
-    final noMap = tiles == null && sources.first.url.isNotEmpty;
+    // none of the map's sources works: the map says so (people are still on it)
+    final noMap = _noMap;
     return Stack(children: [
       FlutterMap(
         key: const Key('exploreMap'),
@@ -420,33 +393,9 @@ class _ExploreMapState extends State<ExploreMap> {
           onPositionChanged: (camera, _) => _moved(camera),
         ),
         children: [
-          if (tiles != null && tiles.url.isNotEmpty)
-            // drawn on its own: what changes on top (markers) never makes
-            // the map images draw again; and one colour filter for all of
-            // them, not one per image
-            RepaintBoundary(
-              child: _nightIf(
-                tiles.night,
-                TileLayer(
-                  // a new layer per source (nothing of the last one kept)
-                  key: ValueKey('tiles-$_source'),
-                  urlTemplate: tiles.url,
-                  // a refused image (e.g. MapTiler's "Invalid key" picture,
-                  // sent with a 403) counts as failed, not drawn: so the
-                  // next source, or "The map can't be shown", takes over
-                  tileProvider: NetworkTileProvider(
-                      attemptDecodeOfHttpErrorResponses: false),
-                  errorTileCallback: (tile, error, stack) =>
-                      _tileFailed(source),
-                  // sharp images on sharp screens, where the provider has
-                  // them (never by loading 4x the images)
-                  retinaMode: tiles.url.contains('{r}') &&
-                      RetinaMode.isHighDensity(context),
-                  userAgentPackageName: 'com.marklibres.huntr',
-                  maxNativeZoom: tiles.maxNativeZoom,
-                ),
-              ),
-            ),
+          HuntrTileLayer(
+              tiles: widget.tiles,
+              onUnavailable: () => setState(() => _noMap = true)),
           if (me != null)
             MarkerLayer(markers: [
               Marker(
@@ -462,14 +411,6 @@ class _ExploreMapState extends State<ExploreMap> {
             onOpen: widget.onOpen,
             onGroup: _openGroup,
           ),
-          if (tiles != null && tiles.attributions.isNotEmpty)
-            RichAttributionWidget(
-              alignment: AttributionAlignment.bottomLeft,
-              attributions: [
-                for (final credit in tiles.attributions)
-                  TextSourceAttribution(credit),
-              ],
-            ),
         ],
       ),
 
@@ -1129,5 +1070,4 @@ class _MapButton extends StatelessWidget {
       );
 }
 
-/// [map], made dark ([nightMap]) when [night].
-Widget _nightIf(bool night, Widget map) => night ? nightMap(map) : map;
+

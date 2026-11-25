@@ -5,13 +5,10 @@ import 'package:latlong2/latlong.dart';
 import '../../models/models.dart';
 import '../../services/nearby_service.dart' show nearbyAgo;
 import '../../theme.dart';
-import '../explore/explore_map.dart' show MapTiles;
+import '../huntr_tile_layer.dart';
 
 /// Roam's globe.
 const roamIcon = Icons.public_rounded;
-
-/// The map images Roam's maps use (tests put [MapTiles.none] here).
-MapTiles Function() roamMapTiles = () => MapTiles.configured;
 
 /// "Roaming": on someone's tile, pin and profile, while they roam. Tapped
 /// (when [onTap] is set), it shows where.
@@ -115,7 +112,6 @@ class RoamWhereSheet extends StatelessWidget {
     final name = person.name.isEmpty ? 'They' : person.name;
     final since = roam.since;
     final spot = LatLng(roam.latitude, roam.longitude);
-    final tiles = roamMapTiles();
     return SafeArea(
       child: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
@@ -147,14 +143,7 @@ class RoamWhereSheet extends StatelessWidget {
                       backgroundColor: HuntrColors.surface,
                     ),
                     children: [
-                      if (tiles.url.isNotEmpty)
-                        TileLayer(
-                          urlTemplate: tiles.url,
-                          tileProvider: NetworkTileProvider(
-                              attemptDecodeOfHttpErrorResponses: false),
-                          userAgentPackageName: 'com.marklibres.huntr',
-                          maxNativeZoom: tiles.maxNativeZoom,
-                        ),
+                      const HuntrTileLayer(),
                       CircleLayer(circles: [
                         CircleMarker(
                           point: spot,
