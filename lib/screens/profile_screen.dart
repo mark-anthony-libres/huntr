@@ -31,6 +31,7 @@ import '../widgets/profile/looking_for_pill.dart';
 import '../widgets/profile/photo_gallery.dart';
 import '../widgets/profile/social_links_row.dart';
 import '../flows/accept_with_album.dart';
+import '../flows/chat_attachments.dart' show offerAlbumTrade;
 import '../widgets/stories/profile_stories.dart';
 import '../widgets/stories/reaction_burst.dart';
 
@@ -68,6 +69,40 @@ class ProfileScreen extends StatelessWidget {
   final bool showDistance;
 
   bool get _isPreview => previewProfile != null;
+
+  /// Their album badge, tapped: offer one of my albums to trade, in a
+  /// sheet (a real person's profile, not my preview or an unmatched one).
+  VoidCallback? _albumTrader(BuildContext context, Profile p) =>
+      _isPreview || p.backendId == null || p.unmatched
+          ? null
+          : () => _offerAlbum(context, p);
+
+  Future<void> _offerAlbum(BuildContext context, Profile p) async {
+    final messaging = MessagingScope.read(context);
+    if (messaging == null) return;
+    final messenger = ScaffoldMessenger.of(context);
+    int? conversationId;
+    String? error;
+    try {
+      conversationId = await messaging.messageTarget(p);
+    } on BackendException catch (e) {
+      error = e.message;
+    } catch (_) {
+      error = "Couldn't start the trade. Check your connection and try again.";
+    }
+    if (!context.mounted) return;
+    if (conversationId == null) {
+      if (error != null) messenger.showSnackBar(SnackBar(content: Text(error)));
+      return;
+    }
+    final offered = await offerAlbumTrade(context,
+        conversationId: conversationId, recipient: p, sheet: true);
+    if (offered) {
+      messenger.showSnackBar(SnackBar(
+          content: Text('Album offered to ${p.name}. Their answer shows in '
+              'your chat.')));
+    }
+  }
 
   /// Someone's photo, tapped: full screen, to reply or react (not my own
   /// preview).
@@ -151,6 +186,7 @@ class ProfileScreen extends StatelessWidget {
             firstIsAvatar: !_isPreview,
             autoPlay: true,
             showAlbums: !_isPreview,
+            onAlbums: _albumTrader(context, p),
             onOpen: _opener(context, p)),
         const IgnorePointer(
             child: DecoratedBox(
@@ -408,6 +444,7 @@ class ProfileScreen extends StatelessWidget {
                           profile: p,
                           firstIsAvatar: !_isPreview,
                           onOpen: _opener(context, p),
+                          onAlbums: _albumTrader(context, p),
                           actions: actions),
                     ),
                     const SizedBox(width: 32),
@@ -949,10 +986,12 @@ class _WideGallery extends StatefulWidget {
       {required this.profile,
       required this.firstIsAvatar,
       required this.actions,
-      this.onOpen});
+      this.onOpen,
+      this.onAlbums});
 
   final Profile profile;
   final ValueChanged<int>? onOpen;
+  final VoidCallback? onAlbums;
   final bool firstIsAvatar;
   final List<Widget> actions;
 
@@ -1013,6 +1052,7 @@ class _WideGalleryState extends State<_WideGallery> {
                     onPageChanged: (i) => setState(() => _page = i),
                     autoPlay: true,
                     showAlbums: widget.firstIsAvatar,
+                    onAlbums: widget.onAlbums,
                     onOpen: widget.onOpen),
                 // only a top shade, for the buttons
                 const IgnorePointer(

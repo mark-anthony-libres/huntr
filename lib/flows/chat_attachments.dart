@@ -227,9 +227,12 @@ Future<void> _location(
 
 // ---- album trades ----
 
-/// Offers one of my albums (full-screen choice; see [AlbumTradeScreen]).
-Future<void> offerAlbumTrade(BuildContext context,
-    {required int conversationId, required Profile recipient}) async {
+/// Offers one of my albums (full-screen choice, or with [sheet] a bottom
+/// sheet; see [AlbumTradeScreen]). True once one was offered.
+Future<bool> offerAlbumTrade(BuildContext context,
+    {required int conversationId,
+    required Profile recipient,
+    bool sheet = false}) async {
   final messaging = MessagingScope.read(context)!;
   // one id per album chosen, so a retried offer is stored once
   final clientIds = <String, String>{};
@@ -243,9 +246,10 @@ Future<void> offerAlbumTrade(BuildContext context,
               trade.offeredAlbum != null)
         '${trade.offeredAlbum!.id}': trade,
   };
-  await Navigator.of(context).push(MaterialPageRoute(
-    fullscreenDialog: true,
-    builder: (_) => AlbumTradeScreen(
+  return showAlbumTrade(
+    context,
+    AlbumTradeScreen(
+      sheet: sheet,
       title: 'Trade an album',
       intro: 'Choose an album to offer ${_name(recipient)}. They can pick '
           'one of theirs in return.',
@@ -257,7 +261,7 @@ Future<void> offerAlbumTrade(BuildContext context,
           conversationId, recipient, int.parse(album.id),
           clientId: clientIds.putIfAbsent(album.id, messaging.newClientId)),
     ),
-  ));
+  );
 }
 
 /// Sends one of my albums as it is, nothing in return (the same album can

@@ -195,22 +195,32 @@ class _PhotoGalleryState extends State<PhotoGallery> {
             right: 14,
             bottom: 14,
             child: IgnorePointer(
-              child: Container(
-                key: const Key('galleryAlbums'),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.6),
-                  borderRadius: BorderRadius.circular(999),
+              ignoring: widget.onAlbums == null,
+              child: Material(
+                color: Colors.black.withValues(alpha: 0.6),
+                shape: const StadiumBorder(),
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  key: const Key('galleryAlbums'),
+                  onTap: widget.onAlbums,
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(
+                        12, 7, widget.onAlbums == null ? 12 : 8, 7),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      const Icon(Icons.photo_library_outlined,
+                          size: 17, color: Colors.white),
+                      const SizedBox(width: 7),
+                      Text(albums == 1 ? '1 album' : '$albums albums',
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600)),
+                      // tappable: to trade
+                      if (widget.onAlbums != null)
+                        const Icon(Icons.chevron_right_rounded,
+                            size: 18, color: Colors.white),
+                    ]),
+                  ),
                 ),
-                child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  const Icon(Icons.photo_library_outlined,
-                      size: 17, color: Colors.white),
-                  const SizedBox(width: 7),
-                  Text(albums == 1 ? '1 album' : '$albums albums',
-                      style: const TextStyle(
-                          color: Colors.white, fontWeight: FontWeight.w600)),
-                ]),
               ),
             ),
           ),
@@ -229,7 +239,8 @@ class PhotoGallery extends StatefulWidget {
       this.onPageChanged,
       this.onOpen,
       this.autoPlay = false,
-      this.showAlbums = false});
+      this.showAlbums = false,
+      this.onAlbums});
 
   /// Moves to the next photo by itself every few seconds (a carousel),
   /// until it's touched.
@@ -237,6 +248,10 @@ class PhotoGallery extends StatefulWidget {
 
   /// Says how many albums they have (to trade for), on the photo.
   final bool showAlbums;
+
+  /// The album badge tapped: offer one of mine to trade (null: not
+  /// tappable).
+  final VoidCallback? onAlbums;
   final Profile profile;
 
   /// A tap on a photo: open it (this one) full screen.

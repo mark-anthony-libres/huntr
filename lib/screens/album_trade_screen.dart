@@ -23,6 +23,9 @@ import 'my_album_screen.dart';
 ///
 /// [onChosen] sends the choice and throws what the backend says; the screen
 /// closes (returning true) once it succeeds, and offers a retry if not.
+///
+/// With [sheet] it's the content of a bottom sheet instead (see
+/// [showAlbumTrade]): a title and Cancel over it, no app bar.
 class AlbumTradeScreen extends StatefulWidget {
   const AlbumTradeScreen({
     super.key,
@@ -32,9 +35,13 @@ class AlbumTradeScreen extends StatefulWidget {
     required this.onChosen,
     this.waiting = const {},
     this.onStopWaiting,
+    this.sheet = false,
     this.note =
         'Only the album’s name and cover show in the chat. Nothing is shared.',
   });
+
+  /// Shown in a bottom sheet, not full screen.
+  final bool sheet;
 
   /// Under the intro: what the other person gets.
   final String note;
@@ -200,59 +207,98 @@ class _AlbumTradeScreenState extends State<AlbumTradeScreen> {
         .toList();
     final firstEmpty = _albums?.where((a) => a.photos.isEmpty).firstOrNull;
     final sending = _sending;
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.title),
-        leading: IconButton(
-          key: const Key('closeTrade'),
-          tooltip: 'Cancel',
-          icon: const Icon(Icons.close_rounded),
-          onPressed: () => Navigator.of(context).pop(false),
-        ),
-      ),
-      body: SafeArea(
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 560),
-            child: _loadError != null
-                ? Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Center(
-                      child: LoadFailedCard(
-                        title: "Couldn't load your albums",
-                        message: _loadError!,
-                        onRetry: _load,
-                        retryKey: const Key('tradeAlbumsRetry'),
-                      ),
-                    ),
-                  )
-                : albums == null
-                    ? const Center(child: CircularProgressIndicator())
-                    : sending != null && _sendError == null
-                        ? _Sending(album: sending, label: widget.sendingLabel)
-                        : albums.isEmpty
-                            ? _NoAlbums(
-                                onCreate: _createAlbum,
-                                emptyAlbum: firstEmpty,
-                                onFill: firstEmpty == null
-                                    ? null
-                                    : () => _fillAlbum(firstEmpty))
-                            : _AlbumList(
-                                intro: widget.intro,
-                                note: widget.note,
-                                albums: albums,
-                                waiting: _waiting,
-                                error: _sendError,
-                                onChoose: _choose,
-                                onWaiting: widget.onStopWaiting == null
-                                    ? null
-                                    : _waitingActions,
-                              ),
-          ),
-        ),
+    final close = IconButton(
+      key: const Key('closeTrade'),
+      tooltip: 'Cancel',
+      icon: const Icon(Icons.close_rounded),
+      onPressed: () => Navigator.of(context).pop(false),
+    );
+    final body = Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 560),
+        child: _loadError != null
+            ? Padding(
+                padding: const EdgeInsets.all(20),
+                child: Center(
+                  child: LoadFailedCard(
+                    title: "Couldn't load your albums",
+                    message: _loadError!,
+                    onRetry: _load,
+                    retryKey: const Key('tradeAlbumsRetry'),
+                  ),
+                ),
+              )
+            : albums == null
+                ? const Center(child: CircularProgressIndicator())
+                : sending != null && _sendError == null
+                    ? _Sending(album: sending, label: widget.sendingLabel)
+                    : albums.isEmpty
+                        ? _NoAlbums(
+                            onCreate: _createAlbum,
+                            emptyAlbum: firstEmpty,
+                            onFill: firstEmpty == null
+                                ? null
+                                : () => _fillAlbum(firstEmpty))
+                        : _AlbumList(
+                            intro: widget.intro,
+                            note: widget.note,
+                            albums: albums,
+                            waiting: _waiting,
+                            error: _sendError,
+                            onChoose: _choose,
+                            onWaiting: widget.onStopWaiting == null
+                                ? null
+                                : _waitingActions,
+                          ),
       ),
     );
+    if (widget.sheet) {
+      return SafeArea(
+        top: false,
+        child: SizedBox(
+          height: MediaQuery.sizeOf(context).height * 0.72,
+          child: Column(children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 8, 0),
+              child: Row(children: [
+                Expanded(
+                  child: Text(widget.title,
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleLarge
+                          ?.copyWith(fontWeight: FontWeight.w800)),
+                ),
+                close,
+              ]),
+            ),
+            Expanded(child: body),
+          ]),
+        ),
+      );
+    }
+    return Scaffold(
+      appBar: AppBar(title: Text(widget.title), leading: close),
+      body: SafeArea(child: body),
+    );
   }
+}
+
+/// Shows [screen] full screen, or (its [AlbumTradeScreen.sheet]) as a
+/// bottom sheet. True once an album was sent.
+Future<bool> showAlbumTrade(
+    BuildContext context, AlbumTradeScreen screen) async {
+  final sent = screen.sheet
+      ? await showModalBottomSheet<bool>(
+          context: context,
+          isScrollControlled: true,
+          useSafeArea: true,
+          showDragHandle: true,
+          constraints: const BoxConstraints(maxWidth: 600),
+          builder: (_) => screen,
+        )
+      : await Navigator.of(context).push<bool>(
+          MaterialPageRoute(fullscreenDialog: true, builder: (_) => screen));
+  return sent == true;
 }
 
 /// Nothing to offer yet: create an album first.
