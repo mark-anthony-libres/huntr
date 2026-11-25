@@ -508,8 +508,8 @@ class _GuestLinkScreenState extends State<GuestLinkScreen> {
   }
 }
 
-/// The picture posted to a story (9:16): HUNTR at the top, my animal and the
-/// words in the middle, room for the link sticker, and the link in print
+/// The picture posted to a story (9:16): my animal and the words in the
+/// middle, room for the link sticker, and the link in print
 /// (for stories without a link sticker).
 class GuestStoryCard extends StatelessWidget {
   const GuestStoryCard({
@@ -553,12 +553,6 @@ class GuestStoryCard extends StatelessWidget {
           ),
           padding: const EdgeInsets.fromLTRB(18, 24, 18, 18),
           child: Column(children: [
-            const Text('HUNTR',
-                style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 11,
-                    letterSpacing: 2,
-                    fontWeight: FontWeight.w800)),
             const Spacer(),
             Container(
               width: 96,

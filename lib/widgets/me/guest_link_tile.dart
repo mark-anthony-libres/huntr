@@ -3,9 +3,9 @@ import 'package:flutter/material.dart';
 import '../../screens/guest_link_screen.dart';
 import '../../state/guest_chats_state.dart';
 import '../../theme.dart';
+
 /// Opens my guest link (to share on My Day or a story). On my anonymous
 /// profile.
-/// guest chats are open. On Me and my anonymous profile.
 class GuestLinkTile extends StatelessWidget {
   const GuestLinkTile({super.key});
 
