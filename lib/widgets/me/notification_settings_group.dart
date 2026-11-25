@@ -13,6 +13,7 @@ import '../../services/push_notifications.dart';
 import '../../services/services_scope.dart';
 import '../../state/app_state.dart';
 import '../../theme.dart';
+import '../notifications_off.dart';
 import 'settings_group.dart';
 
 /// Settings > Notifications: a switch for each kind (taps, messages, replies
@@ -60,7 +61,6 @@ class _NotificationSettingsGroupState extends State<NotificationSettingsGroup>
   /// phone's settings - an app can't ask again), then check again.
   Future<void> _howToAllow() async {
     final appOnPhone = !kIsWeb;
-    final steps = _allowSteps();
     final again = await showModalBottomSheet<bool>(
       context: context,
       showDragHandle: true,
@@ -81,27 +81,7 @@ class _NotificationSettingsGroupState extends State<NotificationSettingsGroup>
                     'Turn them on yourself:',
                     style: TextStyle(color: HuntrColors.muted, height: 1.4)),
                 const SizedBox(height: 14),
-                for (final (i, step) in steps.indexed)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          CircleAvatar(
-                            radius: 12,
-                            backgroundColor: HuntrColors.orange,
-                            child: Text('${i + 1}',
-                                style: const TextStyle(
-                                    color: Colors.black,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w800)),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                              child: Text(step,
-                                  style: const TextStyle(height: 1.4))),
-                        ]),
-                  ),
+                NumberedSteps(steps: notificationAllowSteps()),
                 const SizedBox(height: 8),
                 SizedBox(
                   width: double.infinity,
@@ -127,40 +107,6 @@ class _NotificationSettingsGroupState extends State<NotificationSettingsGroup>
               ? 'Notifications are on for this device.'
               : 'Still blocked. Allow notifications for huntr.online, then '
                   'reload the page.')));
-  }
-
-  /// The steps for where this is: the Android app, or a browser on a
-  /// phone (Android, iPhone) or a computer.
-  static List<String> _allowSteps() {
-    final android = defaultTargetPlatform == TargetPlatform.android;
-    final ios = defaultTargetPlatform == TargetPlatform.iOS;
-    if (!kIsWeb) {
-      return const [
-        'Tap Open settings below.',
-        'Go to Notifications.',
-        'Turn on notifications for HUNTR, then come back.',
-      ];
-    }
-    if (android) {
-      return const [
-        'Tap the icon at the left of the address bar (next to huntr.online).',
-        'Tap Permissions (or Site settings), then Notifications.',
-        'Choose Allow, then come back and tap I\'ve allowed it.',
-      ];
-    }
-    if (ios) {
-      return const [
-        'Open the iPhone Settings app, then Notifications.',
-        'Find HUNTR (added to your Home Screen) and turn on Allow '
-            'Notifications.',
-        'Come back and tap I\'ve allowed it.',
-      ];
-    }
-    return const [
-      'Click the icon at the left of the address bar (next to huntr.online).',
-      'Set Notifications to Allow (in Site settings if it isn\'t listed).',
-      'Reload the page if it asks, then tap I\'ve allowed it.',
-    ];
   }
 
   Future<void> _save({bool? taps, bool? messages, bool? storyReplies}) async {

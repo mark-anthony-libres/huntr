@@ -13,10 +13,6 @@ abstract class DevicePreferences {
   Future<String?> readExploreLayout();
   Future<void> saveExploreLayout(String name);
 
-  /// Turning notifications on was offered on this device (once).
-  Future<bool> readNotificationsOffered();
-  Future<void> saveNotificationsOffered();
-
   /// The reactions on the chat's emoji bar, in their order; null until
   /// changed.
   Future<List<String>?> readQuickReactions();
@@ -39,7 +35,6 @@ class SecureDevicePreferences implements DevicePreferences {
   const SecureDevicePreferences();
 
   static const _themeKey = 'huntr_theme';
-  static const _notificationsOfferedKey = 'huntr_notifications_offered';
   static const _exploreLayoutKey = 'huntr_explore_layout';
   static const _quickReactionsKey = 'huntr_quick_reactions';
   static const _playedVoicesKey = 'huntr_played_voices';
@@ -48,14 +43,6 @@ class SecureDevicePreferences implements DevicePreferences {
 
   @override
   Future<String?> readThemeId() => _storage.read(key: _themeKey);
-
-  @override
-  Future<bool> readNotificationsOffered() async =>
-      await _storage.read(key: _notificationsOfferedKey) == 'true';
-
-  @override
-  Future<void> saveNotificationsOffered() =>
-      _storage.write(key: _notificationsOfferedKey, value: 'true');
 
   @override
   Future<void> saveThemeId(String id) =>

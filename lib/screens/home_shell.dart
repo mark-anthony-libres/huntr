@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:firebase_messaging/firebase_messaging.dart'
+    show AuthorizationStatus;
 import 'package:flutter/material.dart';
 
 import '../services/presence/presence_service.dart';
@@ -17,6 +19,7 @@ import 'me_screen.dart';
 import 'nearby_screen.dart';
 import 'taps_screen.dart';
 import 'whats_new_screen.dart';
+import '../widgets/notifications_off.dart';
 import '../widgets/activity_bubble.dart';
 import '../widgets/huntr_bottom_bar.dart';
 import '../widgets/page_title.dart';
@@ -120,7 +123,7 @@ class _HomeShellState extends State<HomeShell> {
         // push notifications: this device, and a tapped one's place
         unawaited(PushNotifications.instance
             .start(token, onOpen: _open)
-            .then((_) => _offerNotifications()));
+            .then((_) => _remindNotifications()));
         // the website opened from a notification's link
         final linked =
             kIsWeb ? PushTarget.from(Uri.base.queryParameters) : null;
@@ -172,52 +175,26 @@ class _HomeShellState extends State<HomeShell> {
     }
   }
 
-  /// Once per device, while notifications aren't allowed or refused yet:
-  /// offer them (the website's prompt must follow a tap, so it's a button).
-  Future<void> _offerNotifications() async {
-    final push = PushNotifications.instance;
-    final preferences = AppScope.read(context).devicePreferences;
-    if (!mounted || !push.undecided || preferences == null) return;
-    if (await preferences.readNotificationsOffered() || !mounted) return;
-    unawaited(preferences.saveNotificationsOffered());
-    final turnOn = await showModalBottomSheet<bool>(
-      context: context,
-      showDragHandle: true,
-      builder: (context) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            const Icon(Icons.notifications_active_outlined, size: 40),
-            const SizedBox(height: 12),
-            const Text('Turn on notifications?',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-            const SizedBox(height: 6),
-            const Text(
-                'Get a notification when someone taps you, messages you or '
-                'replies to your story. It says who, never what they wrote. '
-                'Change it any time in Settings.',
-                textAlign: TextAlign.center,
-                style: TextStyle(height: 1.4)),
-            const SizedBox(height: 18),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                key: const Key('notificationsOfferOn'),
-                onPressed: () => Navigator.of(context).pop(true),
-                child: const Text('Turn on notifications'),
-              ),
-            ),
-            TextButton(
-              key: const Key('notificationsOfferLater'),
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Not now'),
-            ),
-          ]),
-        ),
-      ),
-    );
-    if (turnOn == true) await push.enable();
+  /// Notifications aren't on for HUNTR on this device (never answered, put
+  /// off, or blocked): each time the app opens, a screen says so and how to
+  /// turn them on.
+  Future<void> _remindNotifications() async {
+    final status = PushNotifications.instance.permission.value;
+    if (!mounted ||
+        !PushNotifications.supported ||
+        status == null ||
+        status == AuthorizationStatus.authorized) {
+      return;
+    }
+    final on = await Navigator.of(context).push<bool>(MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => const NotificationsOffScreen()));
+    if (on == true && mounted) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(
+            content: Text('Notifications are on for this device.')));
+    }
   }
 
   @override
