@@ -9,6 +9,7 @@ import '../services/huntr_backend.dart';
 import '../services/services_scope.dart';
 import '../state/app_state.dart';
 import '../state/messaging_state.dart';
+import '../widgets/roam/roaming.dart';
 import '../widgets/chats/conversation_list.dart' show togglePinned;
 import '../widgets/notes/person_note.dart';
 import '../theme.dart';
@@ -1232,25 +1233,44 @@ class _ChatScreenState extends State<ChatScreen> {
                                 ])
                               // no presence while a block is between us
                               else if (!blocked)
-                                Text(
-                                    typing
-                                        ? 'typing…'
-                                        : [
-                                            p.activeLabel(now),
-                                            if (p.approximateDistanceLabel
-                                                case final distance?)
-                                              distance,
-                                          ].join(' · '),
-                                    key: typing
-                                        ? const Key('typingHeader')
-                                        : null,
-                                    style: TextStyle(
-                                        fontSize: 12,
-                                        color: typing
-                                            ? HuntrColors.orange
-                                            : p.online
-                                                ? HuntrColors.online
-                                                : HuntrColors.muted)),
+                                Row(children: [
+                                  Flexible(
+                                    child: Text(
+                                        typing
+                                            ? 'typing…'
+                                            : [
+                                                p.activeLabel(now),
+                                                if (p.approximateDistanceLabel
+                                                    case final distance?)
+                                                  distance,
+                                              ].join(' · '),
+                                        key: typing
+                                            ? const Key('typingHeader')
+                                            : null,
+                                        style: TextStyle(
+                                            fontSize: 12,
+                                            color: typing
+                                                ? HuntrColors.orange
+                                                : p.online
+                                                    ? HuntrColors.online
+                                                    : HuntrColors.muted)),
+                                  ),
+                                  // roaming: where (tapped)
+                                  if (anonymous == null &&
+                                      p.roaming != null &&
+                                      !typing) ...[
+                                    const SizedBox(width: 6),
+                                    Flexible(
+                                      child: RoamingTag(
+                                          key: const Key('chatRoaming'),
+                                          small: true,
+                                          label:
+                                              'Roaming in ${p.roaming!.place}',
+                                          onTap: () =>
+                                              showRoamWhere(context, p)),
+                                    ),
+                                  ],
+                                ]),
                             ]),
                       ),
                     ]),
@@ -1344,6 +1364,34 @@ class _ChatScreenState extends State<ChatScreen> {
                     _liveAction(() => messaging.declineLiveLocation(asked)),
                 onCancel: () =>
                     _liveAction(() => messaging.cancelLiveLocation(asked)),
+              ),
+            // they roam: they may not be near (a location they share is real)
+            if (!blocked && anonymous == null && p.roaming != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                child: Center(
+                  child: Container(
+                    key: const Key('chatRoamingNote'),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: HuntrColors.surface,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: HuntrColors.border),
+                    ),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      Icon(roamIcon, size: 14, color: HuntrColors.orange),
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: Text(
+                            '${p.name.isEmpty ? 'They' : p.name} '
+                            '${p.name.isEmpty ? 'are' : 'is'} roaming and may not be nearby.',
+                            style: const TextStyle(
+                                fontSize: 12.5, color: HuntrColors.muted)),
+                      ),
+                    ]),
+                  ),
+                ),
               ),
             Expanded(
               child: !loaded && messaging.loadErrorOf(id) != null

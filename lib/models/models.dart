@@ -51,6 +51,43 @@ enum SexualPosition {
   }
 }
 
+/// Where someone roams (Roam: they look around there, and people there see
+/// them in Explore, marked as roaming). The spot is the one they picked,
+/// never where they are.
+class RoamSpot {
+  const RoamSpot({
+    required this.place,
+    required this.latitude,
+    required this.longitude,
+    this.detail,
+    this.since,
+  });
+
+  /// From the backend's `roaming` (null: not roaming).
+  static RoamSpot? fromJson(Object? json) {
+    if (json is! Map<String, dynamic>) return null;
+    final since = json['since'] as String?;
+    return RoamSpot(
+      place: json['place'] as String? ?? '',
+      detail: json['detail'] as String?,
+      latitude: (json['lat'] as num?)?.toDouble() ?? 0,
+      longitude: (json['lng'] as num?)?.toDouble() ?? 0,
+      since: since == null ? null : DateTime.tryParse(since)?.toLocal(),
+    );
+  }
+
+  /// "Shibuya"
+  final String place;
+
+  /// "Tokyo, Japan"
+  final String? detail;
+  final double latitude;
+  final double longitude;
+
+  /// When they started roaming there.
+  final DateTime? since;
+}
+
 /// A point on the map, in degrees.
 class GeoPoint {
   const GeoPoint(
@@ -342,6 +379,7 @@ class Profile {
     this.activeUntil,
     this.hasPlace = false,
     this.socialLinks = const SocialLinks(),
+    this.roaming,
   });
 
   /// Someone anonymous to me (the sender of an anonymous conversation): only
@@ -428,8 +466,13 @@ class Profile {
       hasPlace: json['has_place'] == true,
       // only on a full profile
       socialLinks: SocialLinks.fromJson(json['social_links']),
+      roaming: RoamSpot.fromJson(json['roaming']),
     );
   }
+
+  /// Where they roam (null: they don't): Explore shows them there, marked
+  /// as roaming, never with a distance.
+  final RoamSpot? roaming;
 
   /// Until when they count as recently active (the blue dot in chats): the
   /// server's last activity plus its window. Null when they hide it, or it
@@ -522,6 +565,7 @@ class Profile {
         stickers: stickers,
         hasPlace: hasPlace,
         socialLinks: socialLinks,
+        roaming: roaming,
       );
 
   /// A block between us (as the chat list knows it): I block them, or they
@@ -753,9 +797,11 @@ class ExploreFilters {
     this.maxDistanceKm,
     this.ageRange = const RangeValues(18, 60),
     this.lookingFor = const {},
+    this.positions = const {},
     this.query = '',
     this.hasPlace = false,
     this.favoritesOnly = false,
+    this.notesOnly = false,
   });
 
   final ExploreSort sort;
@@ -766,10 +812,17 @@ class ExploreFilters {
   /// Only people I starred (matched by [AppState.showsInExplore], which
   /// knows them).
   final bool favoritesOnly;
+
+  /// Only people I wrote a (private) note about (the backend knows them;
+  /// [AppState.showsInExplore] drops one whose note I just removed).
+  final bool notesOnly;
   final bool onlineOnly;
   final double? maxDistanceKm;
   final RangeValues ageRange;
   final Set<LookingFor> lookingFor;
+
+  /// Any of these positions (people not showing one never match).
+  final Set<SexualPosition> positions;
   final String query;
 
   bool get isDefault =>
@@ -779,9 +832,11 @@ class ExploreFilters {
       ageRange.start <= minAge &&
       ageRange.end >= maxAge &&
       lookingFor.isEmpty &&
+      positions.isEmpty &&
       query.isEmpty &&
       !hasPlace &&
-      !favoritesOnly;
+      !favoritesOnly &&
+      !notesOnly;
 
   ExploreFilters copyWith({
     ExploreSort? sort,
@@ -790,9 +845,11 @@ class ExploreFilters {
     bool clearDistance = false,
     RangeValues? ageRange,
     Set<LookingFor>? lookingFor,
+    Set<SexualPosition>? positions,
     String? query,
     bool? hasPlace,
     bool? favoritesOnly,
+    bool? notesOnly,
   }) {
     return ExploreFilters(
       sort: sort ?? this.sort,
@@ -801,9 +858,11 @@ class ExploreFilters {
           clearDistance ? null : (maxDistanceKm ?? this.maxDistanceKm),
       ageRange: ageRange ?? this.ageRange,
       lookingFor: lookingFor ?? this.lookingFor,
+      positions: positions ?? this.positions,
       query: query ?? this.query,
       hasPlace: hasPlace ?? this.hasPlace,
       favoritesOnly: favoritesOnly ?? this.favoritesOnly,
+      notesOnly: notesOnly ?? this.notesOnly,
     );
   }
 
@@ -818,8 +877,11 @@ class ExploreFilters {
         if (ageRange.end < maxAge) 'max_age': ageRange.end.round().toString(),
         if (lookingFor.isNotEmpty)
           'looking_for': [for (final l in lookingFor) l.name]..sort(),
+        if (positions.isNotEmpty)
+          'position': [for (final p in positions) p.apiName]..sort(),
         if (hasPlace) 'has_place': 'true',
         if (favoritesOnly) 'favorites': 'true',
+        if (notesOnly) 'notes': 'true',
         if (query.trim().isNotEmpty) 'q': query.trim(),
       };
 
@@ -843,6 +905,9 @@ class ExploreFilters {
     }
     if (lookingFor.isNotEmpty &&
         p.lookingFor.intersection(lookingFor).isEmpty) {
+      return false;
+    }
+    if (positions.isNotEmpty && !positions.contains(p.sexualPosition)) {
       return false;
     }
     if (hasPlace && !p.hasPlace) return false;

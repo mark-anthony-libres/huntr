@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/models.dart';
 import '../theme.dart';
+import 'roam/roaming.dart';
 import 'verified_badge.dart';
 import 'avatar.dart';
 
@@ -47,7 +48,7 @@ class ProfileTile extends StatelessWidget {
     return Semantics(
       button: true,
       label:
-          '${profile.nameAndAge}, ${profile.distanceLabel}${profile.online ? ', online' : ''}${profile.isNew ? ', new' : ''}',
+          '${profile.nameAndAge}, ${profile.roaming != null ? 'roaming' : profile.distanceLabel}${profile.online ? ', online' : ''}${profile.isNew ? ', new' : ''}',
       child: Material(
         color: HuntrColors.surface,
         clipBehavior: Clip.antiAlias,
@@ -83,12 +84,18 @@ class ProfileTile extends StatelessWidget {
                   ),
                 ),
 
-              // ---- top corners: status, then badges ----
-              if (profile.online)
+              // ---- top corners: status (and roaming), then badges ----
+              if (profile.online || profile.roaming != null)
                 Positioned(
                     top: inset,
                     left: inset,
-                    child: compact ? const _OnlineMark() : const _OnlinePill()),
+                    right: inset + 30,
+                    child: Wrap(spacing: 4, runSpacing: 4, children: [
+                      if (profile.online)
+                        compact ? const _OnlineMark() : const _OnlinePill(),
+                      // somewhere else, looking around here
+                      if (profile.roaming != null) RoamingTag(small: compact),
+                    ])),
               Positioned(
                 top: inset,
                 right: inset,
@@ -131,7 +138,8 @@ class ProfileTile extends StatelessWidget {
                         nameSize: nameSize,
                         badgeSize: compact ? 13 : 15,
                       ),
-                      if (showDistance) ...[
+                      // roaming: no distance (the tag says it)
+                      if (showDistance && profile.roaming == null) ...[
                         const SizedBox(height: 3),
                         Row(children: [
                           Icon(
@@ -196,7 +204,7 @@ class ProfileRowTile extends StatelessWidget {
     return Semantics(
       button: true,
       label:
-          '${profile.nameAndAge}, ${profile.distanceLabel}${profile.online ? ', online' : ''}${profile.isNew ? ', new' : ''}',
+          '${profile.nameAndAge}, ${profile.roaming != null ? 'roaming' : profile.distanceLabel}${profile.online ? ', online' : ''}${profile.isNew ? ', new' : ''}',
       child: Material(
         color: HuntrColors.surface,
         clipBehavior: Clip.antiAlias,
@@ -215,6 +223,9 @@ class ProfileRowTile extends StatelessWidget {
                     child: ProfileArt(profile: profile, fontSize: 28)),
                 if (profile.online)
                   const Positioned(top: 7, left: 7, child: _OnlineMark()),
+                if (profile.roaming != null)
+                  const Positioned(
+                      left: 6, bottom: 6, child: RoamingTag(small: true)),
               ]),
             ),
             Expanded(

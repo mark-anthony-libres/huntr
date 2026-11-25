@@ -16,7 +16,10 @@ import 'profile_pager.dart';
 import '../widgets/explore/empty_explore.dart';
 import '../widgets/explore/explore_map.dart';
 import '../widgets/explore/filter_sheet.dart';
-import '../widgets/explore/looking_for_dropdown.dart';
+import '../widgets/explore/filter_choice_sheets.dart';
+import '../widgets/explore/filters_button.dart';
+import '../widgets/roam/roaming.dart';
+import 'roam_screen.dart';
 import '../widgets/me/section_states.dart';
 import '../widgets/new_items_pill.dart';
 
@@ -34,6 +37,11 @@ class _ExploreScreenState extends State<ExploreScreen> {
   String? _loadError;
 
   final _scroll = ScrollController();
+
+  /// The quick filters' row, and which of them were on (when that changes
+  /// the row goes back to its start, where the ones on are).
+  final _chipsScroll = ScrollController();
+  String _chipsOn = '';
 
   /// The list's header (the title): the pill sits under it at the top.
   final _listHeader = GlobalKey();
@@ -91,7 +99,30 @@ class _ExploreScreenState extends State<ExploreScreen> {
     if (_started || ServicesScope.exploreOf(context) == null) return;
     _started = true;
     _loadNearby();
+    unawaited(_loadRoam());
     _watch.start();
+  }
+
+  /// Where I roam (the Roam button shows it).
+  Future<void> _loadRoam() async {
+    final explore = ServicesScope.exploreOf(context);
+    final app = AppScope.read(context);
+    final token = app.sessionToken;
+    if (explore == null || token == null) return;
+    try {
+      app.setMyRoam(await explore.fetchRoam(token));
+    } catch (error) {
+      debugPrint('Roam not loaded: $error');
+    }
+  }
+
+  /// Roam: pick a place; when roaming changed, Explore loads again there.
+  Future<void> _openRoam() async {
+    final changed = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(builder: (_) => const RoamScreen()));
+    if (changed != true || !mounted) return;
+    if (_scroll.hasClients) _scroll.jumpTo(0);
+    await _loadNearby();
   }
 
   /// The first page (or, with [more], the next one).
@@ -203,6 +234,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
     _reload?.cancel();
     _watch.stop();
     _scroll.dispose();
+    _chipsScroll.dispose();
     super.dispose();
   }
 
@@ -281,77 +313,170 @@ class _ExploreScreenState extends State<ExploreScreen> {
       childAspectRatio: wall ? 0.62 : 0.8,
     );
 
+    // how many filters are on (the All filters button's badge)
+    final filtersOn = [
+      f.onlineOnly,
+      f.hasPlace,
+      f.favoritesOnly,
+      f.notesOnly,
+      f.lookingFor.isNotEmpty,
+      f.positions.isNotEmpty,
+      !AgeFilterChip.isAny(f.ageRange),
+      f.maxDistanceKm != null,
+      f.sort != ExploreSort.nearest,
+      f.query.isNotEmpty,
+    ].where((on) => on).length;
+
     final Widget header = Padding(
       padding: const EdgeInsets.fromLTRB(20, 12, 12, 4),
       child: Row(
         children: [
+          // the title keeps its size; Roam takes what's left beside it
+          ShaderMask(
+            shaderCallback: HuntrColors.accentGradient.createShader,
+            child: Text('Explore',
+                maxLines: 1,
+                style: text.headlineLarge?.copyWith(
+                    fontWeight: FontWeight.w800, color: Colors.white)),
+          ),
+          const SizedBox(width: 12),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                ShaderMask(
-                  shaderCallback: HuntrColors.accentGradient.createShader,
-                  child: Text('Explore',
-                      style: text.headlineLarge?.copyWith(
-                          fontWeight: FontWeight.w800, color: Colors.white)),
-                ),
-              ],
-            ),
+            child: onBackend
+                // a small phone: its place shortens, never pushing the
+                // title or Filters off
+                ? Align(
+                    alignment: Alignment.centerRight,
+                    child: RoamButton(roam: app.myRoam, onPressed: _openRoam))
+                : const SizedBox.shrink(),
           ),
-          IconButton.outlined(
-            tooltip: 'All filters',
-            style: _roundButton,
-            icon: Badge(
-              isLabelVisible: !f.isDefault,
-              smallSize: 8,
-              child: const Icon(Icons.tune),
-            ),
-            onPressed: () => _showFilters(context),
-          ),
+          if (onBackend) const SizedBox(width: 8),
+          FiltersButton(
+              count: filtersOn, onPressed: () => _showFilters(context)),
         ],
       ),
     );
+    // the quick filters, the ones on first (with Clear before them), so
+    // they're in view on a phone without scrolling the row
+    final chips = <(String, bool, Widget)>[
+      (
+        'online',
+        f.onlineOnly,
+        PillChip(
+          leading: const OnlineDot(size: 10),
+          label: 'Online now',
+          selected: f.onlineOnly,
+          onSelected: (v) => app.filters = f.copyWith(onlineOnly: v),
+        )
+      ),
+      (
+        'hasPlace',
+        f.hasPlace,
+        PillChip(
+          key: const Key('hasPlaceChip'),
+          icon: Icons.home_rounded,
+          label: 'Has a place',
+          selected: f.hasPlace,
+          onSelected: (v) => app.filters = f.copyWith(hasPlace: v),
+        )
+      ),
+      (
+        'favorites',
+        f.favoritesOnly,
+        PillChip(
+          key: const Key('favoritesChip'),
+          icon: Icons.star_rounded,
+          label: 'Favorites',
+          selected: f.favoritesOnly,
+          onSelected: (v) => app.filters = f.copyWith(favoritesOnly: v),
+        )
+      ),
+      (
+        'notes',
+        f.notesOnly,
+        PillChip(
+          key: const Key('notesChip'),
+          icon: Icons.sticky_note_2_outlined,
+          label: 'With notes',
+          selected: f.notesOnly,
+          onSelected: (v) => app.filters = f.copyWith(notesOnly: v),
+        )
+      ),
+      (
+        'lookingFor',
+        f.lookingFor.isNotEmpty,
+        ChoicesFilterChip<LookingFor>(
+          name: 'lookingFor',
+          title: 'Looking for',
+          icon: Icons.favorite_border,
+          options: LookingFor.values,
+          labelOf: (l) => l.label,
+          iconOf: (l) => l.icon,
+          chosen: f.lookingFor,
+          onChanged: (next) => app.filters = f.copyWith(lookingFor: next),
+        )
+      ),
+      (
+        'age',
+        !AgeFilterChip.isAny(f.ageRange),
+        AgeFilterChip(
+          range: f.ageRange,
+          onChanged: (range) => app.filters = f.copyWith(ageRange: range),
+        )
+      ),
+      (
+        'position',
+        f.positions.isNotEmpty,
+        ChoicesFilterChip<SexualPosition>(
+          name: 'position',
+          title: 'Position',
+          note: "People who don't show a position won't appear.",
+          icon: Icons.swap_vert_rounded,
+          options: SexualPosition.values,
+          labelOf: (p) => p.label,
+          chosen: f.positions,
+          onChanged: (next) => app.filters = f.copyWith(positions: next),
+        )
+      ),
+    ];
+    final on = [
+      for (final c in chips)
+        if (c.$2) c
+    ];
+    final rest = [
+      for (final c in chips)
+        if (!c.$2) c
+    ];
+    final chipsOn = [for (final c in on) c.$1].join(',');
+    if (chipsOn != _chipsOn) {
+      _chipsOn = chipsOn;
+      // back to the start, where the ones on now are
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_chipsScroll.hasClients && _chipsScroll.offset > 0) {
+          _chipsScroll.animateTo(0,
+              duration: const Duration(milliseconds: 250),
+              curve: Curves.easeOutCubic);
+        }
+      });
+    }
     final Widget quickFilters = SizedBox(
       height: 60,
-      child: ListView(
+      // a row (a handful of chips), keyed so one that moves stays itself
+      child: SingleChildScrollView(
+        key: const Key('quickFilters'),
+        controller: _chipsScroll,
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-        children: [
-          PillChip(
-            leading: const OnlineDot(size: 10),
-            label: 'Online now',
-            selected: f.onlineOnly,
-            onSelected: (v) => app.filters = f.copyWith(onlineOnly: v),
-          ),
-          const SizedBox(width: 8),
-          PillChip(
-            key: const Key('hasPlaceChip'),
-            icon: Icons.home_rounded,
-            label: 'Has a place',
-            selected: f.hasPlace,
-            onSelected: (v) => app.filters = f.copyWith(hasPlace: v),
-          ),
-          const SizedBox(width: 8),
-          PillChip(
-            key: const Key('favoritesChip'),
-            icon: Icons.star_rounded,
-            label: 'Favorites',
-            selected: f.favoritesOnly,
-            onSelected: (v) => app.filters = f.copyWith(favoritesOnly: v),
-          ),
-          const SizedBox(width: 8),
-          LookingForDropdown(
-            chosen: f.lookingFor,
-            onChanged: (next) => app.filters = f.copyWith(lookingFor: next),
-          ),
-          const SizedBox(width: 8),
+        child: Row(spacing: 8, children: [
           if (!f.isDefault)
             ActionChip(
+              key: const Key('clearFilters'),
               avatar: const Icon(Icons.close, size: 18),
               label: const Text('Clear'),
               onPressed: () => app.filters = const ExploreFilters(),
             ),
-        ],
+          for (final (name, _, chip) in [...on, ...rest])
+            KeyedSubtree(key: ValueKey('quick-$name'), child: chip),
+        ]),
       ),
     );
 
@@ -410,6 +535,9 @@ class _ExploreScreenState extends State<ExploreScreen> {
             quickFilters,
             Expanded(
               child: ExploreMap(
+                  // somewhere else to roam: a map around it
+                  key: ValueKey(
+                      'map-${app.myRoam?.latitude}-${app.myRoam?.longitude}'),
                   explore: ServicesScope.exploreOf(context)!,
                   onOpen: _open,
                   // the zoom buttons sit above the floating List button
@@ -581,15 +709,47 @@ class _ExploreScreenState extends State<ExploreScreen> {
             ),
           ),
     );
-    if (_arrived.isNotEmpty) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _measureHeader());
-    }
+    // (the floating All filters button and the pill go by its height)
+    WidgetsBinding.instance.addPostFrameCallback((_) => _measureHeader());
     return Scaffold(
       floatingActionButton: mapToggle,
       // new people nearby (or newly online): the pill over the list (the
       // Stack stays either way, so the list and map still fade between them)
       body: Stack(children: [
         body,
+        // the header scrolled away: All filters floats at the top right
+        if (map == null)
+          ListenableBuilder(
+            listenable: _scroll,
+            builder: (context, button) {
+              final away = _scroll.hasClients &&
+                  _scroll.offset > (_headerHeight > 0 ? _headerHeight : 64);
+              return Positioned(
+                top: MediaQuery.paddingOf(context).top + 10,
+                right: 12,
+                child: IgnorePointer(
+                  ignoring: !away,
+                  child: AnimatedSlide(
+                    offset: away ? Offset.zero : const Offset(0, -0.6),
+                    duration: const Duration(milliseconds: 220),
+                    curve: Curves.easeOutCubic,
+                    child: AnimatedOpacity(
+                      opacity: away ? 1 : 0,
+                      duration: const Duration(milliseconds: 180),
+                      child: button,
+                    ),
+                  ),
+                ),
+              );
+            },
+            child: KeyedSubtree(
+              key: const Key('floatingFilters'),
+              child: FiltersButton(
+                  count: filtersOn,
+                  raised: true,
+                  onPressed: () => _showFilters(context)),
+            ),
+          ),
         if (onBackend && map == null)
           ListenableBuilder(
             listenable: _scroll,
@@ -624,19 +784,8 @@ class _ExploreScreenState extends State<ExploreScreen> {
   }
 }
 
-/// The round, outlined search and filter buttons.
-/// Search, map and filters: compact, so the title beside them has room.
 /// How long the list and the map take to turn into each other.
 const _switchDuration = Duration(milliseconds: 320);
-
-final _roundButton = IconButton.styleFrom(
-  fixedSize: const Size(40, 40),
-  minimumSize: const Size(40, 40),
-  padding: EdgeInsets.zero,
-  iconSize: 20,
-  side: const BorderSide(color: Color(0xFF353944), width: 1.2),
-  backgroundColor: HuntrColors.night.withValues(alpha: 0.4),
-);
 
 /// A grey tile while people nearby load.
 class _TilePlaceholder extends StatelessWidget {

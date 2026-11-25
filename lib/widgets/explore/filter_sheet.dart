@@ -15,8 +15,9 @@ class _FilterSheetState extends State<FilterSheet> {
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
     final dist = f.maxDistanceKm ?? 25;
+    // scrolls when the screen is too short for it all
     return SafeArea(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -94,6 +95,26 @@ class _FilterSheetState extends State<FilterSheet> {
                       final next = {...f.lookingFor};
                       v ? next.add(l) : next.remove(l);
                       setState(() => f = f.copyWith(lookingFor: next));
+                    },
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text('Position', style: text.titleSmall),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final position in SexualPosition.values)
+                  FilterChip(
+                    label: Text(position.label),
+                    showCheckmark: false,
+                    selected: f.positions.contains(position),
+                    onSelected: (v) {
+                      final next = {...f.positions};
+                      v ? next.add(position) : next.remove(position);
+                      setState(() => f = f.copyWith(positions: next));
                     },
                   ),
               ],

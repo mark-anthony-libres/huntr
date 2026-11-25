@@ -73,6 +73,7 @@ class AppState extends ChangeNotifier {
     if (albumLimits != null) myAlbums.clear(); // they came from the backend
     nearby = null;
     nearbyNextOffset = null;
+    myRoam = null;
     _seenElsewhere.clear();
     _favorites.clear();
     _notes.clear();
@@ -102,6 +103,16 @@ class AppState extends ChangeNotifier {
 
   void updateMyLocation(GeoPoint location) {
     myLocation = location;
+    notifyListeners();
+  }
+
+  /// Where I roam (null: I don't): Explore (the list, the map, stories) is
+  /// around it, and people there see me there, marked as roaming. My real
+  /// location ([myLocation]) stays what chat and Nearby use.
+  RoamSpot? myRoam;
+
+  void setMyRoam(RoamSpot? roam) {
+    myRoam = roam;
     notifyListeners();
   }
 
@@ -593,7 +604,14 @@ class AppState extends ChangeNotifier {
   bool showsInExplore(Profile p) =>
       !_blocked.contains(p.id) &&
       (!_filters.favoritesOnly || _favorites.contains(p.id)) &&
+      (!_filters.notesOnly || _hasNote(p.backendId)) &&
       _filters.matches(p);
+
+  /// For With notes: from the backend, everyone it sent has one unless I
+  /// removed it since; without it (the samples), only the notes I know of.
+  bool _hasNote(int? id) =>
+      id != null &&
+      (_notes.containsKey(id) ? _notes[id] != null : nearby != null);
 
   List<Profile> get favoriteProfiles => _profiles
       .where((p) => _favorites.contains(p.id) && !_blocked.contains(p.id))

@@ -3172,6 +3172,56 @@ Future<String?> savePersonNote(
       (data) => data['body'] as String?,
     );
 
+/// GET {backendUrl}/roam: where I roam (null: I don't).
+Future<RoamSpot?> fetchRoam(
+        {required String backendUrl,
+        required String token,
+        http.Client? client}) =>
+    _sendAuthorized(
+      client,
+      (httpClient) => httpClient.get(_endpoint(backendUrl, '/roam'),
+          headers: _authorization(token)),
+      (data) => RoamSpot.fromJson(data['roaming']),
+    );
+
+/// PUT {backendUrl}/roam: roam there (anywhere, as often as I like); the
+/// roam as kept.
+Future<RoamSpot?> startRoam(
+        {required String backendUrl,
+        required String token,
+        required double latitude,
+        required double longitude,
+        required String place,
+        String? detail,
+        http.Client? client}) =>
+    _sendAuthorized(
+      client,
+      (httpClient) => httpClient.put(_endpoint(backendUrl, '/roam'),
+          headers: {
+            ..._authorization(token),
+            'Content-Type': 'application/json'
+          },
+          body: jsonEncode({
+            'latitude': latitude,
+            'longitude': longitude,
+            'place': place,
+            if (detail != null) 'detail': detail,
+          })),
+      (data) => RoamSpot.fromJson(data['roaming']),
+    );
+
+/// DELETE {backendUrl}/roam: back to where I am.
+Future<void> stopRoam(
+        {required String backendUrl,
+        required String token,
+        http.Client? client}) =>
+    _sendAuthorized(
+      client,
+      (httpClient) => httpClient.delete(_endpoint(backendUrl, '/roam'),
+          headers: _authorization(token)),
+      (_) {},
+    );
+
 /// GET {backendUrl}/profile/favorites: whom I starred (user ids).
 Future<List<int>> fetchMyFavorites(
         {required String backendUrl,

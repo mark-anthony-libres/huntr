@@ -10,6 +10,7 @@ import '../../services/explore_service.dart';
 import '../../services/huntr_backend.dart';
 import '../../state/app_state.dart';
 import '../../theme.dart';
+import '../roam/roaming.dart';
 import '../avatar.dart';
 import '../night_map.dart';
 
@@ -60,6 +61,9 @@ class MapTiles {
   List<MapTiles> get inOrder => [this, ...?fallback?.inOrder];
 
   static const _mapTilerKey = String.fromEnvironment('MAPTILER_KEY');
+
+  /// MapTiler's key (empty: none), for its place search too (Roam).
+  static String get mapTilerKey => _mapTilerKey;
   static const _customUrl = String.fromEnvironment('MAP_TILE_URL');
   static const _customCredit = String.fromEnvironment('MAP_TILE_ATTRIBUTION');
   static const _fallbackUrl = String.fromEnvironment('MAP_FALLBACK_URL');
@@ -173,8 +177,12 @@ class _ExploreMapState extends State<ExploreMap> {
   /// Manila, until my own position is known.
   static const _fallback = LatLng(14.5995, 120.9842);
 
+  /// Where the map is around: where I roam, else where I am.
   LatLng? get _me {
-    final mine = AppScope.read(context).myLocation;
+    final app = AppScope.read(context);
+    final roam = app.myRoam;
+    if (roam != null) return LatLng(roam.latitude, roam.longitude);
+    final mine = app.myLocation;
     return mine == null ? null : LatLng(mine.latitude, mine.longitude);
   }
 
@@ -571,9 +579,20 @@ class _PeopleLayer extends StatelessWidget {
             height: single,
             child: GestureDetector(
               onTap: () => onOpen(group.single.profile),
-              child: faces && group.single.profile.photoUrls.isNotEmpty
-                  ? _FaceMarker(profile: group.single.profile, size: single)
-                  : _MarkMarker(profile: group.single.profile, size: single),
+              child: Stack(clipBehavior: Clip.none, children: [
+                faces && group.single.profile.photoUrls.isNotEmpty
+                    ? _FaceMarker(profile: group.single.profile, size: single)
+                    : _MarkMarker(profile: group.single.profile, size: single),
+                // roaming: here to look around, not here
+                if (group.single.profile.roaming != null)
+                  Positioned(
+                    top: single + 2,
+                    left: -40,
+                    right: -40,
+                    child: const Center(
+                        child: IgnorePointer(child: RoamingTag(small: true))),
+                  ),
+              ]),
             ),
           )
         else

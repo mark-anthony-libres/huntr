@@ -46,6 +46,28 @@ class ExploreService {
           token: token,
           userId: userId);
 
+  /// Where I roam (null: I don't).
+  Future<RoamSpot?> fetchRoam(String token) async => backend.fetchRoam(
+      backendUrl: await GoogleOAuthConfig.loadBackendUrl(), token: token);
+
+  /// Roam there; the roam as kept.
+  Future<RoamSpot?> startRoam(String token,
+          {required double latitude,
+          required double longitude,
+          required String place,
+          String? detail}) async =>
+      backend.startRoam(
+          backendUrl: await GoogleOAuthConfig.loadBackendUrl(),
+          token: token,
+          latitude: latitude,
+          longitude: longitude,
+          place: place,
+          detail: detail);
+
+  /// Back to where I am.
+  Future<void> stopRoam(String token) async => backend.stopRoam(
+      backendUrl: await GoogleOAuthConfig.loadBackendUrl(), token: token);
+
   /// One person with all their photos.
   Future<Profile> fetchPerson(String token, int userId) async =>
       backend.fetchPerson(

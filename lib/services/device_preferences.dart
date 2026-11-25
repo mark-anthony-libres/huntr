@@ -26,6 +26,11 @@ abstract class DevicePreferences {
   /// first); empty until one was played.
   Future<List<int>> readPlayedVoices();
   Future<void> savePlayedVoices(List<int> messageIds);
+
+  /// The places I roamed last (Roam's Recent), newest first, as saved
+  /// (each a JSON object); empty until I roamed.
+  Future<List<Map<String, dynamic>>> readRecentRoams();
+  Future<void> saveRecentRoams(List<Map<String, dynamic>> places);
 }
 
 /// Kept in the platform's secure storage, like the session token (the one
@@ -38,6 +43,7 @@ class SecureDevicePreferences implements DevicePreferences {
   static const _exploreLayoutKey = 'huntr_explore_layout';
   static const _quickReactionsKey = 'huntr_quick_reactions';
   static const _playedVoicesKey = 'huntr_played_voices';
+  static const _recentRoamsKey = 'huntr_recent_roams';
   static const _storage = FlutterSecureStorage();
 
   @override
@@ -91,4 +97,22 @@ class SecureDevicePreferences implements DevicePreferences {
   @override
   Future<void> savePlayedVoices(List<int> messageIds) =>
       _storage.write(key: _playedVoicesKey, value: jsonEncode(messageIds));
+
+  @override
+  Future<List<Map<String, dynamic>>> readRecentRoams() async {
+    final saved = await _storage.read(key: _recentRoamsKey);
+    if (saved == null) return const [];
+    try {
+      return [
+        for (final place in jsonDecode(saved) as List)
+          if (place is Map<String, dynamic>) place
+      ];
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  @override
+  Future<void> saveRecentRoams(List<Map<String, dynamic>> places) =>
+      _storage.write(key: _recentRoamsKey, value: jsonEncode(places));
 }

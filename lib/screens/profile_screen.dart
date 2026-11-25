@@ -5,6 +5,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 
 import '../state/block_state.dart';
+import '../widgets/roam/roaming.dart';
 import '../widgets/block_gate.dart';
 import '../models/models.dart';
 import '../models/stickers.dart';
@@ -201,19 +202,25 @@ class ProfileScreen extends StatelessWidget {
             runSpacing: 8,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
+              // roaming: where (tapped), instead of a distance
+              if (!_isPreview && p.roaming != null)
+                RoamingTag(
+                    key: const Key('profileRoaming'),
+                    onTap: () => showRoamWhere(context, p)),
               ProfileMeta(
                 icon: p.online ? null : Icons.schedule,
                 leading: p.online ? const OnlineDot(size: 10) : null,
                 label: p.activeLabel(DateTime.now()),
                 color: p.online ? HuntrColors.online : HuntrColors.muted,
               ),
-              ProfileMeta(
-                  icon: Icons.near_me_outlined,
-                  label: _isPreview
-                      ? (showDistance
-                          ? 'Distance shown to others'
-                          : 'Distance hidden')
-                      : p.distanceLabel),
+              if (_isPreview || p.roaming == null)
+                ProfileMeta(
+                    icon: Icons.near_me_outlined,
+                    label: _isPreview
+                        ? (showDistance
+                            ? 'Distance shown to others'
+                            : 'Distance hidden')
+                        : p.distanceLabel),
               if (p.hasPlace)
                 ProfileMeta(
                     key: const Key('profileHasPlace'),
