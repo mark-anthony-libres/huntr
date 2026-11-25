@@ -20,7 +20,8 @@ class LocationMap extends StatelessWidget {
       this.person,
       this.interactive = false,
       this.zoom = 15,
-      this.controller});
+      this.controller,
+      this.buttons = const []});
 
   final SharedPosition position;
 
@@ -29,6 +30,9 @@ class LocationMap extends StatelessWidget {
   final bool interactive;
   final double zoom;
   final MapController? controller;
+
+  /// Round buttons above the zoom card (e.g. back to the pin).
+  final List<Widget> buttons;
 
   @override
   Widget build(BuildContext context) {
@@ -40,6 +44,7 @@ class LocationMap extends StatelessWidget {
       // a location can be anywhere: wider than Explore's
       minZoom: _chatMinZoom,
       interactive: interactive,
+      buttons: buttons,
       layers: [
         if (position.accuracy != null && position.accuracy! > 0)
           CircleLayer(circles: [

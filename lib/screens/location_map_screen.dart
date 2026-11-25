@@ -8,6 +8,7 @@ import '../state/messaging_state.dart';
 import '../theme.dart';
 import '../widgets/chat/location_bubble.dart';
 import '../widgets/chat/media_bubble.dart' show remainingLabel;
+import '../widgets/map_controls.dart' show MapButton;
 
 /// A shared location on a full-screen map. A live one follows each update
 /// as it arrives (the map moves with the pin unless I've panned away).
@@ -87,18 +88,20 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
                   position: position,
                   person: widget.person,
                   interactive: true,
-                  controller: _map),
-            ),
-      floatingActionButton: position == null
-          ? null
-          : FloatingActionButton.small(
-              tooltip: 'Back to the pin',
-              backgroundColor: HuntrColors.surfaceHigh,
-              onPressed: () {
-                _follow = true;
-                _map.move(LatLng(position.latitude, position.longitude), 16);
-              },
-              child: Icon(Icons.my_location_rounded, color: HuntrColors.orange),
+                  controller: _map,
+                  // above the zoom card (not over it)
+                  buttons: [
+                    MapButton(
+                      key: const Key('backToPin'),
+                      tooltip: 'Back to the pin',
+                      icon: Icons.my_location_rounded,
+                      onPressed: () {
+                        _follow = true;
+                        _map.move(
+                            LatLng(position.latitude, position.longitude), 16);
+                      },
+                    ),
+                  ]),
             ),
     );
   }
