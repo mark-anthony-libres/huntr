@@ -664,6 +664,12 @@ class _ChatScreenState extends State<ChatScreen> {
   /// Quick replies (while the box is empty) and the message box.
   /// The message box; [anonymous]: text and GIFs only (no attachments).
   List<Widget> _composer(Profile p, {bool anonymous = false}) {
+    // a voice message: direct chats only (a voice can tell who someone is);
+    // on a phone its mic sits inside the empty box, elsewhere beside it
+    final canRecord = _conversationId != null && !anonymous;
+    final micInside = canRecord &&
+        _input.text.trim().isEmpty &&
+        MediaQuery.sizeOf(context).width < 600;
     // room for a separate GIF button beside +
     final wideComposer = MediaQuery.sizeOf(context).width >= 600;
     return [
@@ -789,8 +795,19 @@ class _ChatScreenState extends State<ChatScreen> {
                           maxLines: 5,
                           textCapitalization: TextCapitalization.sentences,
                           inputFormatters: const [EmoticonFormatter()],
-                          decoration:
-                              InputDecoration(hintText: 'Message ${p.name}…'),
+                          decoration: InputDecoration(
+                            hintText: 'Message ${p.name}…',
+                            // phones: the mic inside the box, on the right
+                            suffixIcon: micInside
+                                ? IconButton(
+                                    key: const Key('voiceButton'),
+                                    tooltip: 'Record a voice message',
+                                    icon: Icon(Icons.mic_none_rounded,
+                                        color: HuntrColors.orange),
+                                    onPressed: _startVoice,
+                                  )
+                                : null,
+                          ),
                           onSubmitted: (v) => _send(p, v),
                         ),
                       ),
@@ -803,7 +820,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       child: _input.text.trim().isEmpty
                           // an empty box: a voice message instead (direct chats
                           // only: a voice can tell who someone is)
-                          ? _conversationId != null && !anonymous
+                          ? canRecord && !micInside
                               ? Padding(
                                   padding: const EdgeInsets.only(left: 6),
                                   child: IconButton(
@@ -815,10 +832,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                     ),
                                     icon: Icon(Icons.mic_none_rounded,
                                         color: HuntrColors.orange),
-                                    onPressed: () {
-                                      _inputFocus.unfocus();
-                                      setState(() => _recordingVoice = true);
-                                    },
+                                    onPressed: _startVoice,
                                   ),
                                 )
                               : const SizedBox(height: 48)
@@ -842,6 +856,12 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
       ),
     ];
+  }
+
+  /// Records a voice message: the recording bar takes the box's place.
+  void _startVoice() {
+    _inputFocus.unfocus();
+    setState(() => _recordingVoice = true);
   }
 
   /// Their profile, from the chat header: shown at once, then with all their
