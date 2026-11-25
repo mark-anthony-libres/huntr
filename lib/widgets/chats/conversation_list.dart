@@ -158,28 +158,48 @@ class _ConversationListState extends State<ConversationList> {
             SliverPadding(
               padding: pad(0, 12),
               sliver: SliverToBoxAdapter(
-                child: Wrap(spacing: 8, runSpacing: 8, children: [
-                  for (final filter in _ChatFilter.values)
-                    // someone anonymous can't be a favourite
-                    if (!_anonymous ||
-                        filter == _ChatFilter.all ||
-                        filter == _ChatFilter.unread)
-                      ChoiceChip(
-                        key: Key(filter == _ChatFilter.unread
-                            ? 'unreadChats'
-                            : 'chatFilter-${filter.name}'),
-                        label: Text(switch (filter) {
-                          _ChatFilter.all => 'All',
-                          _ChatFilter.online => 'Online',
-                          _ChatFilter.favorites => 'Favorites',
-                          _ChatFilter.unread =>
-                            'Unread${unreadTotal > 0 ? ' ($unreadTotal)' : ''}',
-                        }),
-                        selected: _filter == filter,
-                        showCheckmark: false,
-                        onSelected: (_) => _choose(filter),
-                      ),
-                ]),
+                // one line: compact chips, sliding sideways when the column
+                // is too narrow for them all (the wide layout's list), the
+                // ones past its edge fading out
+                child: ShaderMask(
+                  shaderCallback: (rect) => const LinearGradient(
+                    colors: [Colors.white, Colors.transparent],
+                    stops: [0.9, 1],
+                  ).createShader(rect),
+                  blendMode: BlendMode.dstIn,
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(spacing: 6, children: [
+                      for (final filter in _ChatFilter.values)
+                        // someone anonymous can't be a favourite
+                        if (!_anonymous ||
+                            filter == _ChatFilter.all ||
+                            filter == _ChatFilter.unread)
+                          ChoiceChip(
+                            key: Key(filter == _ChatFilter.unread
+                                ? 'unreadChats'
+                                : 'chatFilter-${filter.name}'),
+                            label: Text(switch (filter) {
+                              _ChatFilter.all => 'All',
+                              _ChatFilter.online => 'Online',
+                              _ChatFilter.favorites => 'Favorites',
+                              _ChatFilter.unread =>
+                                'Unread${unreadTotal > 0 ? ' ($unreadTotal)' : ''}',
+                            }),
+                            selected: _filter == filter,
+                            showCheckmark: false,
+                            visualDensity: VisualDensity.compact,
+                          labelStyle: const TextStyle(fontSize: 13.5),
+                            labelPadding:
+                                const EdgeInsets.symmetric(horizontal: 4),
+                            padding: const EdgeInsets.symmetric(horizontal: 6),
+                            onSelected: (_) => _choose(filter),
+                          ),
+                      // room to scroll the last one clear of the fade
+                      const SizedBox(width: 16),
+                    ]),
+                  ),
+                ),
               ),
             ),
             if (all == null && loadError != null)
