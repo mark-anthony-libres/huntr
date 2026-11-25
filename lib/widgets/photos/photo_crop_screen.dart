@@ -226,11 +226,19 @@ class _PhotoCropScreenState extends State<PhotoCropScreen> {
     });
   }
 
+  /// Zoom in or out a step, around the frame's middle.
+  void _zoomBy(double step) {
+    final viewport = _viewport;
+    if (viewport == null) return;
+    _setZoom((_zoom + step).clamp(1.0, _maxZoom), viewport);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.title),
+        title: Text(widget.title,
+            style: const TextStyle(fontWeight: FontWeight.w800)),
         leading: IconButton(
           tooltip: 'Cancel',
           icon: const Icon(Icons.close),
@@ -240,27 +248,35 @@ class _PhotoCropScreenState extends State<PhotoCropScreen> {
           // the tools: drawing on the photo, blurring parts of it
           if (widget.editable)
             Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: TextButton.icon(
+              padding: const EdgeInsets.only(right: 12),
+              child: FilledButton.icon(
                 key: const Key('photoEdit'),
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size(0, 42),
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14)),
+                ),
                 onPressed: () => setState(() {
                   _editing = !_editing;
                   if (!_editing) _tool = _Tool.move;
                 }),
                 icon: Icon(_editing ? Icons.check_rounded : Icons.brush_rounded,
                     size: 20),
-                label: Text(_editing ? 'Done' : 'Edit'),
+                label: Text(_editing ? 'Done' : 'Edit',
+                    style: const TextStyle(fontWeight: FontWeight.w700)),
               ),
             ),
         ],
       ),
       body: SafeArea(
         child: LayoutBuilder(builder: (context, box) {
-          // room for the tools too, when there are some
+          // room for the tools too, when there are some (the same either
+          // way, so the photo doesn't move when they open)
           final viewport = math
               .min(
-                  math.min(box.maxWidth - 40,
-                      box.maxHeight - (widget.editable ? 300 : 220)),
+                  math.min(box.maxWidth - 32,
+                      box.maxHeight - (widget.editable ? 400 : 230)),
                   560.0)
               .clamp(160.0, 560.0);
           if (_viewport != viewport) {
@@ -272,23 +288,15 @@ class _PhotoCropScreenState extends State<PhotoCropScreen> {
           final display = _displaySize(viewport);
           return Column(
             children: [
-              const SizedBox(height: 16),
-              Text(
-                  switch (_tool) {
-                    _Tool.move => 'Drag to move · pinch or scroll to zoom',
-                    _Tool.draw => 'Draw on the photo',
-                    _Tool.blur =>
-                      'Paint over anything to blur it (a face, a tattoo…)',
-                  },
-                  key: const Key('photoEditHint'),
-                  style: const TextStyle(color: HuntrColors.muted)),
-              const SizedBox(height: 16),
+              const SizedBox(height: 10),
+              _hint(),
+              const SizedBox(height: 14),
               Center(
                 child: SizedBox.square(
                   dimension: viewport,
                   child: Stack(children: [
                     ClipRRect(
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(18),
                       child: InteractiveViewer(
                         key: const Key('photoCropViewer'),
                         transformationController: _transform,
@@ -326,10 +334,16 @@ class _PhotoCropScreenState extends State<PhotoCropScreen> {
                 ),
               ),
               const SizedBox(height: 12),
+              // zoom out, the zoom, zoom in; fit (back to the whole photo)
               SizedBox(
                 width: viewport,
                 child: Row(children: [
-                  const Icon(Icons.zoom_out, color: HuntrColors.muted),
+                  _SquareButton(
+                    key: const Key('photoZoomOut'),
+                    tooltip: 'Zoom out',
+                    icon: Icons.zoom_out_rounded,
+                    onPressed: _zoom > 1.001 ? () => _zoomBy(-0.5) : null,
+                  ),
                   Expanded(
                     child: Slider(
                       key: const Key('photoCropZoom'),
@@ -339,45 +353,38 @@ class _PhotoCropScreenState extends State<PhotoCropScreen> {
                       onChanged: (zoom) => _setZoom(zoom, viewport),
                     ),
                   ),
-                  const Icon(Icons.zoom_in, color: HuntrColors.muted),
+                  _SquareButton(
+                    key: const Key('photoZoomIn'),
+                    tooltip: 'Zoom in',
+                    icon: Icons.zoom_in_rounded,
+                    onPressed:
+                        _zoom < _maxZoom - 0.001 ? () => _zoomBy(0.5) : null,
+                  ),
+                  const SizedBox(width: 12),
+                  _SquareButton(
+                    key: const Key('photoCropReset'),
+                    tooltip: 'Fit the photo',
+                    icon: Icons.fit_screen_rounded,
+                    onPressed: () => _center(viewport),
+                  ),
                 ]),
               ),
               const Spacer(),
-              if (_editing)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 560),
-                    child: _toolbar(),
-                  ),
-                )
-              else
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 560),
-                    child: Row(children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          style: OutlinedButton.styleFrom(
-                              minimumSize: const Size.fromHeight(52),
-                              shape: const StadiumBorder()),
-                          onPressed: () => _center(viewport),
-                          child: const Text('Reset'),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        flex: 2,
-                        child: FilledButton(
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 560),
+                  child: _editing
+                      ? _toolbar()
+                      : FilledButton(
                           key: const Key('photoCropConfirm'),
+                          style: FilledButton.styleFrom(
+                              minimumSize: const Size.fromHeight(52)),
                           onPressed: _confirm,
                           child: Text(widget.confirmLabel),
                         ),
-                      ),
-                    ]),
-                  ),
                 ),
+              ),
             ],
           );
         }),
@@ -385,40 +392,79 @@ class _PhotoCropScreenState extends State<PhotoCropScreen> {
     );
   }
 
-  /// Move, Draw or Blur, Undo and Redo; Draw's colours and brush size,
-  /// Blur's brush size.
+  /// What the tool does, in a pill over the photo.
+  Widget _hint() {
+    final (icon, text) = switch (_tool) {
+      _Tool.move => (
+          Icons.open_with_rounded,
+          'Drag to move · pinch or scroll to zoom'
+        ),
+      _Tool.draw => (Icons.brush_rounded, 'Draw on the photo'),
+      _Tool.blur => (
+          Icons.blur_on_rounded,
+          'Paint over a face or a tattoo to blur it'
+        ),
+    };
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: HuntrColors.surface,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: HuntrColors.border),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(icon, size: 18, color: HuntrColors.orange),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(text,
+                key: const Key('photoEditHint'),
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 14)),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  /// Move, Draw or Blur, Undo and Redo; Draw's colours, and the brush
+  /// size for Draw and Blur.
   Widget _toolbar() {
     Widget tool(_Tool which, IconData icon, String label) {
       final on = _tool == which;
       return Expanded(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 5),
+          padding: const EdgeInsets.only(right: 10),
           child: Material(
             color: on
-                ? HuntrColors.orange.withValues(alpha: 0.16)
+                ? HuntrColors.orange.withValues(alpha: 0.18)
                 : HuntrColors.surfaceHigh,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(16),
               side: BorderSide(
-                  color: on ? HuntrColors.orange : Colors.transparent,
-                  width: 1.4),
+                  color: on ? HuntrColors.orange : HuntrColors.border,
+                  width: on ? 1.6 : 1),
             ),
             clipBehavior: Clip.antiAlias,
             child: InkWell(
               key: Key('photoTool-${which.name}'),
               onTap: () => setState(() => _tool = which),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  Icon(icon,
-                      size: 24, color: on ? HuntrColors.orange : Colors.white),
-                  const SizedBox(height: 5),
-                  Text(label,
-                      style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: on ? HuntrColors.orange : Colors.white)),
-                ]),
+              child: SizedBox(
+                height: 72,
+                child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(icon,
+                          size: 26,
+                          color: on ? HuntrColors.orange : Colors.white),
+                      const SizedBox(height: 6),
+                      Text(label,
+                          style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: on ? HuntrColors.orange : Colors.white)),
+                    ]),
               ),
             ),
           ),
@@ -426,89 +472,115 @@ class _PhotoCropScreenState extends State<PhotoCropScreen> {
       );
     }
 
+    const label = TextStyle(fontSize: 15, fontWeight: FontWeight.w600);
     final size = _tool == _Tool.draw ? _drawSize : _blurSize;
-    return Column(mainAxisSize: MainAxisSize.min, children: [
-      Row(children: [
-        tool(_Tool.move, Icons.open_with_rounded, 'Move'),
-        tool(_Tool.draw, Icons.brush_rounded, 'Draw'),
-        tool(_Tool.blur, Icons.blur_on_rounded, 'Blur'),
-        const SizedBox(width: 3),
-        IconButton(
-          key: const Key('photoEditUndo'),
-          tooltip: 'Undo',
-          onPressed: _strokes.isEmpty ? null : _undo,
-          icon: const Icon(Icons.undo_rounded),
-        ),
-        IconButton(
-          key: const Key('photoEditRedo'),
-          tooltip: 'Redo',
-          onPressed: _undone.isEmpty ? null : _redo,
-          icon: const Icon(Icons.redo_rounded),
-        ),
-      ]),
-      if (_tool != _Tool.move) ...[
-        const SizedBox(height: 16),
-        if (_tool == _Tool.draw)
-          SizedBox(
-            height: 40,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              children: [
-                for (final color in _drawColors)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 5),
-                    child: Semantics(
-                      button: true,
-                      selected: color == _color,
-                      label: 'Colour',
-                      child: GestureDetector(
-                        onTap: () => setState(() => _color = color),
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 150),
-                          width: 32,
-                          height: 32,
-                          decoration: BoxDecoration(
-                            color: color,
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                                color: color == _color
-                                    ? HuntrColors.orange
-                                    : Colors.white24,
-                                width: color == _color ? 3 : 1),
-                          ),
-                        ),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(children: [
+          tool(_Tool.move, Icons.open_with_rounded, 'Move'),
+          tool(_Tool.draw, Icons.brush_rounded, 'Draw'),
+          tool(_Tool.blur, Icons.blur_on_rounded, 'Blur'),
+          Container(
+              width: 1,
+              height: 48,
+              margin: const EdgeInsets.only(right: 10),
+              color: HuntrColors.border),
+          Column(children: [
+            _SquareButton(
+              key: const Key('photoEditUndo'),
+              tooltip: 'Undo',
+              icon: Icons.undo_rounded,
+              height: 34,
+              onPressed: _strokes.isEmpty ? null : _undo,
+            ),
+            const SizedBox(height: 4),
+            _SquareButton(
+              key: const Key('photoEditRedo'),
+              tooltip: 'Redo',
+              icon: Icons.redo_rounded,
+              height: 34,
+              onPressed: _undone.isEmpty ? null : _redo,
+            ),
+          ]),
+        ]),
+        if (_tool == _Tool.draw) ...[
+          const SizedBox(height: 18),
+          const Text('Colour', style: label),
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              for (final color in _drawColors)
+                Semantics(
+                  button: true,
+                  selected: color == _color,
+                  label: 'Colour',
+                  child: GestureDetector(
+                    onTap: () => setState(() => _color = color),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 150),
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        color: color,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                            color: color == _color
+                                ? HuntrColors.orange
+                                : Colors.white24,
+                            width: color == _color ? 3 : 1),
                       ),
                     ),
                   ),
-              ],
-            ),
+                ),
+            ],
           ),
-        if (_tool == _Tool.draw) const SizedBox(height: 10),
-        Row(children: [
-          const Text('Brush size',
-              style: TextStyle(color: HuntrColors.muted, fontSize: 13)),
-          Expanded(
-            child: Slider(
-              key: const Key('photoBrushSize'),
-              value: size,
-              min: _tool == _Tool.draw ? 3 : 14,
-              max: _tool == _Tool.draw ? 30 : 90,
-              onChanged: (v) => setState(() {
-                if (_tool == _Tool.draw) {
-                  _drawSize = v;
-                } else {
-                  _blurSize = v;
-                }
-              }),
+        ],
+        if (_tool != _Tool.move) ...[
+          const SizedBox(height: 18),
+          Row(children: [
+            const Expanded(child: Text('Brush size', style: label)),
+            Text('${size.round()} px',
+                key: const Key('photoBrushSizeLabel'),
+                style: const TextStyle(color: HuntrColors.muted)),
+          ]),
+          Row(children: [
+            Icon(
+                _tool == _Tool.draw
+                    ? Icons.brush_rounded
+                    : Icons.blur_on_rounded,
+                size: 20,
+                color: HuntrColors.muted),
+            Expanded(
+              child: Slider(
+                key: const Key('photoBrushSize'),
+                value: size,
+                min: _tool == _Tool.draw ? 3 : 14,
+                max: _tool == _Tool.draw ? 30 : 90,
+                onChanged: (v) => setState(() {
+                  if (_tool == _Tool.draw) {
+                    _drawSize = v;
+                  } else {
+                    _blurSize = v;
+                  }
+                }),
+              ),
             ),
-          ),
-          // the brush as it paints
-          SizedBox.square(
-            dimension: 40,
-            child: Center(
+            // the brush as it paints
+            Container(
+              width: 44,
+              height: 44,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: HuntrColors.surfaceHigh,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: HuntrColors.border),
+              ),
               child: Container(
-                width: math.min(size, 40),
-                height: math.min(size, 40),
+                width: math.min(size, 34),
+                height: math.min(size, 34),
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: _tool == _Tool.draw
@@ -518,10 +590,51 @@ class _PhotoCropScreenState extends State<PhotoCropScreen> {
                 ),
               ),
             ),
-          ),
-        ]),
+          ]),
+        ],
       ],
-    ]);
+    );
+  }
+}
+
+/// A small rounded square button (zoom, fit, undo, redo).
+class _SquareButton extends StatelessWidget {
+  const _SquareButton({
+    super.key,
+    required this.tooltip,
+    required this.icon,
+    required this.onPressed,
+    this.height = 44,
+  });
+
+  final String tooltip;
+  final IconData icon;
+  final VoidCallback? onPressed;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    final on = onPressed != null;
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: HuntrColors.surfaceHigh,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: const BorderSide(color: HuntrColors.border),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onPressed,
+          child: SizedBox(
+            width: 44,
+            height: height,
+            child:
+                Icon(icon, size: 22, color: on ? Colors.white : Colors.white38),
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -529,12 +642,12 @@ class _CropFramePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final frame =
-        RRect.fromRectAndRadius(Offset.zero & size, const Radius.circular(16));
+        RRect.fromRectAndRadius(Offset.zero & size, const Radius.circular(18));
     canvas.drawRRect(
         frame,
         Paint()
           ..style = PaintingStyle.stroke
-          ..strokeWidth = 2
+          ..strokeWidth = 2.5
           ..color = HuntrColors.orange);
     final grid = Paint()
       ..strokeWidth = 1
