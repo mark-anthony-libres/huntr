@@ -375,127 +375,140 @@ class _PlaceCard extends StatelessWidget {
               color: Colors.black54, blurRadius: 24, offset: Offset(0, -6)),
         ],
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                gradient: HuntrColors.accentGradient,
-                borderRadius: BorderRadius.circular(15),
-              ),
-              child: const Icon(roamIcon, color: Colors.black),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 200),
-                child: naming || p == null
-                    ? Row(
-                        key: const ValueKey('finding'),
-                        children: [
-                          if (naming) ...[
-                            const SizedBox.square(
-                                dimension: 16,
-                                child:
-                                    CircularProgressIndicator(strokeWidth: 2)),
-                            const SizedBox(width: 10),
-                          ],
-                          Flexible(
-                            child: Text(
-                                naming
-                                    ? 'Finding the place…'
-                                    : 'Move the map to choose a spot',
-                                key: const Key('roamPlaceName'),
-                                style: const TextStyle(
-                                    color: HuntrColors.muted,
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w600)),
-                          ),
-                        ],
-                      )
-                    : Column(
-                        key: ValueKey('${p.name}|${p.detail}'),
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('ROAM TO',
-                              style: TextStyle(
-                                  color: HuntrColors.muted,
-                                  fontSize: 11,
-                                  letterSpacing: 0.8,
-                                  fontWeight: FontWeight.w700)),
-                          const SizedBox(height: 2),
-                          Text(p.name,
-                              key: const Key('roamPlaceName'),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                  fontSize: 19, fontWeight: FontWeight.w800)),
-                          if (p.detail != null)
-                            Text(p.detail!,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                    color: HuntrColors.muted, fontSize: 13.5)),
-                        ],
-                      ),
-              ),
-            ),
-            // how far from me
-            if (far != null && p != null && !naming) ...[
-              const SizedBox(width: 10),
-              Container(
-                key: const Key('roamDistance'),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: HuntrColors.surfaceHigh,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(far,
-                    style: const TextStyle(
-                        fontSize: 12.5, fontWeight: FontWeight.w700)),
-              ),
-            ],
-          ]),
-          const SizedBox(height: 16),
-          Row(children: [
-            // roaming: Stop roaming, beside Roam here
-            if (roaming) ...[
-              Expanded(
-                child: OutlinedButton.icon(
-                  key: const Key('roamHome'),
-                  onPressed: saving ? null : onHome,
-                  style: OutlinedButton.styleFrom(
-                    minimumSize: const Size.fromHeight(52),
-                    side: const BorderSide(color: HuntrColors.border),
+      // wide screens: a comfortable width, in the middle
+      child: Center(
+        heightFactor: 1,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 560),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    gradient: HuntrColors.accentGradient,
+                    borderRadius: BorderRadius.circular(15),
                   ),
-                  icon: const Icon(Icons.my_location_rounded, size: 18),
-                  label: const Text('Stop roaming'),
+                  child: const Icon(roamIcon, color: Colors.black),
                 ),
-              ),
-              const SizedBox(width: 10),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 200),
+                    // from the left (it centres by default)
+                    layoutBuilder: (current, previous) => Stack(
+                        alignment: Alignment.centerLeft,
+                        children: [...previous, if (current != null) current]),
+                    child: naming || p == null
+                        ? Row(
+                            key: const ValueKey('finding'),
+                            children: [
+                              if (naming) ...[
+                                const SizedBox.square(
+                                    dimension: 16,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2)),
+                                const SizedBox(width: 10),
+                              ],
+                              Flexible(
+                                child: Text(
+                                    naming
+                                        ? 'Finding the place…'
+                                        : 'Move the map to choose a spot',
+                                    key: const Key('roamPlaceName'),
+                                    style: const TextStyle(
+                                        color: HuntrColors.muted,
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w600)),
+                              ),
+                            ],
+                          )
+                        : Column(
+                            key: ValueKey('${p.name}|${p.detail}'),
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('ROAM TO',
+                                  style: TextStyle(
+                                      color: HuntrColors.muted,
+                                      fontSize: 11,
+                                      letterSpacing: 0.8,
+                                      fontWeight: FontWeight.w700)),
+                              const SizedBox(height: 2),
+                              Text(p.name,
+                                  key: const Key('roamPlaceName'),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                      fontSize: 19,
+                                      fontWeight: FontWeight.w800)),
+                              if (p.detail != null)
+                                Text(p.detail!,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                        color: HuntrColors.muted,
+                                        fontSize: 13.5)),
+                            ],
+                          ),
+                  ),
+                ),
+                // how far from me
+                if (far != null && p != null && !naming) ...[
+                  const SizedBox(width: 10),
+                  Container(
+                    key: const Key('roamDistance'),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: HuntrColors.surfaceHigh,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(far,
+                        style: const TextStyle(
+                            fontSize: 12.5, fontWeight: FontWeight.w700)),
+                  ),
+                ],
+              ]),
+              const SizedBox(height: 16),
+              Row(children: [
+                // roaming: Stop roaming, beside Roam here
+                if (roaming) ...[
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      key: const Key('roamHome'),
+                      onPressed: saving ? null : onHome,
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size.fromHeight(52),
+                        side: const BorderSide(color: HuntrColors.border),
+                      ),
+                      icon: const Icon(Icons.my_location_rounded, size: 18),
+                      label: const Text('Stop roaming'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                ],
+                Expanded(
+                  child: FilledButton.icon(
+                    key: const Key('roamHere'),
+                    onPressed: ready ? onRoam : null,
+                    style: FilledButton.styleFrom(
+                        minimumSize: const Size.fromHeight(52)),
+                    icon: saving
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2.5, color: Colors.black))
+                        : const Icon(roamIcon, size: 18),
+                    label: const Text('Roam here'),
+                  ),
+                ),
+              ]),
             ],
-            Expanded(
-              child: FilledButton.icon(
-                key: const Key('roamHere'),
-                onPressed: ready ? onRoam : null,
-                style: FilledButton.styleFrom(
-                    minimumSize: const Size.fromHeight(52)),
-                icon: saving
-                    ? const SizedBox.square(
-                        dimension: 18,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2.5, color: Colors.black))
-                    : const Icon(roamIcon, size: 18),
-                label: const Text('Roam here'),
-              ),
-            ),
-          ]),
-        ],
+          ),
+        ),
       ),
     );
   }
@@ -588,10 +601,12 @@ class _Outside extends CustomClipper<ui.Path> {
   final double radius;
 
   @override
-  ui.Path getClip(Size size) => ui.Path()
-    ..fillType = PathFillType.evenOdd
-    ..addRect(Offset.zero & size)
-    ..addOval(Rect.fromCircle(center: middle, radius: radius));
+  ui.Path getClip(Size size) => ui.Path.combine(
+      // the shape itself (the even-odd rule isn't kept by every renderer:
+      // on the web the blur went inside the circle instead)
+      ui.PathOperation.difference,
+      ui.Path()..addRect(Offset.zero & size),
+      ui.Path()..addOval(Rect.fromCircle(center: middle, radius: radius)));
 
   @override
   bool shouldReclip(_Outside old) =>
