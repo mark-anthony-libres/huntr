@@ -40,9 +40,10 @@ class Place {
   }
 }
 
-/// Finding places for Roam: MapTiler's place search (the same key as the
-/// map's tiles), as you type, and the name of a spot picked on the map.
-/// Without a key there's no search (picking on the map still works).
+/// Finding places for Roam, as you type, and the name of a spot picked on
+/// the map: MapTiler's place search (the same key as the map's tiles); with
+/// no key, or once MapTiler refuses it (for the rest of the session),
+/// Photon's (OpenStreetMap's places, free, no key).
 class PlaceSearch {
   PlaceSearch({String? key, http.Client? client})
       : _key = key ?? MapTiles.mapTilerKey,
@@ -51,23 +52,43 @@ class PlaceSearch {
   final String _key;
   final http.Client? _client;
 
-  bool get available => _key.isNotEmpty;
+  /// MapTiler refused the key (this session): Photon from then on.
+  static bool _mapTilerRefused = false;
+
+  bool get _useMapTiler => _key.isNotEmpty && !_mapTilerRefused;
+
+  /// There's always a search (Photon needs no key).
+  bool get available => true;
 
   /// Places matching what's typed (2 letters or more), best first.
   Future<List<Place>> search(String query) async {
     final q = query.trim();
-    if (!available || q.length < 2) return const [];
-    final found = await _get('/geocoding/${Uri.encodeComponent(q)}.json',
-        {'autocomplete': 'true', 'limit': '6', 'fuzzyMatch': 'true'});
-    return found;
+    if (q.length < 2) return const [];
+    if (_useMapTiler) {
+      try {
+        return await _get('/geocoding/${Uri.encodeComponent(q)}.json',
+            {'autocomplete': 'true', 'limit': '6', 'fuzzyMatch': 'true'});
+      } on PlaceSearchFailed catch (error) {
+        if (!error.refused) rethrow;
+        _mapTilerRefused = true;
+      }
+    }
+    return _photon('/api/', {'q': q, 'limit': '8', 'lang': 'en'});
   }
 
-  /// What's at this spot (null: nothing known, or no search).
+  /// What's at this spot (null: nothing known).
   Future<Place?> at(double latitude, double longitude) async {
-    if (!available) return null;
-    final found = await _get(
-        '/geocoding/${longitude.toStringAsFixed(5)},${latitude.toStringAsFixed(5)}.json',
-        {'limit': '1'});
+    if (!_useMapTiler) return _photonAt(latitude, longitude);
+    final List<Place> found;
+    try {
+      found = await _get(
+          '/geocoding/${longitude.toStringAsFixed(5)},${latitude.toStringAsFixed(5)}.json',
+          {'limit': '1'});
+    } on PlaceSearchFailed catch (error) {
+      if (!error.refused) rethrow;
+      _mapTilerRefused = true;
+      return _photonAt(latitude, longitude);
+    }
     if (found.isEmpty) return null;
     // the spot itself, named for what's there
     final place = found.first;
@@ -78,8 +99,77 @@ class PlaceSearch {
         longitude: longitude);
   }
 
-  Future<List<Place>> _get(String path, Map<String, String> query) async {
-    final uri = Uri.https('api.maptiler.com', path, {...query, 'key': _key});
+  Future<List<Place>> _get(String path, Map<String, String> query) => _fetch(
+      Uri.https('api.maptiler.com', path, {...query, 'key': _key}), _place);
+
+  // ---- Photon (photon.komoot.io) ----
+
+  Future<List<Place>> _photon(String path, Map<String, String> query) async {
+    final found =
+        await _fetch(Uri.https('photon.komoot.io', path, query), _photonPlace);
+    // the same place more than once (a district and its station...): once
+    final seen = <String>{};
+    return [
+      for (final place in found)
+        if (seen.add('${place.name}|${place.detail}')) place
+    ].take(6).toList();
+  }
+
+  /// The area at a spot (its neighbourhood or town, not the street).
+  Future<Place?> _photonAt(double latitude, double longitude) async {
+    final found = await _fetch(
+        Uri.https('photon.komoot.io', '/reverse', {
+          'lat': latitude.toStringAsFixed(5),
+          'lon': longitude.toStringAsFixed(5),
+          'lang': 'en',
+        }),
+        (feature) => _photonPlace(feature, area: true));
+    if (found.isEmpty) return null;
+    return Place(
+        name: found.first.name,
+        detail: found.first.detail,
+        latitude: latitude,
+        longitude: longitude);
+  }
+
+  /// A Photon feature as a place: its name (with [area], the area it's in:
+  /// a street is named for its neighbourhood or town), then its town,
+  /// region and country.
+  static Place? _photonPlace(Map<String, dynamic> feature,
+      {bool area = false}) {
+    final p = feature['properties'] as Map<String, dynamic>? ?? const {};
+    final coordinates =
+        (feature['geometry'] as Map<String, dynamic>?)?['coordinates'] as List?;
+    String? text(String key) {
+      final v = p[key];
+      return v is String && v.trim().isNotEmpty ? v.trim() : null;
+    }
+
+    final name = area
+        ? text('locality') ??
+            text('district') ??
+            text('city') ??
+            text('county') ??
+            text('name')
+        : text('name') ?? text('city');
+    if (name == null || coordinates == null || coordinates.length < 2) {
+      return null;
+    }
+    final detail = <String>[];
+    for (final part in [text('city'), text('state'), text('country')]) {
+      if (part != null && part != name && !detail.contains(part)) {
+        detail.add(part);
+      }
+    }
+    return Place(
+        name: name,
+        detail: detail.isEmpty ? null : detail.join(', '),
+        latitude: (coordinates[1] as num).toDouble(),
+        longitude: (coordinates[0] as num).toDouble());
+  }
+
+  Future<List<Place>> _fetch(
+      Uri uri, Place? Function(Map<String, dynamic>) read) async {
     final client = _client ?? http.Client();
     try {
       final response = await client.get(uri);
@@ -89,7 +179,7 @@ class PlaceSearch {
       final body = jsonDecode(response.body) as Map<String, dynamic>;
       return [
         for (final feature in body['features'] as List<dynamic>? ?? const [])
-          if (_place(feature as Map<String, dynamic>) case final place?) place
+          if (read(feature as Map<String, dynamic>) case final place?) place
       ];
     } finally {
       if (_client == null) client.close();
@@ -120,6 +210,9 @@ class PlaceSearch {
 class PlaceSearchFailed implements Exception {
   const PlaceSearchFailed(this.status);
   final int status;
+
+  /// The key isn't accepted (wrong, disabled, limited to other sites).
+  bool get refused => status == 401 || status == 403;
 
   @override
   String toString() => 'PlaceSearchFailed($status)';
