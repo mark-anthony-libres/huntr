@@ -315,7 +315,9 @@ class _RoamScreenState extends State<RoamScreen> {
             // for somewhere else)
             cameraConstraint: _relocating
                 ? const CameraConstraint.unconstrained()
-                : CameraConstraint.contain(
+                // the pin (the map's middle) reaches the whole reach, up to
+                // its edge (not just what fits on screen inside it)
+                : CameraConstraint.containCenter(
                     bounds: reachBounds(anchor, reachKm)),
             onEvent: _mapEvent,
             onTap: _focus.unfocus,
