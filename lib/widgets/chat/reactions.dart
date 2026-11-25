@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import '../../services/huntr_backend.dart';
 import '../../state/app_state.dart';
 import '../../theme.dart';
+import 'emoji_words.dart';
 import 'reply.dart';
 
 /// The quick reactions, in the bar above a message.
@@ -746,49 +747,131 @@ class _EmojiButton extends StatelessWidget {
   }
 }
 
-/// Any emoji, from a sheet of them by kind.
+/// Any emoji, from a sheet of them by kind, or searched by name.
 Future<String?> showEmojiPicker(BuildContext context) =>
     showModalBottomSheet<String>(
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
-      builder: (context) => SafeArea(
+      builder: (context) => const _EmojiPicker(),
+    );
+
+class _EmojiPicker extends StatefulWidget {
+  const _EmojiPicker();
+
+  @override
+  State<_EmojiPicker> createState() => _EmojiPickerState();
+}
+
+class _EmojiPickerState extends State<_EmojiPicker> {
+  final _search = TextEditingController();
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  Widget _emoji(String emoji) => InkResponse(
+        key: Key('pick-$emoji'),
+        onTap: () => Navigator.of(context).pop(emoji),
+        radius: 24,
+        child: SizedBox(
+          width: 44,
+          height: 44,
+          child:
+              Center(child: Text(emoji, style: const TextStyle(fontSize: 26))),
+        ),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    final query = _search.text.trim();
+    final found = query.isEmpty
+        ? null
+        : [
+            for (final (kind, emojis) in _allEmojis)
+              for (final emoji in emojis.split(' '))
+                if (emojiMatches(emoji, query, kind: kind)) emoji,
+          ];
+    // the keyboard pushes the sheet up; the list keeps the rest
+    final keyboard = MediaQuery.viewInsetsOf(context).bottom;
+    return Padding(
+      padding: EdgeInsets.only(bottom: keyboard),
+      child: SafeArea(
         child: SizedBox(
           height: MediaQuery.sizeOf(context).height * 0.55,
-          child: ListView(
-            key: const Key('emojiPicker'),
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-            children: [
-              for (final (title, emojis) in _allEmojis) ...[
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(4, 12, 4, 6),
-                  child: Text(title,
-                      style: const TextStyle(
-                          color: HuntrColors.muted,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700)),
+          child: Column(children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+              child: TextField(
+                key: const Key('emojiSearch'),
+                controller: _search,
+                onChanged: (_) => setState(() {}),
+                textInputAction: TextInputAction.search,
+                decoration: InputDecoration(
+                  hintText: 'Search emoji',
+                  prefixIcon: const Icon(Icons.search_rounded),
+                  suffixIcon: query.isEmpty
+                      ? null
+                      : IconButton(
+                          tooltip: 'Clear',
+                          icon: const Icon(Icons.close_rounded),
+                          onPressed: () => setState(_search.clear),
+                        ),
+                  isDense: true,
+                  filled: true,
+                  fillColor: HuntrColors.surfaceHigh,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide.none,
+                  ),
                 ),
-                Wrap(children: [
-                  for (final emoji in emojis.split(' '))
-                    InkResponse(
-                      key: Key('pick-$emoji'),
-                      onTap: () => Navigator.of(context).pop(emoji),
-                      radius: 24,
-                      child: SizedBox(
-                        width: 44,
-                        height: 44,
-                        child: Center(
-                            child: Text(emoji,
-                                style: const TextStyle(fontSize: 26))),
+              ),
+            ),
+            Expanded(
+              child: ListView(
+                key: const Key('emojiPicker'),
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                children: [
+                  if (found != null)
+                    found.isEmpty
+                        ? const Padding(
+                            key: Key('emojiNoneFound'),
+                            padding: EdgeInsets.all(32),
+                            child: Text('No emoji found',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(color: HuntrColors.muted)),
+                          )
+                        : Padding(
+                            padding: const EdgeInsets.only(top: 12),
+                            child: Wrap(children: [
+                              for (final emoji in found) _emoji(emoji)
+                            ]),
+                          )
+                  else
+                    for (final (title, emojis) in _allEmojis) ...[
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(4, 12, 4, 6),
+                        child: Text(title,
+                            style: const TextStyle(
+                                color: HuntrColors.muted,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700)),
                       ),
-                    ),
-                ]),
-              ],
-            ],
-          ),
+                      Wrap(children: [
+                        for (final emoji in emojis.split(' ')) _emoji(emoji)
+                      ]),
+                    ],
+                ],
+              ),
+            ),
+          ]),
         ),
       ),
     );
+  }
+}
 
 const _allEmojis = [
   (
