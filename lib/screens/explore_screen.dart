@@ -719,12 +719,14 @@ class _ExploreScreenState extends State<ExploreScreen> {
       // Stack stays either way, so the list and map still fade between them)
       body: Stack(children: [
         body,
-        // the header scrolled away: All filters floats at the top right
+        // the header scrolled away, with filters on: All filters floats at
+        // the top right (with none on, it stays in the header)
         if (map == null)
           ListenableBuilder(
             listenable: _scroll,
             builder: (context, button) {
-              final away = _scroll.hasClients &&
+              final away = filtersOn > 0 &&
+                  _scroll.hasClients &&
                   _scroll.offset > (_headerHeight > 0 ? _headerHeight : 64);
               return Positioned(
                 top: MediaQuery.paddingOf(context).top + 10,
