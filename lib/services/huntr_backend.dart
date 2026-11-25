@@ -1459,7 +1459,11 @@ enum ChatMessageType {
   sticker,
 
   /// A recorded voice message ([ChatMessage.voice]), in a direct chat only.
-  voice;
+  voice,
+
+  /// A guest chat moved here when its guest joined HUNTR (from the one who
+  /// joined): the messages before it came from the guest chat.
+  guestJoined;
 
   static ChatMessageType parse(String? value) => switch (value) {
         'gif' => gif,
@@ -1471,6 +1475,7 @@ enum ChatMessageType {
         'image' => image,
         'video' => video,
         'voice' => voice,
+        'guest_joined' => guestJoined,
         'album_trade' => albumTrade,
         'album_trade_return' => albumTradeReturn,
         'album_interest' => albumInterest,
@@ -1794,6 +1799,9 @@ class ChatMessage {
           fromMe ? 'You said you’re interested' : 'Interested in your album',
         ChatMessageType.sticker => '${sticker?.name ?? 'Sticker'} sticker',
         ChatMessageType.voice => '🎤 Voice message',
+        ChatMessageType.guestJoined => fromMe
+            ? 'You joined HUNTR. This chat no longer expires.'
+            : 'They joined HUNTR. This chat no longer expires.',
       };
 }
 
@@ -1963,6 +1971,7 @@ class ReplyPreview {
         ChatMessageType.albumInterest => 'Interested in an album',
         ChatMessageType.sticker => body.isEmpty ? 'Sticker' : '$body sticker',
         ChatMessageType.voice => '🎤 Voice message',
+        ChatMessageType.guestJoined => 'Joined HUNTR',
       };
 }
 

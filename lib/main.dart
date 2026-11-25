@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'screens/session_gate.dart';
 import 'services/agreement_service.dart';
@@ -41,6 +42,9 @@ import 'widgets/video_taps_io.dart'
     if (dart.library.js_interop) 'widgets/video_taps_web.dart';
 import 'services/push_notifications.dart';
 import 'theme.dart';
+import 'services/guest_chat_api.dart';
+import 'state/guest_chats_state.dart';
+import 'screens/guest_page.dart';
 
 void main() {
   // before anything reads the device (saved preferences, secure storage)
@@ -58,6 +62,7 @@ void main() {
   late final MessagingState messaging;
   late final BlockState blocks;
   late final TapState taps;
+  late final GuestChatsState guestChats;
   late final AppState state;
   late final NearbyUploads nearbyUploads;
   state = AppState(
@@ -69,6 +74,7 @@ void main() {
       messaging.clear();
       blocks.clear();
       taps.clear();
+      guestChats.clear();
       nearbyUploads.clear();
       await Future.wait([
         if (photoCache != null) photoCache.clear(),
@@ -96,6 +102,10 @@ void main() {
       onSessionRejected: state.endSession);
   nearbyUploads =
       NearbyUploads(const NearbyService(), onSessionRejected: state.endSession);
+  guestChats = GuestChatsState(
+      api: GuestChatApi(),
+      token: () => state.sessionToken,
+      onSessionRejected: state.endSession);
   runApp(HuntrApp(
     state: state,
     updates: AppUpdateGate(),
@@ -117,6 +127,8 @@ void main() {
     locationAccess: LocationAccess(const GeolocatorPermissions()),
     blocks: blocks,
     taps: taps,
+    guestChats: guestChats,
+    guestLinkCode: guestLinkCode(Uri.base),
   ));
 }
 
@@ -143,6 +155,8 @@ class HuntrApp extends StatelessWidget {
     this.locationAccess,
     this.blocks,
     this.taps,
+    this.guestChats,
+    this.guestLinkCode,
     this.updates,
   });
 
@@ -210,6 +224,12 @@ class HuntrApp extends StatelessWidget {
   /// My Tap inbox, and tapping others. Null: no taps (tests, sample data).
   final TapState? taps;
 
+  /// My guest link and guest chats. Null: none (tests, sample data).
+  final GuestChatsState? guestChats;
+
+  /// Opened as a guest link (huntr.online/g/<code>): its page first.
+  final String? guestLinkCode;
+
   @override
   Widget build(BuildContext context) {
     return AppScope(
@@ -220,43 +240,49 @@ class HuntrApp extends StatelessWidget {
           state: blocks,
           child: TapScope(
             state: taps,
-            child: ServicesScope(
-              profiles: profiles,
-              agreements: agreements,
-              sessions: sessions,
-              photos: photos,
-              photoCache: photoCache,
-              albums: albums,
-              albumCache: albumCache,
-              explore: explore,
-              presence: presence,
-              feedback: feedback,
-              changelog: changelog,
-              stories: stories,
-              nearby: nearby,
-              nearbyUploads: nearbyUploads,
-              child: ThemeFollower(
-                appearance: state.appearance,
-                builder: (context) => MaterialApp(
-                  title: 'HUNTR',
-                  debugShowCheckedModeBanner: false,
-                  theme: buildHuntrTheme(),
-                  // too many requests: one full-screen notice over everything
-                  // too old: "Time to update" over everything, even that
-                  builder: (context, child) {
-                    final app = RateLimitOverlay(
-                        gate: rateLimitGate, child: _locationGate(child!));
-                    final updates = this.updates;
-                    return updates == null
-                        ? app
-                        : UpdateGateOverlay(gate: updates, child: app);
-                  },
-                  home: SessionGate(
-                    sessions: sessions,
-                    profiles: profiles,
-                    agreements: agreements,
-                    locate: locate,
-                    locationAccess: locationAccess,
+            child: GuestChatsScope(
+              state: guestChats,
+              child: ServicesScope(
+                profiles: profiles,
+                agreements: agreements,
+                sessions: sessions,
+                photos: photos,
+                photoCache: photoCache,
+                albums: albums,
+                albumCache: albumCache,
+                explore: explore,
+                presence: presence,
+                feedback: feedback,
+                changelog: changelog,
+                stories: stories,
+                nearby: nearby,
+                nearbyUploads: nearbyUploads,
+                child: ThemeFollower(
+                  appearance: state.appearance,
+                  builder: (context) => MaterialApp(
+                    title: 'HUNTR',
+                    debugShowCheckedModeBanner: false,
+                    theme: buildHuntrTheme(),
+                    // too many requests: one full-screen notice over everything
+                    // too old: "Time to update" over everything, even that
+                    builder: (context, child) {
+                      final app = RateLimitOverlay(
+                          gate: rateLimitGate, child: _locationGate(child!));
+                      final updates = this.updates;
+                      return updates == null
+                          ? app
+                          : UpdateGateOverlay(gate: updates, child: app);
+                    },
+                    home: _GuestLinkFirst(
+                      code: guestLinkCode,
+                      app: SessionGate(
+                        sessions: sessions,
+                        profiles: profiles,
+                        agreements: agreements,
+                        locate: locate,
+                        locationAccess: locationAccess,
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -282,6 +308,43 @@ class HuntrApp extends StatelessWidget {
         child: child!,
       ),
       child: app,
+    );
+  }
+}
+
+/// The code in a guest link's address (huntr.online/g/<code>), if it is one.
+String? guestLinkCode(Uri uri) {
+  final parts = uri.pathSegments;
+  return parts.length == 2 && parts[0] == 'g' && parts[1].isNotEmpty
+      ? parts[1]
+      : null;
+}
+
+/// A guest link opened: its page, until they go to HUNTR itself (log in, or
+/// join to keep talking), when the address becomes HUNTR's own.
+class _GuestLinkFirst extends StatefulWidget {
+  const _GuestLinkFirst({required this.code, required this.app});
+
+  final String? code;
+  final Widget app;
+
+  @override
+  State<_GuestLinkFirst> createState() => _GuestLinkFirstState();
+}
+
+class _GuestLinkFirstState extends State<_GuestLinkFirst> {
+  bool _left = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final code = widget.code;
+    if (code == null || _left) return widget.app;
+    return GuestPage(
+      code: code,
+      onLeave: () {
+        SystemNavigator.routeInformationUpdated(uri: Uri.parse('/'));
+        setState(() => _left = true);
+      },
     );
   }
 }

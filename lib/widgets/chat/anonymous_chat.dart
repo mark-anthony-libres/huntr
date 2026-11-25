@@ -651,3 +651,44 @@ class RevealRequestCard extends StatelessWidget {
     );
   }
 }
+
+/// In a chat that began as a guest chat: the guest joined HUNTR here
+/// ([fromMe]: I did), and the chat no longer expires.
+class GuestJoinedCard extends StatelessWidget {
+  const GuestJoinedCard({super.key, required this.fromMe, this.name});
+
+  final bool fromMe;
+
+  /// Their anonymous name.
+  final String? name;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Container(
+        key: const Key('guestJoinedCard'),
+        constraints: const BoxConstraints(maxWidth: 360),
+        margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: HuntrColors.orange.withValues(alpha: 0.10),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: HuntrColors.orange.withValues(alpha: 0.45)),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(Icons.check_rounded, size: 18, color: HuntrColors.orange),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              fromMe
+                  ? 'You joined HUNTR. This chat no longer expires.'
+                  : '${name == null || name!.isEmpty ? 'They' : name} joined '
+                      'HUNTR. This chat no longer expires.',
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
+}

@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../widgets/me/guest_link_tile.dart';
+
 import '../services/huntr_backend.dart';
 import '../services/services_scope.dart';
 import '../state/app_state.dart';
@@ -746,6 +748,9 @@ class _MyAnonymousProfileScreenState extends State<MyAnonymousProfileScreen> {
                         avatar: mine.avatar,
                         online: true),
                   ),
+                  // my guest link: people without HUNTR chat with this name
+                  const SizedBox(height: 14),
+                  const GuestLinkTile(),
                 ],
               ),
               tabs: const ThreadsProfileTabs.mine(),

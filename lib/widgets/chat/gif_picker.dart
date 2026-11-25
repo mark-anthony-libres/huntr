@@ -33,26 +33,33 @@ class UndoPickedSticker extends ChatPick {
   final HuntrSticker sticker;
 }
 
+/// Where GIFs come from: by default the signed-in user's GIF search; a
+/// guest chat passes its own.
+typedef GifSource = Future<GifPage?> Function(
+    {required bool stickers, String query, int offset});
+
 /// The GIF picker: HUNTR's stickers first ([sentStickers]: the ones already
 /// sent to this person, which can't be sent again until undone), then GIFs
 /// and stickers from GIPHY, trending until something is searched. Returns
-/// the one picked (null: closed).
+/// the one picked (null: closed). With [source] (a guest chat) only GIFs and
+/// stickers from GIPHY, found through it.
 Future<ChatPick?> showGifPicker(BuildContext context,
-        {Set<int> sentStickers = const {}}) =>
+        {Set<int> sentStickers = const {}, GifSource? source}) =>
     showModalBottomSheet<ChatPick>(
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
       builder: (context) => FractionallySizedBox(
         heightFactor: 0.75,
-        child: _GifPicker(sentStickers: sentStickers),
+        child: _GifPicker(sentStickers: sentStickers, source: source),
       ),
     );
 
 class _GifPicker extends StatefulWidget {
-  const _GifPicker({required this.sentStickers});
+  const _GifPicker({required this.sentStickers, this.source});
 
   final Set<int> sentStickers;
+  final GifSource? source;
 
   @override
   State<_GifPicker> createState() => _GifPickerState();
@@ -68,8 +75,9 @@ class _GifPickerState extends State<_GifPicker>
   String _query = '';
 
   // the Beans show beside the search on the HUNTR tab, and only there
-  late final TabController _tabs = TabController(length: 3, vsync: this)
-    ..addListener(() => setState(() {}));
+  late final TabController _tabs =
+      TabController(length: widget.source == null ? 3 : 2, vsync: this)
+        ..addListener(() => setState(() {}));
 
   /// My Beans, once HUNTR's stickers are in.
   int? _beans;
@@ -100,7 +108,8 @@ class _GifPickerState extends State<_GifPicker>
 
   @override
   Widget build(BuildContext context) {
-    final beans = _tabs.index == 0 ? _beans : null;
+    final huntr = widget.source == null;
+    final beans = huntr && _tabs.index == 0 ? _beans : null;
     return SafeArea(
       top: false,
       child: Column(children: [
@@ -163,22 +172,27 @@ class _GifPickerState extends State<_GifPicker>
             ],
           ]),
         ),
-        TabBar(controller: _tabs, tabs: const [
-          Tab(key: Key('huntrStickersTab'), text: 'HUNTR'),
-          Tab(text: 'GIFs'),
-          Tab(text: 'Stickers'),
+        TabBar(controller: _tabs, tabs: [
+          if (huntr) const Tab(key: Key('huntrStickersTab'), text: 'HUNTR'),
+          const Tab(text: 'GIFs'),
+          const Tab(text: 'Stickers'),
         ]),
         Expanded(
           child: TabBarView(controller: _tabs, children: [
-            _HuntrStickers(
+            if (huntr)
+              _HuntrStickers(
+                  query: _query,
+                  sent: widget.sentStickers,
+                  onBeans: (beans) => setState(() => _beans = beans)),
+            _GifResults(
+                key: ValueKey('gif:$_query'),
                 query: _query,
-                sent: widget.sentStickers,
-                onBeans: (beans) => setState(() => _beans = beans)),
-            _GifResults(key: ValueKey('gif:$_query'), query: _query),
+                source: widget.source),
             _GifResults(
                 key: ValueKey('sticker:$_query'),
                 query: _query,
-                stickers: true),
+                stickers: true,
+                source: widget.source),
           ]),
         ),
         const Padding(
@@ -193,10 +207,12 @@ class _GifPickerState extends State<_GifPicker>
 
 /// One tab's results, loading more as the grid nears its end.
 class _GifResults extends StatefulWidget {
-  const _GifResults({super.key, required this.query, this.stickers = false});
+  const _GifResults(
+      {super.key, required this.query, this.stickers = false, this.source});
 
   final String query;
   final bool stickers;
+  final GifSource? source;
 
   @override
   State<_GifResults> createState() => _GifResultsState();
@@ -216,14 +232,14 @@ class _GifResultsState extends State<_GifResults> {
 
   Future<void> _loadMore() async {
     final offset = _nextOffset;
-    final messaging = MessagingScope.read(context);
-    if (_loading || offset == null || messaging == null) return;
+    final source = widget.source ?? MessagingScope.read(context)?.gifs;
+    if (_loading || offset == null || source == null) return;
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
-      final page = await messaging.gifs(
+      final page = await source(
           stickers: widget.stickers, query: widget.query, offset: offset);
       if (!mounted) return;
       setState(() {

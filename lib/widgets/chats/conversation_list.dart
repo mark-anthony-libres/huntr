@@ -8,6 +8,11 @@ import '../../services/huntr_backend.dart';
 import '../../state/app_state.dart';
 import '../../state/messaging_state.dart';
 import '../../theme.dart';
+import 'chat_row_frame.dart';
+import 'guest_chat_row.dart';
+import '../../screens/guest_chat_screen.dart';
+import '../../state/guest_chats_state.dart';
+import '../../services/guest_chat_api.dart' show GuestChatSummary;
 import '../load_more_row.dart';
 import '../pill_tabs.dart';
 import '../anonymous_avatar.dart';
@@ -74,6 +79,11 @@ class _ConversationListState extends State<ConversationList> {
       onVisible: () => messaging.loadMore(anonymous: _anonymous),
     );
     final app = AppScope.of(context);
+    // guest chats (from my guest link) lead the Anonymous tab
+    final guestChats = GuestChatsScope.of(context);
+    final guests = _anonymous && _filter == _ChatFilter.all && _query.isEmpty
+        ? guestChats?.chats ?? const []
+        : const <GuestChatSummary>[];
     final matching = (all ?? const []).where((c) {
       switch (_filter) {
         case _ChatFilter.all:
@@ -147,7 +157,8 @@ class _ConversationListState extends State<ConversationList> {
                 child: _Tabs(
                   anonymous: _anonymous,
                   directUnread: messaging.directUnread,
-                  anonymousUnread: messaging.anonymousUnread,
+                  anonymousUnread:
+                      messaging.anonymousUnread + (guestChats?.unread ?? 0),
                   onChanged: (anonymous) => setState(() {
                     _anonymous = anonymous;
                     _filter = _ChatFilter.all;
@@ -189,7 +200,7 @@ class _ConversationListState extends State<ConversationList> {
                             selected: _filter == filter,
                             showCheckmark: false,
                             visualDensity: VisualDensity.compact,
-                          labelStyle: const TextStyle(fontSize: 13.5),
+                            labelStyle: const TextStyle(fontSize: 13.5),
                             labelPadding:
                                 const EdgeInsets.symmetric(horizontal: 4),
                             padding: const EdgeInsets.symmetric(horizontal: 6),
@@ -202,6 +213,19 @@ class _ConversationListState extends State<ConversationList> {
                 ),
               ),
             ),
+            if (guests.isNotEmpty)
+              SliverPadding(
+                padding: EdgeInsets.fromLTRB(side - 8, 0, side - 8, 8),
+                sliver: SliverList.list(children: [
+                  for (final g in guests)
+                    GuestChatRow(
+                      chat: g,
+                      now: now,
+                      onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                          builder: (_) => GuestChatScreen(chat: g))),
+                    ),
+                ]),
+              ),
             if (all == null && loadError != null)
               SliverPadding(
                 padding: pad(4, 16),
@@ -220,6 +244,8 @@ class _ConversationListState extends State<ConversationList> {
                 sliver: const SliverToBoxAdapter(
                     child: LoadingRows(count: 4, height: 72)),
               )
+            else if (all.isEmpty && guests.isNotEmpty)
+              const SliverToBoxAdapter(child: SizedBox.shrink())
             else if (all.isEmpty)
               SliverFillRemaining(
                 hasScrollBody: false,
@@ -627,167 +653,124 @@ class _ConversationRow extends StatelessWidget {
     final last = c.lastMessage;
     final unread = c.unreadCount > 0;
     final text = Theme.of(context).textTheme;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: Material(
-        color: selected
-            ? HuntrColors.surfaceHigh
-            : unread
-                ? HuntrColors.orange.withValues(alpha: 0.07)
-                : Colors.transparent,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(18),
-          side: BorderSide(
-              color: selected
-                  ? HuntrColors.orange.withValues(alpha: 0.5)
-                  : unread
-                      ? HuntrColors.orange.withValues(alpha: 0.22)
-                      : Colors.transparent),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          key: Key('conversation-${c.id}'),
-          onTap: onTap,
-          onLongPress: onLongPress,
-          hoverColor: HuntrColors.surface,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(10, 10, 14, 10),
-            child: Row(children: [
-              // where I'm the anonymous one: a mask over their picture
-              c.anonymous?.onlyMeMasked == true
-                  ? MaskOverlay(
-                      size: 56,
-                      activeUntil: c.other.activeUntil,
-                      child:
-                          Avatar(profile: c.other, size: 56, showOnline: false))
-                  // the blue dot: active in the last 20 minutes
-                  : Avatar(
-                      profile: c.other,
-                      size: 56,
-                      showOnline: false,
-                      showActive: true),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(children: [
-                      Expanded(
-                        child: Row(children: [
-                          Flexible(
-                            child: Text(c.other.nameAndAge,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                    fontSize: 16,
-                                    color: Colors.white,
-                                    fontWeight: unread
-                                        ? FontWeight.w800
-                                        : FontWeight.w700)),
-                          ),
-                          // roughly how far, when they show it
-                          if (c.other.approximateDistanceLabel
-                              case final distance?)
-                            Text(' · $distance',
-                                key: Key('distance-${c.id}'),
-                                maxLines: 1,
-                                style: const TextStyle(
-                                    fontSize: 13, color: HuntrColors.muted)),
-                          if (c.other.isNew && c.anonymous == null) ...[
-                            const SizedBox(width: 8),
-                            const NewBadge(),
-                          ],
-                          // where I'm the anonymous one: whom they see
-                          if (c.anonymous case final a?
-                              when a.iAmAnonymous) ...[
-                            const SizedBox(width: 8),
-                            _MaskBadge(name: a.shownAs),
-                          ],
-                        ]),
-                      ),
-                      const SizedBox(width: 8),
-                      if (c.pinned)
-                        Padding(
-                          padding: const EdgeInsets.only(right: 4),
-                          // in the theme's accent
-                          child: Icon(Icons.push_pin_rounded,
-                              key: Key('pinned-${c.id}'),
-                              size: 19,
-                              color: HuntrColors.orange),
-                        ),
-                      if (last != null)
-                        Text(timeLabel(last.sentAt, now),
-                            style: text.labelSmall?.copyWith(
-                                fontWeight:
-                                    unread ? FontWeight.w700 : FontWeight.w500,
-                                color: unread
-                                    ? HuntrColors.orange
-                                    : HuntrColors.muted)),
-                    ]),
-                    const SizedBox(height: 4),
-                    Row(children: [
-                      if (!typing && last != null && last.fromMe)
-                        Padding(
-                          padding: const EdgeInsets.only(right: 4),
-                          child: last.read
-                              ? Icon(Icons.done_all_rounded,
-                                  key: Key('lastRead'),
-                                  size: 16,
-                                  color: HuntrColors.orange)
-                              : const Icon(Icons.done_rounded,
-                                  size: 16, color: HuntrColors.muted),
-                        ),
-                      Expanded(
-                        child: Text(
-                          typing
-                              ? 'typing…'
-                              : last == null
-                                  ? 'Say hi'
-                                  : '${last.fromMe ? 'You: ' : ''}${last.preview}',
-                          key: typing ? Key('typingRow-${c.id}') : null,
+    return ChatRowFrame(
+      unread: unread,
+      selected: selected,
+      inkKey: Key('conversation-${c.id}'),
+      onTap: onTap,
+      onLongPress: onLongPress,
+      child: Row(children: [
+        // where I'm the anonymous one: a mask over their picture
+        c.anonymous?.onlyMeMasked == true
+            ? MaskOverlay(
+                size: 56,
+                activeUntil: c.other.activeUntil,
+                child: Avatar(profile: c.other, size: 56, showOnline: false))
+            // the blue dot: active in the last 20 minutes
+            : Avatar(
+                profile: c.other,
+                size: 56,
+                showOnline: false,
+                showActive: true),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                Expanded(
+                  child: Row(children: [
+                    Flexible(
+                      child: Text(c.other.nameAndAge,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            fontSize: 14,
-                            color: typing
-                                ? HuntrColors.orange
-                                : unread
-                                    ? Colors.white
-                                    : HuntrColors.muted,
-                            fontWeight: typing || unread
-                                ? FontWeight.w600
-                                : FontWeight.w400,
-                          ),
-                        ),
-                      ),
-                      if (unread) ...[
-                        const SizedBox(width: 10),
-                        Container(
-                          key: Key('unread-${c.id}'),
-                          constraints: const BoxConstraints(minWidth: 22),
-                          height: 22,
-                          padding: const EdgeInsets.symmetric(horizontal: 7),
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(
-                              gradient: HuntrColors.accentGradient,
-                              borderRadius:
-                                  BorderRadius.all(Radius.circular(11))),
-                          child: Text(
-                              c.unreadCount > 99 ? '99+' : '${c.unreadCount}',
-                              style: const TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w800,
-                                  color: Colors.black)),
-                        ),
-                      ],
-                    ]),
-                  ],
+                              fontSize: 16,
+                              color: Colors.white,
+                              fontWeight:
+                                  unread ? FontWeight.w800 : FontWeight.w700)),
+                    ),
+                    // roughly how far, when they show it
+                    if (c.other.approximateDistanceLabel case final distance?)
+                      Text(' · $distance',
+                          key: Key('distance-${c.id}'),
+                          maxLines: 1,
+                          style: const TextStyle(
+                              fontSize: 13, color: HuntrColors.muted)),
+                    if (c.other.isNew && c.anonymous == null) ...[
+                      const SizedBox(width: 8),
+                      const NewBadge(),
+                    ],
+                    // where I'm the anonymous one: whom they see
+                    if (c.anonymous case final a? when a.iAmAnonymous) ...[
+                      const SizedBox(width: 8),
+                      _MaskBadge(name: a.shownAs),
+                    ],
+                  ]),
                 ),
-              ),
-            ]),
+                const SizedBox(width: 8),
+                if (c.pinned)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 4),
+                    // in the theme's accent
+                    child: Icon(Icons.push_pin_rounded,
+                        key: Key('pinned-${c.id}'),
+                        size: 19,
+                        color: HuntrColors.orange),
+                  ),
+                if (last != null)
+                  Text(timeLabel(last.sentAt, now),
+                      style: text.labelSmall?.copyWith(
+                          fontWeight:
+                              unread ? FontWeight.w700 : FontWeight.w500,
+                          color:
+                              unread ? HuntrColors.orange : HuntrColors.muted)),
+              ]),
+              const SizedBox(height: 4),
+              Row(children: [
+                if (!typing && last != null && last.fromMe)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 4),
+                    child: last.read
+                        ? Icon(Icons.done_all_rounded,
+                            key: Key('lastRead'),
+                            size: 16,
+                            color: HuntrColors.orange)
+                        : const Icon(Icons.done_rounded,
+                            size: 16, color: HuntrColors.muted),
+                  ),
+                Expanded(
+                  child: Text(
+                    typing
+                        ? 'typing…'
+                        : last == null
+                            ? 'Say hi'
+                            : '${last.fromMe ? 'You: ' : ''}${last.preview}',
+                    key: typing ? Key('typingRow-${c.id}') : null,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: typing
+                          ? HuntrColors.orange
+                          : unread
+                              ? Colors.white
+                              : HuntrColors.muted,
+                      fontWeight:
+                          typing || unread ? FontWeight.w600 : FontWeight.w400,
+                    ),
+                  ),
+                ),
+                if (unread) ...[
+                  const SizedBox(width: 10),
+                  UnreadCountPill(
+                      key: Key('unread-${c.id}'), count: c.unreadCount),
+                ],
+              ]),
+            ],
           ),
         ),
-      ),
+      ]),
     );
   }
 }

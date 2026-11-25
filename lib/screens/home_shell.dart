@@ -12,6 +12,8 @@ import '../state/block_state.dart';
 import '../state/app_state.dart';
 import '../state/messaging_state.dart';
 import '../state/tap_state.dart';
+import '../state/guest_chats_state.dart';
+import '../flows/guest_join.dart';
 import 'chat_screen.dart';
 import 'chats_screen.dart';
 import 'explore_screen.dart';
@@ -59,17 +61,22 @@ class _HomeShellState extends State<HomeShell> {
   PresenceService? _presence;
   MessagingState? _messaging;
   TapState? _taps;
+  GuestChatsState? _guestChats;
   AppLifecycleListener? _lifecycle;
 
   /// A live event: chats and taps each take what concerns them.
   void _handleEvent(Map<String, dynamic> event) {
     _messaging?.handleEvent(event);
     _taps?.handleEvent(event);
+    _guestChats?.handleEvent(event);
+    // a guest joined: their chat moved into my anonymous chats
+    if (event['type'] == 'guest.joined') unawaited(_messaging?.refresh());
   }
 
   /// Back online: messages and taps re-sync, and blocks are checked again.
   Future<void> _reconnected() async {
     unawaited(_taps?.refresh());
+    unawaited(_guestChats?.refresh());
     await _messaging?.sync();
     if (mounted) await BlockScope.read(context)?.checkAll();
   }
@@ -106,6 +113,7 @@ class _HomeShellState extends State<HomeShell> {
     _presence ??= ServicesScope.presenceOf(context);
     _messaging ??= MessagingScope.read(context);
     _taps ??= TapScope.read(context);
+    _guestChats ??= GuestChatsScope.read(context);
     if (token != null && _lifecycle == null) {
       // Chat events come on the presence connection; after it (re)connects,
       // and when the app comes back to the foreground, messages re-sync.
@@ -120,6 +128,9 @@ class _HomeShellState extends State<HomeShell> {
         if (!mounted) return;
         unawaited(_messaging?.refresh());
         unawaited(_taps?.refresh());
+        unawaited(_guestChats?.refresh());
+        // signed up from a guest chat: it moves here and opens
+        unawaited(completeGuestJoin(context));
         // push notifications: this device, and a tapped one's place
         unawaited(PushNotifications.instance
             .start(token, onOpen: _open)

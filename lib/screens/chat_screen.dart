@@ -1660,6 +1660,9 @@ class _ChatScreenState extends State<ChatScreen> {
                                               onSayHi: blocked || closed != null
                                                   ? null
                                                   : _sayHi),
+                                        ChatMessageType.guestJoined =>
+                                          GuestJoinedCard(
+                                              fromMe: m.fromMe, name: p.name),
                                         ChatMessageType.revealRequest =>
                                           RevealRequestCard(
                                               fromMe: m.fromMe,

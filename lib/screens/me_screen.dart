@@ -7,6 +7,7 @@ import '../widgets/me/my_albums_section.dart';
 import '../widgets/me/my_story_section.dart';
 import '../widgets/me/profile_photos_section.dart';
 import '../widgets/me/has_place_setting.dart';
+import '../widgets/me/guest_link_tile.dart';
 import '../widgets/me/profile_preview_banner.dart';
 import '../theme.dart';
 import 'settings_screen.dart';
@@ -65,6 +66,9 @@ class MeScreen extends StatelessWidget {
                 builder: (_) => const MyAnonymousProfileScreen())),
           ),
         ),
+        const SizedBox(height: 12),
+        // people without HUNTR chat with me anonymously from my link
+        const GuestLinkTile(),
         const SizedBox(height: 16),
       ],
       ProfilePreviewBanner(
