@@ -189,6 +189,18 @@ class _GuestLinkScreenState extends State<GuestLinkScreen> {
     return data?.buffer.asUint8List();
   }
 
+  /// Share to story: how to add the link (My Day or Instagram), then the
+  /// last step shares the card through the phone's share sheet.
+  Future<void> _stepsThenShare(String url) async {
+    if (_onOwnWords && _ownWords.isEmpty) {
+      await _writeOwn();
+      if (_ownWords.isEmpty || !mounted) return;
+    }
+    final share = await Navigator.of(context).push<bool>(MaterialPageRoute(
+        builder: (_) => GuestStoryHowToScreen(url: url, sharing: true)));
+    if (share == true && mounted) await _share(url);
+  }
+
   Future<void> _share(String url) async {
     if (_sharing) return;
     if (_onOwnWords && _ownWords.isEmpty) {
@@ -491,7 +503,10 @@ class _GuestLinkScreenState extends State<GuestLinkScreen> {
                                       fontSize: 16.5,
                                       fontWeight: FontWeight.w800),
                                 ),
-                                onPressed: _sharing ? null : () => _share(url),
+                                // the steps first, then the share sheet
+                                onPressed: _sharing
+                                    ? null
+                                    : () => _stepsThenShare(url),
                                 icon: _sharing
                                     ? const SizedBox.square(
                                         dimension: 18,

@@ -7,9 +7,14 @@ import '../widgets/pill_tabs.dart';
 /// Instagram (Instagram's link sticker is everyone's; on Facebook not every
 /// account has one: then the link goes in as text).
 class GuestStoryHowToScreen extends StatefulWidget {
-  const GuestStoryHowToScreen({super.key, required this.url});
+  const GuestStoryHowToScreen(
+      {super.key, required this.url, this.sharing = false});
 
   final String url;
+
+  /// Opened from Share to story: the last step shares the card (the
+  /// screen closes returning true), instead of Got it.
+  final bool sharing;
 
   @override
   State<GuestStoryHowToScreen> createState() => _GuestStoryHowToScreenState();
@@ -21,7 +26,7 @@ class _GuestStoryHowToScreenState extends State<GuestStoryHowToScreen> {
 
   static const _myDay = [
     (
-      'Tap Share to story, then pick My Day',
+      'In the share sheet, pick Facebook (My Day)',
       'The card opens in Facebook, ready to post.'
     ),
     (
@@ -39,7 +44,7 @@ class _GuestStoryHowToScreenState extends State<GuestStoryHowToScreen> {
 
   static const _ig = [
     (
-      'Tap Share to story, then pick Instagram',
+      'In the share sheet, pick Instagram (Stories)',
       'The card opens in Instagram, ready to post.'
     ),
     (
@@ -162,9 +167,11 @@ class _GuestStoryHowToScreenState extends State<GuestStoryHowToScreen> {
                             fontSize: 17,
                             fontWeight: FontWeight.w800)),
                     onPressed: () => last
-                        ? Navigator.of(context).pop()
+                        ? Navigator.of(context).pop(widget.sharing)
                         : setState(() => _step++),
-                    child: Text(last ? 'Got it' : 'Next step'),
+                    child: Text(last
+                        ? (widget.sharing ? 'Share to story' : 'Got it')
+                        : 'Next step'),
                   ),
                 ],
               ),
