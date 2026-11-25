@@ -104,9 +104,23 @@ Future<StoredPhotoEdit?> editStoredPhoto(
   ));
   if (result == null) return null;
   if (result.strokes.isEmpty) return StoredPhotoEdit(result.crop);
+  // the saved photo itself, to draw on (a browser may not be let in)
+  Uint8List? bytes;
   try {
-    final bytes = (await cache?.load(photo))?.bytes ??
-        (await http.get(Uri.parse(photo.imageUrl))).bodyBytes;
+    bytes = (await cache?.load(photo))?.bytes;
+    if (bytes == null) {
+      final response = await http.get(Uri.parse(photo.imageUrl));
+      if (response.statusCode == 200) bytes = response.bodyBytes;
+    }
+  } catch (error) {
+    debugPrint('Saved photo not loaded for editing: $error');
+  }
+  if (bytes == null) {
+    onProblem("The photo couldn't be loaded to save your changes. Check "
+        'your connection and try again.');
+    return null;
+  }
+  try {
     final edited = await _edited(bytes, result.strokes, maxBytes);
     if (edited == null) {
       onProblem('The edited photo is too large. Try a smaller photo.');
