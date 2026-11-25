@@ -58,7 +58,7 @@ const _drawColors = [
 /// Square (1:1) crop editor: drag to move, pinch / scroll / slider to zoom.
 /// What's inside the frame is exactly what's kept. With [editable] (a photo
 /// not uploaded yet) it can also be drawn on and parts of it blurred (Draw,
-/// Blur; Undo), baked into the photo before it's uploaded. Pops with a
+/// Blur; Undo, Redo), baked into the photo before it's uploaded. Pops with a
 /// [PhotoCropResult], or null when cancelled. The photo itself is cropped
 /// by the backend.
 class PhotoCropScreen extends StatefulWidget {
@@ -96,6 +96,10 @@ class _PhotoCropScreenState extends State<PhotoCropScreen> {
   bool _editing = false;
   _Tool _tool = _Tool.move;
   final _strokes = <PhotoStroke>[];
+
+  /// Strokes undone, the last undone last (Redo brings them back; a new
+  /// stroke forgets them).
+  final _undone = <PhotoStroke>[];
 
   /// Bumped whenever a stroke changes (they grow in place while drawn).
   int _version = 0;
@@ -178,6 +182,7 @@ class _PhotoCropScreenState extends State<PhotoCropScreen> {
     _pointer = event.pointer;
     final onScreen = _tool == _Tool.draw ? _drawSize : _blurSize;
     setState(() {
+      _undone.clear();
       _strokes.add(PhotoStroke(
         kind:
             _tool == _Tool.draw ? PhotoStrokeKind.paint : PhotoStrokeKind.blur,
@@ -208,7 +213,15 @@ class _PhotoCropScreenState extends State<PhotoCropScreen> {
   void _undo() {
     if (_strokes.isEmpty) return;
     setState(() {
-      _strokes.removeLast();
+      _undone.add(_strokes.removeLast());
+      _version++;
+    });
+  }
+
+  void _redo() {
+    if (_undone.isEmpty) return;
+    setState(() {
+      _strokes.add(_undone.removeLast());
       _version++;
     });
   }
@@ -372,8 +385,8 @@ class _PhotoCropScreenState extends State<PhotoCropScreen> {
     );
   }
 
-  /// Move, Draw or Blur, and Undo; Draw's colours and brush size, Blur's
-  /// brush size.
+  /// Move, Draw or Blur, Undo and Redo; Draw's colours and brush size,
+  /// Blur's brush size.
   Widget _toolbar() {
     Widget tool(_Tool which, IconData icon, String label) {
       final on = _tool == which;
@@ -425,6 +438,12 @@ class _PhotoCropScreenState extends State<PhotoCropScreen> {
           tooltip: 'Undo',
           onPressed: _strokes.isEmpty ? null : _undo,
           icon: const Icon(Icons.undo_rounded),
+        ),
+        IconButton(
+          key: const Key('photoEditRedo'),
+          tooltip: 'Redo',
+          onPressed: _undone.isEmpty ? null : _redo,
+          icon: const Icon(Icons.redo_rounded),
         ),
       ]),
       if (_tool != _Tool.move) ...[
