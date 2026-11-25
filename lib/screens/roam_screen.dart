@@ -19,12 +19,12 @@ import '../widgets/roam/roaming.dart';
 
 /// How far from where I am I can roam (km) until the backend says
 /// (ROAM_REACH_KM).
-const defaultRoamReachKm = 20.0;
+const defaultRoamReachKm = 50.0;
 
 /// Makes the place naming Roam uses (tests put a fake one here).
 PlaceSearch Function() newPlaceSearch = PlaceSearch.new;
 
-/// Roam: look around somewhere near - within the roam reach (20 km) around
+/// Roam: look around somewhere near - within the roam reach (50 km) around
 /// where I am, drawn as a circle. Move the map under
 /// the pin (let go outside the circle: back to its edge), then Roam here.
 /// While roaming, Stop roaming ends it. Pops with true when roaming
@@ -79,7 +79,7 @@ class _RoamScreenState extends State<RoamScreen> {
     return mine == null ? null : LatLng(mine.latitude, mine.longitude);
   }
 
-  /// How far from where I am I can roam (the backend's, else 20 km).
+  /// How far from where I am I can roam (the backend's, else 50 km).
   double get _reachKm =>
       AppScope.read(context).roamReachKm ?? defaultRoamReachKm;
 
@@ -632,27 +632,28 @@ Future<void> showRoamInfo(BuildContext context, double reachKm) =>
               MapInfoPoint(
                 icon: Icons.radio_button_unchecked_rounded,
                 title: 'Up to ${reachKm.round()} km from you',
-                text: 'Roam anywhere inside the circle around where you '
-                    'are. Move the map to put the pin where you want to look '
-                    'around, then tap Roam here.',
+                text: 'You can roam anywhere inside the circle. Move the map '
+                    'until the pin is where you want to be, then tap Roam '
+                    'here.',
               ),
               const MapInfoPoint(
                 icon: roamIcon,
-                title: 'Seen there as roaming',
-                text: 'While you roam, Explore shows the people around that '
-                    'spot. They see you there with a Roaming label, never '
-                    'with a distance.',
+                title: 'People there can see you',
+                text: 'While you roam, Explore shows people near that spot. '
+                    'They see you with a Roaming label instead of a '
+                    'distance.',
               ),
               const MapInfoPoint(
                 icon: Icons.lock_outline_rounded,
                 title: 'Your real location stays private',
-                text: "The spot you roam isn't where you are. A location you "
-                    'share in chat is always your real one.',
+                text: "The spot you roam to isn't your real location. When you "
+                    'share your location in a chat, it always shows where you '
+                    'really are.',
               ),
               const MapInfoPoint(
                 icon: Icons.my_location_rounded,
                 title: 'Stop any time',
-                text: 'Tap Stop roaming to be back where you are.',
+                text: 'Tap Stop roaming to go back to your real location.',
               ),
             ],
           ),
