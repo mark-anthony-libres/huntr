@@ -69,3 +69,9 @@ flutter:
           weight: 700
         - asset: assets/fonts/plus_jakarta_sans/PlusJakartaSans-ExtraBold.ttf
           weight: 800
+
+# A patched copy of a plugin the sign-in bot check needs: the published one
+# doesn't build with Android Gradle Plugin 9 (see the copy's PATCHED.md).
+dependency_overrides:
+  flutter_inappwebview_android:
+    path: third_party/flutter_inappwebview_android
