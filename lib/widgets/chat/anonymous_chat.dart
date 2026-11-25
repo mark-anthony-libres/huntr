@@ -20,7 +20,11 @@ class RevealBanner extends StatelessWidget {
     this.busy = false,
     this.onAccept,
     this.onDecline,
+    this.onClose,
   });
+
+  /// Closes the banner (an answered request in a mutual chat).
+  final VoidCallback? onClose;
 
   final AnonymousInfo anonymous;
   final RevealRequest reveal;
@@ -171,6 +175,15 @@ class RevealBanner extends StatelessWidget {
           ],
         ]),
       ),
+      if (onClose != null)
+        IconButton(
+          key: const Key('revealBannerClose'),
+          tooltip: 'Close',
+          visualDensity: VisualDensity.compact,
+          onPressed: onClose,
+          icon: const Icon(Icons.close_rounded,
+              size: 20, color: HuntrColors.muted),
+        ),
     ]);
 
     return Align(

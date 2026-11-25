@@ -177,7 +177,7 @@ class _AnonymousProfileScreenState extends State<AnonymousProfileScreen> {
   }
 }
 
-/// The animal, name and status, on a warm card.
+/// The animal, and beside it the name and status, on a warm card.
 class _Hero extends StatelessWidget {
   const _Hero({required this.profile, this.presence = true, this.distance});
 
@@ -193,90 +193,103 @@ class _Hero extends StatelessWidget {
   Widget build(BuildContext context) {
     final online = profile.online && !profile.blocked;
     return Container(
-      padding: const EdgeInsets.fromLTRB(20, 28, 20, 24),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           colors: [Color(0xFF2A160B), Color(0xFF161210), Color(0xFF111114)],
           stops: [0, 0.55, 1],
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
         ),
         borderRadius: BorderRadius.circular(28),
         border: Border.all(color: HuntrColors.orange.withValues(alpha: 0.25)),
       ),
-      child: Column(children: [
-        // the animal, glowing
-        Container(
-          width: 132,
-          height: 132,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(
-                  color: HuntrColors.orange.withValues(alpha: 0.35),
-                  blurRadius: 36,
-                  spreadRadius: 2),
-            ],
+      child: LayoutBuilder(builder: (context, box) {
+        // smaller on a narrow phone
+        final avatar = box.maxWidth < 340 ? 84.0 : 108.0;
+        return Row(children: [
+          // the animal, glowing
+          Container(
+            width: avatar,
+            height: avatar,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                    color: HuntrColors.orange.withValues(alpha: 0.35),
+                    blurRadius: 36,
+                    spreadRadius: 2),
+              ],
+            ),
+            child: AnonymousArt(
+                animal: profile.avatar, radius: avatar / 2, size: avatar),
           ),
-          child: AnonymousArt(animal: profile.avatar, radius: 66, size: 132),
-        ),
-        const SizedBox(height: 18),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          decoration: BoxDecoration(
-            color: HuntrColors.orange.withValues(alpha: 0.15),
-            borderRadius: BorderRadius.circular(20),
+          const SizedBox(width: 20),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: HuntrColors.orange.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(Icons.theater_comedy_outlined,
+                        size: 15, color: HuntrColors.orange),
+                    SizedBox(width: 6),
+                    Text('ANONYMOUS',
+                        style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 1.2,
+                            color: HuntrColors.orange)),
+                  ]),
+                ),
+                const SizedBox(height: 8),
+                Text(profile.name,
+                    key: const Key('anonymousName'),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context)
+                        .textTheme
+                        .headlineSmall
+                        ?.copyWith(fontWeight: FontWeight.w800)),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    if (presence)
+                      _Pill(
+                        leading: online
+                            ? const OnlineDot(size: 9)
+                            : const Icon(Icons.circle_outlined,
+                                size: 10, color: HuntrColors.muted),
+                        label: online ? 'Online now' : 'Offline',
+                        color: online ? HuntrColors.online : HuntrColors.muted,
+                      ),
+                    if (distance ??
+                            (profile.distanceKm == null
+                                ? null
+                                : 'About ${profile.distanceKm} km away')
+                        case final far?)
+                      _Pill(
+                        key: const Key('anonymousDistance'),
+                        leading: const Icon(Icons.near_me_rounded,
+                            size: 14, color: HuntrColors.muted),
+                        label: far,
+                        color: Colors.white70,
+                      ),
+                  ],
+                ),
+              ],
+            ),
           ),
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-            Icon(Icons.theater_comedy_outlined,
-                size: 15, color: HuntrColors.orange),
-            SizedBox(width: 6),
-            Text('ANONYMOUS',
-                style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 1.2,
-                    color: HuntrColors.orange)),
-          ]),
-        ),
-        const SizedBox(height: 10),
-        Text(profile.name,
-            key: const Key('anonymousName'),
-            textAlign: TextAlign.center,
-            style: Theme.of(context)
-                .textTheme
-                .headlineMedium
-                ?.copyWith(fontWeight: FontWeight.w800)),
-        const SizedBox(height: 14),
-        Wrap(
-          alignment: WrapAlignment.center,
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            if (presence)
-              _Pill(
-                leading: online
-                    ? const OnlineDot(size: 9)
-                    : const Icon(Icons.circle_outlined,
-                        size: 10, color: HuntrColors.muted),
-                label: online ? 'Online now' : 'Offline',
-                color: online ? HuntrColors.online : HuntrColors.muted,
-              ),
-            if (distance ??
-                    (profile.distanceKm == null
-                        ? null
-                        : 'About ${profile.distanceKm} km away')
-                case final far?)
-              _Pill(
-                key: const Key('anonymousDistance'),
-                leading: const Icon(Icons.near_me_rounded,
-                    size: 14, color: HuntrColors.muted),
-                label: far,
-                color: Colors.white70,
-              ),
-          ],
-        ),
-      ]),
+        ]);
+      }),
     );
   }
 }

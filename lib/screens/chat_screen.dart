@@ -54,6 +54,7 @@ import '../widgets/page_title.dart';
 import '../widgets/emoticons.dart';
 import '../widgets/chat/album_interest.dart';
 import '../flows/my_albums.dart';
+import '../services/closed_reveals.dart';
 
 class ChatScreen extends StatefulWidget {
   /// A sample chat (no backend), by profile.
@@ -356,6 +357,10 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void initState() {
     super.initState();
+    // reveal outcomes closed before stay closed
+    ClosedReveals.load().then((_) {
+      if (mounted) setState(() {});
+    });
     _input.addListener(() {
       setState(() {});
       // tell the other person I'm typing (or stopped) - only when the text
@@ -1353,10 +1358,22 @@ class _ChatScreenState extends State<ChatScreen> {
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 760),
           child: Column(children: [
-            if (anonymous != null && summary?.reveal != null)
+            if (anonymous != null &&
+                summary?.reveal != null &&
+                !ClosedReveals.isClosed(id, summary!.reveal!.status.name))
               RevealBanner(
                 anonymous: anonymous,
-                reveal: summary!.reveal!,
+                reveal: summary.reveal!,
+                // a mutual chat goes on whatever the answer: once answered,
+                // the banner can be closed
+                onClose: anonymous.mutual &&
+                        summary.reveal!.status != RevealStatus.pending
+                    ? () async {
+                        await ClosedReveals.close(
+                            id, summary.reveal!.status.name);
+                        if (mounted) setState(() {});
+                      }
+                    : null,
                 otherName: p.name,
                 busy: _answering,
                 onAccept: () =>
