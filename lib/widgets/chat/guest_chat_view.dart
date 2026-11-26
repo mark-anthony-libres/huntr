@@ -504,7 +504,7 @@ class _Glow extends StatefulWidget {
 
 class _GlowState extends State<_Glow> with SingleTickerProviderStateMixin {
   late final _pulse = AnimationController(
-      vsync: this, duration: const Duration(milliseconds: 1600));
+      vsync: this, duration: const Duration(milliseconds: 1200));
 
   @override
   void didChangeDependencies() {
@@ -540,23 +540,23 @@ class _GlowState extends State<_Glow> with SingleTickerProviderStateMixin {
         child: widget.child,
         builder: (context, child) {
           final t = widget.on ? Curves.easeInOut.transform(_pulse.value) : 0.0;
-          return AnimatedContainer(
+          // (drawn as it is each frame: the pulse is the animation)
+          return Container(
             key: const Key('guestMessageGlow'),
-            duration: const Duration(milliseconds: 300),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(28),
               border: Border.all(
                   color: widget.on
-                      ? HuntrColors.orange.withValues(alpha: 0.7 + 0.3 * t)
+                      ? HuntrColors.orange.withValues(alpha: 0.35 + 0.65 * t)
                       : Colors.transparent,
                   width: 1.5),
               boxShadow: widget.on
                   ? [
                       BoxShadow(
                           color: HuntrColors.orange
-                              .withValues(alpha: 0.45 + 0.35 * t),
-                          blurRadius: 16 + 16 * t,
-                          spreadRadius: 2 * t),
+                              .withValues(alpha: 0.15 + 0.6 * t),
+                          blurRadius: 6 + 26 * t,
+                          spreadRadius: 6 * t),
                     ]
                   : const [],
             ),

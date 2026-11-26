@@ -201,6 +201,35 @@ class _GuestPageState extends State<GuestPage> {
     widget.onLeave();
   }
 
+  /// How it works: the rules, and the Community Guidelines.
+  void _info(int minutes) => showModalBottomSheet<void>(
+        context: context,
+        showDragHandle: true,
+        isScrollControlled: true,
+        builder: (context) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+            child: Column(
+              key: const Key('guestInfoSheet'),
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text('How it works',
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w700)),
+                const SizedBox(height: 14),
+                _Rules(minutes: minutes),
+                const SizedBox(height: 6),
+                Align(
+                    alignment: Alignment.centerLeft, child: _GuidelinesLink()),
+              ],
+            ),
+          ),
+        ),
+      );
+
   void _profile() {
     final card = _card;
     if (card == null) return;
@@ -237,18 +266,10 @@ class _GuestPageState extends State<GuestPage> {
           intro: GuestChatIntro(
             animal: started ? summary.myAvatar : card.avatar,
             title: started ? 'Hi, ${summary.myName}' : 'Say hi to ${card.name}',
+            // the rest is behind (i) in the header
             text: started
-                ? 'You’re both anonymous. They only see ${summary.myName}, '
-                    'and you only see an anonymous name. The chat ends '
-                    '${card.idleMinutes} minutes after your last message. '
-                    'After that you can’t open it, and they can read it for '
-                    '7 days.'
-                : 'You’re anonymous, and no account is needed. The chat '
-                    'ends ${card.idleMinutes} minutes after your last '
-                    'message, and they can read it for 7 days. Don’t share '
-                    'anything you wouldn’t want kept.\n\nBy sending a '
-                    'message, you confirm you’re 18 or older and agree to '
-                    'the Community Guidelines.',
+                ? 'You’re anonymous to each other.'
+                : 'You’re anonymous. No account needed.',
             actions: [
               FilledButton.icon(
                 key: const Key('guestJoin'),
@@ -257,10 +278,15 @@ class _GuestPageState extends State<GuestPage> {
                 icon: const Icon(Icons.person_add_alt_1_rounded, size: 18),
                 label: const Text('Join HUNTR to keep talking'),
               ),
-              _GuidelinesLink(),
             ],
           ),
           actions: [
+            IconButton(
+              key: const Key('guestInfo'),
+              tooltip: 'How it works',
+              icon: const Icon(Icons.info_outline_rounded),
+              onPressed: () => _info(card.idleMinutes),
+            ),
             if (!chat.ended && _token != null)
               Padding(
                 padding: const EdgeInsets.only(right: 8),
@@ -404,6 +430,11 @@ class _Rules extends StatelessWidget {
             Icons.visibility_outlined,
             'They can read what you send. Don’t share anything you wouldn’t '
             'want kept.'),
+        const SizedBox(height: 12),
+        line(
+            Icons.verified_user_outlined,
+            'Only for people 18 or older. By sending a message, you agree to '
+            'the Community Guidelines.'),
       ]),
     );
   }
