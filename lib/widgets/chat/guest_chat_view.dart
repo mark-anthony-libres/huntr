@@ -158,6 +158,8 @@ class _GuestChatViewState extends State<GuestChatView> {
                   _MessageBox(
                     input: _input,
                     focus: _inputFocus,
+                    // nothing said yet: the box glows, to start there
+                    glow: c.messages.isEmpty,
                     hint: chat == null ? 'Message' : 'Message ${chat.name}…',
                     onSend: _send,
                     onGif: c.gifs == null ? null : _pickGif,
@@ -406,12 +408,16 @@ class _MessageBox extends StatelessWidget {
   const _MessageBox(
       {required this.input,
       required this.focus,
+      this.glow = false,
       required this.hint,
       required this.onSend,
       this.onGif});
 
   final TextEditingController input;
   final FocusNode focus;
+
+  /// An orange glow around the box (before the first message).
+  final bool glow;
   final String hint;
   final VoidCallback onSend;
   final VoidCallback? onGif;
@@ -438,22 +444,25 @@ class _MessageBox extends StatelessWidget {
             const SizedBox(width: 6),
           ],
           Expanded(
-            child: TextField(
-              key: const Key('guestMessageInput'),
-              controller: input,
-              focusNode: focus,
-              minLines: 1,
-              maxLines: 5,
-              maxLength: 1000,
-              buildCounter: (_,
-                      {required currentLength,
-                      required isFocused,
-                      maxLength}) =>
-                  null,
-              textCapitalization: TextCapitalization.sentences,
-              textInputAction: TextInputAction.send,
-              decoration: InputDecoration(hintText: hint),
-              onSubmitted: (_) => onSend(),
+            child: _Glow(
+              on: glow,
+              child: TextField(
+                key: const Key('guestMessageInput'),
+                controller: input,
+                focusNode: focus,
+                minLines: 1,
+                maxLines: 5,
+                maxLength: 1000,
+                buildCounter: (_,
+                        {required currentLength,
+                        required isFocused,
+                        maxLength}) =>
+                    null,
+                textCapitalization: TextCapitalization.sentences,
+                textInputAction: TextInputAction.send,
+                decoration: InputDecoration(hintText: hint),
+                onSubmitted: (_) => onSend(),
+              ),
             ),
           ),
           AnimatedSize(
@@ -479,4 +488,80 @@ class _MessageBox extends StatelessWidget {
       ),
     );
   }
+}
+
+/// A soft orange glow that breathes around [child] while [on] (still with
+/// reduced motion).
+class _Glow extends StatefulWidget {
+  const _Glow({required this.on, required this.child});
+
+  final bool on;
+  final Widget child;
+
+  @override
+  State<_Glow> createState() => _GlowState();
+}
+
+class _GlowState extends State<_Glow> with SingleTickerProviderStateMixin {
+  late final _pulse = AnimationController(
+      vsync: this, duration: const Duration(milliseconds: 1600));
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _run();
+  }
+
+  @override
+  void didUpdateWidget(_Glow old) {
+    super.didUpdateWidget(old);
+    _run();
+  }
+
+  void _run() {
+    final still = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    if (widget.on && !still) {
+      if (!_pulse.isAnimating) _pulse.repeat(reverse: true);
+    } else {
+      _pulse.stop();
+      _pulse.value = widget.on ? 1 : 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+        animation: _pulse,
+        child: widget.child,
+        builder: (context, child) {
+          final t = widget.on ? Curves.easeInOut.transform(_pulse.value) : 0.0;
+          return AnimatedContainer(
+            key: const Key('guestMessageGlow'),
+            duration: const Duration(milliseconds: 300),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(
+                  color: widget.on
+                      ? HuntrColors.orange.withValues(alpha: 0.7 + 0.3 * t)
+                      : Colors.transparent,
+                  width: 1.5),
+              boxShadow: widget.on
+                  ? [
+                      BoxShadow(
+                          color: HuntrColors.orange
+                              .withValues(alpha: 0.45 + 0.35 * t),
+                          blurRadius: 16 + 16 * t,
+                          spreadRadius: 2 * t),
+                    ]
+                  : const [],
+            ),
+            child: child,
+          );
+        },
+      );
 }
