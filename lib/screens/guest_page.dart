@@ -270,15 +270,6 @@ class _GuestPageState extends State<GuestPage> {
             text: started
                 ? 'You’re anonymous to each other.'
                 : 'You’re anonymous. No account needed.',
-            actions: [
-              FilledButton.icon(
-                key: const Key('guestJoin'),
-                style: FilledButton.styleFrom(minimumSize: const Size(0, 46)),
-                onPressed: _join,
-                icon: const Icon(Icons.person_add_alt_1_rounded, size: 18),
-                label: const Text('Join HUNTR to keep talking'),
-              ),
-            ],
           ),
           actions: [
             IconButton(
