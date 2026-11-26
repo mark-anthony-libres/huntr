@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 
 import '../../models/models.dart' show Message, MessageStatus;
 import '../../services/guest_chat_api.dart';
-import '../../services/huntr_backend.dart' show ChatMessage, ChatMessageType;
 import '../../state/guest_chats_state.dart';
 import '../../theme.dart';
 import '../anonymous_avatar.dart';
@@ -12,13 +11,16 @@ import 'anonymous_chat.dart' show AnonymousClosedBar;
 import 'gif_bubble.dart';
 import 'gif_picker.dart';
 import 'message_bubble.dart';
+import 'reactions.dart';
+import 'reply.dart';
 import 'time_divider.dart';
 
 /// A guest chat, the same for the host (in the app) and the guest (in a
 /// browser): the anonymous chat's header (their animal and anonymous name,
 /// whom they see me as, the time left), an [intro] at the start, the
-/// messages as chat bubbles, and the anonymous chat's message box (GIFs and
-/// stickers, and text). When it ends, [ended] in place of the box.
+/// messages as chat bubbles (with what chats do with one: react, reply,
+/// copy), and the anonymous chat's message box (GIFs and stickers, and
+/// text). When it ends, [ended] in place of the box.
 class GuestChatView extends StatefulWidget {
   const GuestChatView({
     super.key,
@@ -53,7 +55,16 @@ class GuestChatView extends StatefulWidget {
 
 class _GuestChatViewState extends State<GuestChatView> {
   final _input = TextEditingController();
+  final _inputFocus = FocusNode();
   Timer? _clock;
+
+  /// The message I'm answering (its quote over the box).
+  GuestChatMessage? _replying;
+
+  void _reply(GuestChatMessage m) {
+    setState(() => _replying = m);
+    _inputFocus.requestFocus();
+  }
 
   @override
   void initState() {
@@ -69,6 +80,7 @@ class _GuestChatViewState extends State<GuestChatView> {
   void dispose() {
     _clock?.cancel();
     _input.dispose();
+    _inputFocus.dispose();
     super.dispose();
   }
 
@@ -76,13 +88,17 @@ class _GuestChatViewState extends State<GuestChatView> {
     final text = _input.text.trim();
     if (text.isEmpty) return;
     _input.clear();
-    unawaited(widget.controller.sendText(text));
+    final replying = _replying;
+    setState(() => _replying = null);
+    unawaited(widget.controller.sendText(text, replyTo: replying));
   }
 
   Future<void> _pickGif() async {
     final picked = await showGifPicker(context, source: widget.controller.gifs);
     if (picked is PickedGif) {
-      unawaited(widget.controller.sendGif(picked.gif));
+      final replying = _replying;
+      setState(() => _replying = null);
+      unawaited(widget.controller.sendGif(picked.gif, replyTo: replying));
     }
   }
 
@@ -132,13 +148,21 @@ class _GuestChatViewState extends State<GuestChatView> {
                 if (c.ended)
                   widget.ended ??
                       const AnonymousClosedBar(message: 'This chat has ended.')
-                else
+                else ...[
+                  if (_replying != null)
+                    ReplyBanner(
+                      message: _replying!.toChatMessage(),
+                      otherName: chat?.name ?? '',
+                      onCancel: () => setState(() => _replying = null),
+                    ),
                   _MessageBox(
                     input: _input,
+                    focus: _inputFocus,
                     hint: chat == null ? 'Message' : 'Message ${chat.name}…',
                     onSend: _send,
                     onGif: c.gifs == null ? null : _pickGif,
                   ),
+                ],
               ]),
             ),
           ),
@@ -174,16 +198,9 @@ class _GuestChatViewState extends State<GuestChatView> {
             : seen
                 ? MessageStatus.read
                 : MessageStatus.sent;
+    final chatMessage = m.toChatMessage();
     final Widget bubble = m.gif != null
-        ? GifBubble(
-            message: ChatMessage(
-                id: m.id ?? 0,
-                conversationId: 0,
-                fromMe: m.mine,
-                body: '',
-                sentAt: m.sentAt,
-                type: ChatMessageType.gif,
-                gif: m.gif))
+        ? GifBubble(message: chatMessage)
         : MessageBubble(
             message: Message(
                 id: m.clientId,
@@ -194,9 +211,21 @@ class _GuestChatViewState extends State<GuestChatView> {
             tail: tail,
             // the status under my newest one (and any that failed)
             showStatus: m.mine && (isLast || m.failed));
-    if (!m.failed) return bubble;
-    return GestureDetector(
-      onTap: () => unawaited(c.retry(m)),
+    if (m.failed) {
+      return GestureDetector(
+        onTap: () => unawaited(c.retry(m)),
+        child: bubble,
+      );
+    }
+    // as in chats: react (long-press, double tap), reply (swipe), copy;
+    // an ended chat is only to read (copy still works)
+    return Reactable(
+      key: ValueKey('guestMessage-${m.clientId}'),
+      message: chatMessage,
+      enabled: !c.ended && c.react != null,
+      otherName: c.chat?.name ?? '',
+      onReact: (emoji) => unawaited(c.reactTo(m, emoji)),
+      onReply: c.ended ? null : () => _reply(m),
       child: bubble,
     );
   }
@@ -373,11 +402,13 @@ class GuestChatIntro extends StatelessWidget {
 class _MessageBox extends StatelessWidget {
   const _MessageBox(
       {required this.input,
+      required this.focus,
       required this.hint,
       required this.onSend,
       this.onGif});
 
   final TextEditingController input;
+  final FocusNode focus;
   final String hint;
   final VoidCallback onSend;
   final VoidCallback? onGif;
@@ -407,6 +438,7 @@ class _MessageBox extends StatelessWidget {
             child: TextField(
               key: const Key('guestMessageInput'),
               controller: input,
+              focusNode: focus,
               minLines: 1,
               maxLines: 5,
               maxLength: 1000,

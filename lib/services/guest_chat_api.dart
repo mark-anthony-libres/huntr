@@ -4,7 +4,15 @@ import 'package:http/http.dart' as http;
 
 import '../config/google_oauth_config.dart';
 import 'huntr_backend.dart'
-    show BackendException, ChatGif, GifPage, SessionRejectedException;
+    show
+        BackendException,
+        ChatGif,
+        ChatMessage,
+        ChatMessageType,
+        GifPage,
+        MessageReaction,
+        ReplyPreview,
+        SessionRejectedException;
 
 /// Guest chats (a guest link: people not on HUNTR chat anonymously with its
 /// owner). The guest's side is public and opened by a secret only their
@@ -75,6 +83,8 @@ class GuestChatMessage {
     required this.clientId,
     this.gif,
     this.failed = false,
+    this.replyTo,
+    this.reactions = const [],
   });
 
   factory GuestChatMessage.fromJson(Map<String, dynamic> json) {
@@ -87,6 +97,10 @@ class GuestChatMessage {
       gif: isGif ? ChatGif.fromJson(body as Map<String, dynamic>) : null,
       clientId: json['client_id'] as String,
       sentAt: DateTime.parse(json['created_at'] as String).toLocal(),
+      replyTo: json['reply_to'] == null
+          ? null
+          : ReplyPreview.fromJson(json['reply_to'] as Map<String, dynamic>),
+      reactions: reactionsFromJson(json['reactions']),
     );
   }
 
@@ -98,6 +112,27 @@ class GuestChatMessage {
   final DateTime sentAt;
   final bool failed;
 
+  /// The message it replies to (as chats show it).
+  final ReplyPreview? replyTo;
+
+  /// Each side's reaction (one each, as in chats).
+  final List<MessageReaction> reactions;
+
+  /// As a chat message, for what chats show and do with one (the bubble,
+  /// reactions, reply, copy).
+  ChatMessage toChatMessage() => ChatMessage(
+      id: id,
+      conversationId: 0,
+      fromMe: mine,
+      body: text,
+      sentAt: sentAt,
+      clientId: clientId,
+      failed: failed,
+      type: gif == null ? ChatMessageType.text : ChatMessageType.gif,
+      gif: gif,
+      replyTo: replyTo,
+      reactions: reactions);
+
   /// A line for a chat list.
   String get preview => gif == null
       ? text
@@ -105,15 +140,24 @@ class GuestChatMessage {
           ? 'Sticker'
           : 'GIF';
 
-  GuestChatMessage copyWith({bool? failed}) => GuestChatMessage(
-      id: id,
-      mine: mine,
-      text: text,
-      gif: gif,
-      clientId: clientId,
-      sentAt: sentAt,
-      failed: failed ?? this.failed);
+  GuestChatMessage copyWith({bool? failed, List<MessageReaction>? reactions}) =>
+      GuestChatMessage(
+          id: id,
+          mine: mine,
+          text: text,
+          gif: gif,
+          clientId: clientId,
+          sentAt: sentAt,
+          failed: failed ?? this.failed,
+          replyTo: replyTo,
+          reactions: reactions ?? this.reactions);
 }
+
+/// Reactions as chats send them: [{"emoji", "from_me"}].
+List<MessageReaction> reactionsFromJson(Object? json) => [
+      for (final r in json as List? ?? const [])
+        MessageReaction.fromJson(r as Map<String, dynamic>),
+    ];
 
 /// A guest chat as either side sees it: the other's anonymous name and
 /// animal, mine, when it ends, the last message and how many are unread.
@@ -201,7 +245,8 @@ class GuestChatSummary {
 
 /// A chat and its messages.
 class GuestChatPage {
-  const GuestChatPage({required this.chat, required this.messages});
+  const GuestChatPage(
+      {required this.chat, required this.messages, this.reactions});
 
   factory GuestChatPage.fromJson(Map<String, dynamic> json) => GuestChatPage(
         chat: GuestChatSummary.fromJson(json['chat'] as Map<String, dynamic>),
@@ -209,10 +254,22 @@ class GuestChatPage {
           for (final m in json['messages'] as List<dynamic>)
             GuestChatMessage.fromJson(m as Map<String, dynamic>),
         ],
+        reactions: json['reactions'] is! Map
+            ? null
+            : {
+                for (final e in (json['reactions'] as Map).entries)
+                  int.parse(e.key as String): reactionsFromJson(e.value),
+              },
       );
 
   final GuestChatSummary chat;
+
+  /// The new messages.
   final List<GuestChatMessage> messages;
+
+  /// Every reacted message's reactions, by id (null: not said): the others
+  /// have none. How a reaction on an older message arrives.
+  final Map<int, List<MessageReaction>>? reactions;
 }
 
 /// A chat just started: its secret (kept by the browser) and the chat.
@@ -310,11 +367,28 @@ class GuestChatApi {
           token: token)));
 
   Future<GuestChatMessage> hostSend(String token, int chatId,
-          {String? body, String? gifId, required String clientId}) async =>
+          {String? body,
+          String? gifId,
+          int? replyToId,
+          required String clientId}) async =>
       GuestChatMessage.fromJson(_data(await _send(
           'POST', '/guest-chats/$chatId/messages',
           token: token,
-          body: {'body': body, 'gif_id': gifId, 'client_id': clientId})));
+          body: {
+            'body': body,
+            'gif_id': gifId,
+            'client_id': clientId,
+            if (replyToId != null) 'reply_to_id': replyToId,
+          })));
+
+  /// My reaction on their message (null: removed).
+  Future<GuestChatMessage> hostReact(
+          String token, int chatId, int messageId, String? emoji) async =>
+      GuestChatMessage.fromJson(_data(await _send(
+          emoji == null ? 'DELETE' : 'PUT',
+          '/guest-chats/$chatId/messages/$messageId/reaction',
+          token: token,
+          body: emoji == null ? null : {'emoji': emoji})));
 
   Future<void> hostRead(String token, int chatId, int upTo) =>
       _send('POST', '/guest-chats/$chatId/read',
@@ -350,11 +424,28 @@ class GuestChatApi {
           guestToken: guestToken)));
 
   Future<GuestChatMessage> guestSend(String guestToken,
-          {String? body, String? gifId, required String clientId}) async =>
+          {String? body,
+          String? gifId,
+          int? replyToId,
+          required String clientId}) async =>
       GuestChatMessage.fromJson(_data(await _send(
           'POST', '/guest/chat/messages',
           guestToken: guestToken,
-          body: {'body': body, 'gif_id': gifId, 'client_id': clientId})));
+          body: {
+            'body': body,
+            'gif_id': gifId,
+            'client_id': clientId,
+            if (replyToId != null) 'reply_to_id': replyToId,
+          })));
+
+  /// My reaction on the host's message (null: removed).
+  Future<GuestChatMessage> guestReact(
+          String guestToken, int messageId, String? emoji) async =>
+      GuestChatMessage.fromJson(_data(await _send(
+          emoji == null ? 'DELETE' : 'PUT',
+          '/guest/chat/messages/$messageId/reaction',
+          guestToken: guestToken,
+          body: emoji == null ? null : {'emoji': emoji})));
 
   Future<void> guestRead(String guestToken, int upTo) =>
       _send('POST', '/guest/chat/read',

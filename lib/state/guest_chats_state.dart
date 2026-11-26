@@ -5,10 +5,23 @@ import 'package:flutter/widgets.dart';
 
 import '../services/guest_chat_api.dart';
 import '../services/huntr_backend.dart'
-    show BackendException, ChatGif, GifPage, SessionRejectedException;
+    show
+        BackendException,
+        ChatGif,
+        GifPage,
+        MessageReaction,
+        ReplyPreview,
+        SessionRejectedException;
 
 typedef GuestGifLoader = Future<GifPage?> Function(
     {required bool stickers, String query, int offset});
+
+typedef GuestPost = Future<GuestChatMessage> Function(
+    {String? body, String? gifId, int? replyToId, required String clientId});
+
+/// Sets my reaction on a message (null: removes it); the message after.
+typedef GuestReact = Future<GuestChatMessage> Function(
+    int messageId, String? emoji);
 
 final _random = Random.secure();
 
@@ -17,14 +30,13 @@ String newGuestClientId() => List.generate(
 
 /// One guest chat, for either side (the host signed in, or the guest by the
 /// secret their browser holds): its messages, sending text and GIFs, read
-/// marks, and catching up every [pollEvery]. The calls differ by side; what
-/// the chat does doesn't.
+/// marks, replies and reactions, and catching up every [pollEvery]. The
+/// calls differ by side; what the chat does doesn't.
 class GuestChatController extends ChangeNotifier {
   GuestChatController({
     required Future<GuestChatPage> Function(int? after) fetch,
-    required Future<GuestChatMessage> Function(
-            {String? body, String? gifId, required String clientId})
-        post,
+    required GuestPost post,
+    this.react,
     this.read,
     this.gifs,
     this.pollEvery = const Duration(seconds: 3),
@@ -33,8 +45,8 @@ class GuestChatController extends ChangeNotifier {
         _post = post;
 
   final Future<GuestChatPage> Function(int? after) _fetch;
-  final Future<GuestChatMessage> Function(
-      {String? body, String? gifId, required String clientId}) _post;
+  final GuestPost _post;
+  final GuestReact? react;
   final Future<void> Function(int upTo)? read;
 
   /// GIF search for this side.
@@ -78,6 +90,7 @@ class GuestChatController extends ChangeNotifier {
       for (final message in page.messages) {
         _add(message);
       }
+      _applyReactions(page.reactions);
       loading = false;
       error = null;
       _notify();
@@ -105,6 +118,56 @@ class GuestChatController extends ChangeNotifier {
     _markRead();
   }
 
+  /// Every reacted message's reactions: the rest have none.
+  void _applyReactions(Map<int, List<MessageReaction>>? reactions) {
+    if (reactions == null) return;
+    for (var i = 0; i < messages.length; i++) {
+      final m = messages[i];
+      if (m.id == null) continue;
+      final now = reactions[m.id] ?? const <MessageReaction>[];
+      if (!_sameReactions(m.reactions, now)) {
+        messages[i] = m.copyWith(reactions: now);
+      }
+    }
+  }
+
+  static bool _sameReactions(
+          List<MessageReaction> a, List<MessageReaction> b) =>
+      a.length == b.length &&
+      [
+        for (var i = 0; i < a.length; i++)
+          a[i].emoji == b[i].emoji && a[i].fromMe == b[i].fromMe
+      ].every((same) => same);
+
+  /// A message changed elsewhere (a reaction came live).
+  void updated(GuestChatMessage message) {
+    if (!messages.any((m) => m.id == message.id)) return;
+    _add(message);
+    _notify();
+  }
+
+  /// My reaction on their message: [emoji], or (the same as mine again)
+  /// none. Shown at once; put back if it fails.
+  Future<void> reactTo(GuestChatMessage message, String emoji) async {
+    final id = message.id;
+    if (react == null || id == null || message.mine || ended) return;
+    final mine = message.reactions.where((r) => r.fromMe).firstOrNull;
+    final next = mine?.emoji == emoji ? null : emoji;
+    _add(message.copyWith(reactions: [
+      ...message.reactions.where((r) => !r.fromMe),
+      if (next != null) MessageReaction(emoji: next, fromMe: true),
+    ]));
+    _notify();
+    try {
+      _add(await react!(id, next));
+    } on GuestChatEndedException {
+      _end();
+    } catch (_) {
+      _add(message);
+    }
+    _notify();
+  }
+
   void _add(GuestChatMessage message) {
     final i = messages.indexWhere((m) =>
         (m.id != null && m.id == message.id) || m.clientId == message.clientId);
@@ -124,12 +187,23 @@ class GuestChatController extends ChangeNotifier {
     unawaited(read!(upTo).catchError((_) {}));
   }
 
-  Future<void> sendText(String text) => _send(body: text.trim());
+  /// [replyTo]: the message it answers.
+  Future<void> sendText(String text, {GuestChatMessage? replyTo}) => _send(
+      body: text.trim(),
+      replyTo: replyTo?.id == null ? null : _quote(replyTo!));
 
-  Future<void> sendGif(ChatGif gif) => _send(gif: gif);
+  Future<void> sendGif(ChatGif gif, {GuestChatMessage? replyTo}) =>
+      _send(gif: gif, replyTo: replyTo?.id == null ? null : _quote(replyTo!));
+
+  static ReplyPreview _quote(GuestChatMessage m) =>
+      ReplyPreview.of(m.toChatMessage());
 
   /// Shown at once, then saved; a failure marks it to try again.
-  Future<void> _send({String? body, ChatGif? gif, String? clientId}) async {
+  Future<void> _send(
+      {String? body,
+      ChatGif? gif,
+      String? clientId,
+      ReplyPreview? replyTo}) async {
     if (ended || ((body == null || body.isEmpty) && gif == null)) return;
     final id = clientId ?? newGuestClientId();
     final pending = GuestChatMessage(
@@ -138,11 +212,13 @@ class GuestChatController extends ChangeNotifier {
         text: body ?? '',
         gif: gif,
         clientId: id,
-        sentAt: DateTime.now());
+        sentAt: DateTime.now(),
+        replyTo: replyTo);
     _add(pending);
     _notify();
     try {
-      final saved = await _post(body: body, gifId: gif?.id, clientId: id);
+      final saved = await _post(
+          body: body, gifId: gif?.id, replyToId: replyTo?.id, clientId: id);
       _add(saved);
       // a guest's message gives the chat its full time again
       await refresh();
@@ -158,7 +234,8 @@ class GuestChatController extends ChangeNotifier {
   Future<void> retry(GuestChatMessage failed) => _send(
       body: failed.gif == null ? failed.text : null,
       gif: failed.gif,
-      clientId: failed.clientId);
+      clientId: failed.clientId,
+      replyTo: failed.replyTo);
 
   void markEnded({int? joinedConversationId}) {
     this.joinedConversationId ??= joinedConversationId;
@@ -259,9 +336,18 @@ class GuestChatsState extends ChangeNotifier {
     final controller = GuestChatController(
       fetch: (after) async =>
           (await _call((t) => api.hostMessages(t, chatId, after: after)))!,
-      post: ({String? body, String? gifId, required String clientId}) async =>
+      post: (
+              {String? body,
+              String? gifId,
+              int? replyToId,
+              required String clientId}) async =>
           (await _call((t) => api.hostSend(t, chatId,
-              body: body, gifId: gifId, clientId: clientId)))!,
+              body: body,
+              gifId: gifId,
+              replyToId: replyToId,
+              clientId: clientId)))!,
+      react: (messageId, emoji) async =>
+          (await _call((t) => api.hostReact(t, chatId, messageId, emoji)))!,
       read: (upTo) async {
         await _call((t) => api.hostRead(t, chatId, upTo));
         _setUnread(chatId, 0);
@@ -348,6 +434,12 @@ class GuestChatsState extends ChangeNotifier {
         final rest = chats.where((c) => c.id != summary.id);
         chats = [open == null ? summary : summary.copyWith(unread: 0), ...rest];
         notifyListeners();
+      case 'guest.reacted':
+        final id = event['chat_id'];
+        final messageJson = event['message'];
+        if (id is int && messageJson is Map<String, dynamic>) {
+          _open[id]?.updated(GuestChatMessage.fromJson(messageJson));
+        }
       case 'guest.ended':
         final id = event['chat_id'];
         if (id is int) _markEnded(id);

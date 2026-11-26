@@ -85,8 +85,17 @@ class _GuestPageState extends State<GuestPage> {
     _chat?.dispose();
     final chat = GuestChatController(
       fetch: (after) => _api.guestChat(token, after: after),
-      post: ({String? body, String? gifId, required String clientId}) =>
-          _api.guestSend(token, body: body, gifId: gifId, clientId: clientId),
+      post: (
+              {String? body,
+              String? gifId,
+              int? replyToId,
+              required String clientId}) =>
+          _api.guestSend(token,
+              body: body,
+              gifId: gifId,
+              replyToId: replyToId,
+              clientId: clientId),
+      react: (messageId, emoji) => _api.guestReact(token, messageId, emoji),
       read: (upTo) => _api.guestRead(token, upTo),
       gifs: ({required bool stickers, String query = '', int offset = 0}) =>
           _api.guestGifs(token,
