@@ -79,11 +79,27 @@ class _ConversationListState extends State<ConversationList> {
       onVisible: () => messaging.loadMore(anonymous: _anonymous),
     );
     final app = AppScope.of(context);
-    // guest chats (from my guest link) lead the Anonymous tab
+    // guest chats (from my guest link): first in the Anonymous tab, under
+    // the search, which (with Unread) picks among them too
     final guestChats = GuestChatsScope.of(context);
-    final guests = _anonymous && _filter == _ChatFilter.all && _query.isEmpty
-        ? guestChats?.chats ?? const []
-        : const <GuestChatSummary>[];
+    final anyGuests = _anonymous && (guestChats?.chats.isNotEmpty ?? false);
+    final guests = !anyGuests
+        ? const <GuestChatSummary>[]
+        : guestChats!.chats.where((g) {
+            switch (_filter) {
+              case _ChatFilter.all:
+                break;
+              case _ChatFilter.unread:
+                if (g.unread == 0) return false;
+              case _ChatFilter.online:
+              case _ChatFilter.favorites:
+                return false; // neither applies to a guest
+            }
+            if (_query.isEmpty) return true;
+            final q = _query.toLowerCase();
+            return g.name.toLowerCase().contains(q) ||
+                (g.lastMessage?.preview.toLowerCase().contains(q) ?? false);
+          }).toList();
     final matching = (all ?? const []).where((c) {
       switch (_filter) {
         case _ChatFilter.all:
@@ -213,19 +229,6 @@ class _ConversationListState extends State<ConversationList> {
                 ),
               ),
             ),
-            if (guests.isNotEmpty)
-              SliverPadding(
-                padding: EdgeInsets.fromLTRB(side - 8, 0, side - 8, 8),
-                sliver: SliverList.list(children: [
-                  for (final g in guests)
-                    GuestChatRow(
-                      chat: g,
-                      now: now,
-                      onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                          builder: (_) => GuestChatScreen(chat: g))),
-                    ),
-                ]),
-              ),
             if (all == null && loadError != null)
               SliverPadding(
                 padding: pad(4, 16),
@@ -244,9 +247,7 @@ class _ConversationListState extends State<ConversationList> {
                 sliver: const SliverToBoxAdapter(
                     child: LoadingRows(count: 4, height: 72)),
               )
-            else if (all.isEmpty && guests.isNotEmpty)
-              const SliverToBoxAdapter(child: SizedBox.shrink())
-            else if (all.isEmpty)
+            else if (all.isEmpty && !anyGuests)
               SliverFillRemaining(
                 hasScrollBody: false,
                 child: _anonymous
@@ -266,10 +267,24 @@ class _ConversationListState extends State<ConversationList> {
                   ),
                 ),
               ),
+              if (guests.isNotEmpty)
+                SliverPadding(
+                  padding: EdgeInsets.fromLTRB(side - 8, 0, side - 8, 8),
+                  sliver: SliverList.list(children: [
+                    for (final g in guests)
+                      GuestChatRow(
+                        chat: g,
+                        now: now,
+                        onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute(
+                                builder: (_) => GuestChatScreen(chat: g))),
+                      ),
+                  ]),
+                ),
               // nothing matches among those loaded: look further
               if (list.isEmpty && more)
                 SliverToBoxAdapter(child: loadMore)
-              else if (list.isEmpty)
+              else if (list.isEmpty && guests.isEmpty)
                 SliverFillRemaining(
                   hasScrollBody: false,
                   child: Center(
