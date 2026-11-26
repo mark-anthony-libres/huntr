@@ -177,6 +177,23 @@ class GuestChatSummary {
     this.deletesAt,
   });
 
+  /// The chat a guest sees before their first message (nothing exists
+  /// yet): its host's card; id 0, no name of mine yet.
+  factory GuestChatSummary.notStarted(GuestLinkCard card) => GuestChatSummary(
+      id: 0,
+      name: card.name,
+      avatar: card.avatar,
+      myName: '',
+      myAvatar: card.avatar,
+      endsAt: DateTime.now().add(Duration(minutes: card.idleMinutes)),
+      idleMinutes: card.idleMinutes,
+      lastMessage: null,
+      unread: 0,
+      theyReadUpTo: null);
+
+  /// It exists (see [GuestChatSummary.notStarted]).
+  bool get started => id != 0;
+
   factory GuestChatSummary.fromJson(Map<String, dynamic> json) {
     final last = json['last_message'] as Map<String, dynamic>?;
     return GuestChatSummary(

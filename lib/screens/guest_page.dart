@@ -13,9 +13,11 @@ import '../widgets/chat/guest_chat_view.dart';
 import 'agreement_screen.dart';
 
 /// A guest link opened in a browser (huntr.online/g/<code>), by someone not
-/// on HUNTR: the host's anonymous card, then a temporary anonymous chat
-/// with them (the shared guest chat view), and joining HUNTR to keep
-/// talking. [onLeave] goes to HUNTR itself (sign up or log in).
+/// on HUNTR: straight into a temporary anonymous chat with its owner (the
+/// shared guest chat view), and joining HUNTR to keep talking. The chat
+/// itself starts with the guest's first message (or GIF search), so opening
+/// the link leaves nothing behind. [onLeave] goes to HUNTR itself (sign up
+/// or log in).
 class GuestPage extends StatefulWidget {
   const GuestPage(
       {super.key, required this.code, required this.onLeave, this.api});
@@ -34,10 +36,10 @@ class _GuestPageState extends State<GuestPage> {
   late final GuestChatApi _api = widget.api ?? GuestChatApi();
   GuestLinkCard? _card;
   String? _cardError;
-  bool _agreed = false;
-  bool _starting = false;
-  String? _startError;
+
+  /// The chat's secret, once it started.
   String? _token;
+  Future<String>? _starting;
   GuestChatController? _chat;
 
   @override
@@ -58,16 +60,18 @@ class _GuestPageState extends State<GuestPage> {
       if (!mounted) return;
       setState(() => _card = card);
       // a chat already open here (a reload): back into it, unless it ended
-      // meanwhile (then forgotten: the link's page, to start a new one)
+      // meanwhile (then forgotten: a new one)
       final token = await GuestStore.token(widget.code);
-      if (token == null || !mounted) return;
+      if (!mounted) return;
+      if (token == null) return _open(null);
       try {
         final page = await _api.guestChat(token);
         if (!mounted) return;
         _open(token);
-        _chat?.chat ??= page.chat;
+        _chat?.chat = page.chat;
       } on GuestChatEndedException {
         await GuestStore.forget(widget.code);
+        if (mounted) _open(null);
       } catch (_) {
         // can't tell now: try the chat (it says if it ended)
         if (mounted) _open(token);
@@ -81,67 +85,77 @@ class _GuestPageState extends State<GuestPage> {
     }
   }
 
-  void _open(String token) {
+  /// The chat, open here: [token] its secret, or (null) not started yet:
+  /// shown empty, and started by the first message.
+  void _open(String? token) {
     _chat?.dispose();
+    _token = token;
+    _starting = null;
     final chat = GuestChatController(
-      fetch: (after) => _api.guestChat(token, after: after),
+      fetch: (after) async {
+        final t = _token;
+        if (t == null) {
+          return GuestChatPage(
+              chat: GuestChatSummary.notStarted(_card!), messages: const []);
+        }
+        return _api.guestChat(t, after: after);
+      },
       post: (
               {String? body,
               String? gifId,
               int? replyToId,
-              required String clientId}) =>
-          _api.guestSend(token,
+              required String clientId}) async =>
+          _api.guestSend(await _started(),
               body: body,
               gifId: gifId,
               replyToId: replyToId,
               clientId: clientId),
-      react: (messageId, emoji) => _api.guestReact(token, messageId, emoji),
-      read: (upTo) => _api.guestRead(token, upTo),
-      gifs: ({required bool stickers, String query = '', int offset = 0}) =>
-          _api.guestGifs(token,
+      react: (messageId, emoji) async =>
+          _api.guestReact(await _started(), messageId, emoji),
+      read: (upTo) async {
+        final t = _token;
+        if (t != null) await _api.guestRead(t, upTo);
+      },
+      gifs: (
+              {required bool stickers,
+              String query = '',
+              int offset = 0}) async =>
+          _api.guestGifs(await _started(),
               stickers: stickers, query: query, offset: offset),
       onEnded: () => unawaited(GuestStore.forget(widget.code)),
     );
-    setState(() {
-      _token = token;
-      _chat = chat;
-    });
+    setState(() => _chat = chat);
     unawaited(chat.start());
   }
 
-  Future<void> _start() async {
-    if (_starting) return;
-    setState(() {
-      _starting = true;
-      _startError = null;
-    });
-    try {
-      final started = await _api.start(widget.code);
-      await GuestStore.saveToken(widget.code, started.token);
-      if (!mounted) return;
-      _open(started.token);
-      // the names and time left at once, before its first check
-      _chat?.chat ??= started.chat;
-    } on BackendException catch (e) {
-      if (mounted) setState(() => _startError = e.message);
-    } catch (_) {
-      if (mounted) {
-        setState(() => _startError = 'Check your connection and try again.');
+  /// The chat's secret: it starts now if it hasn't (by sending, the guest
+  /// agrees: 18 or older, and the Community Guidelines). What stops it
+  /// (e.g. too many chats) is said.
+  Future<String> _started() {
+    final token = _token;
+    if (token != null) return Future.value(token);
+    return _starting ??= () async {
+      try {
+        final started = await _api.start(widget.code);
+        await GuestStore.saveToken(widget.code, started.token);
+        _token = started.token;
+        if (mounted) setState(() => _chat?.chat = started.chat);
+        return started.token;
+      } catch (e) {
+        _starting = null; // the next message tries again
+        if (mounted) {
+          ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(
+              content: Text(e is BackendException
+                  ? e.message
+                  : 'Check your connection and try again.')));
+        }
+        rethrow;
       }
-    } finally {
-      if (mounted) setState(() => _starting = false);
-    }
+    }();
   }
 
   /// A new chat after one ended.
-  void _again() {
-    _chat?.dispose();
-    setState(() {
-      _chat = null;
-      _token = null;
-      _agreed = false;
-    });
-  }
+  void _again() => _open(null);
 
   Future<void> _end() async {
     final sure = await showDialog<bool>(
@@ -203,7 +217,7 @@ class _GuestPageState extends State<GuestPage> {
   Widget build(BuildContext context) {
     final card = _card;
     final chat = _chat;
-    if (card == null) {
+    if (card == null || chat == null) {
       return Scaffold(
         body: Center(
           child: _cardError == null
@@ -212,33 +226,29 @@ class _GuestPageState extends State<GuestPage> {
         ),
       );
     }
-    if (chat == null) {
-      return _Landing(
-        card: card,
-        agreed: _agreed,
-        starting: _starting,
-        error: _startError,
-        onAgree: (v) => setState(() => _agreed = v),
-        onStart: _start,
-        onHuntr: widget.onLeave,
-        onProfile: _profile,
-      );
-    }
     final view = ListenableBuilder(
       listenable: chat,
       builder: (context, _) {
         final summary = chat.chat;
+        final started = summary != null && summary.started;
         return GuestChatView(
           controller: chat,
           onOpenProfile: _profile,
           intro: GuestChatIntro(
-            animal: summary?.myAvatar ?? 'fox',
-            title: 'Hi, ${summary?.myName ?? 'there'}',
-            text: 'You’re both anonymous. They only see '
-                '${summary?.myName ?? 'your guest name'}, and you only see '
-                'an anonymous name. The chat ends ${card.idleMinutes} minutes '
-                'after your last message. After that you can’t open it, and '
-                'they can read it for 7 days.',
+            animal: started ? summary.myAvatar : card.avatar,
+            title: started ? 'Hi, ${summary.myName}' : 'Say hi to ${card.name}',
+            text: started
+                ? 'You’re both anonymous. They only see ${summary.myName}, '
+                    'and you only see an anonymous name. The chat ends '
+                    '${card.idleMinutes} minutes after your last message. '
+                    'After that you can’t open it, and they can read it for '
+                    '7 days.'
+                : 'You’re anonymous, and no account is needed. The chat '
+                    'ends ${card.idleMinutes} minutes after your last '
+                    'message, and they can read it for 7 days. Don’t share '
+                    'anything you wouldn’t want kept.\n\nBy sending a '
+                    'message, you confirm you’re 18 or older and agree to '
+                    'the Community Guidelines.',
             actions: [
               FilledButton.icon(
                 key: const Key('guestJoin'),
@@ -251,7 +261,7 @@ class _GuestPageState extends State<GuestPage> {
             ],
           ),
           actions: [
-            if (!chat.ended)
+            if (!chat.ended && _token != null)
               Padding(
                 padding: const EdgeInsets.only(right: 8),
                 child: TextButton(
@@ -309,10 +319,9 @@ class _Brand extends StatelessWidget {
 
 /// The host as guests see them: their anonymous card only.
 class _HostCard extends StatelessWidget {
-  const _HostCard({required this.card, this.line});
+  const _HostCard({required this.card});
 
   final GuestLinkCard card;
-  final String? line;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -356,12 +365,6 @@ class _HostCard extends StatelessWidget {
                   .textTheme
                   .headlineSmall
                   ?.copyWith(fontWeight: FontWeight.w800)),
-          if (line != null) ...[
-            const SizedBox(height: 8),
-            Text(line!,
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Color(0xFFC9CAD1), height: 1.5)),
-          ],
         ]),
       );
 }
@@ -437,132 +440,6 @@ class _JoinButton extends StatelessWidget {
 
 /// The link's page before a chat: the host's card, what to know, agreeing
 /// (18+, the rules), and Start anonymous chat.
-class _Landing extends StatelessWidget {
-  const _Landing({
-    required this.card,
-    required this.agreed,
-    required this.starting,
-    required this.onAgree,
-    required this.onStart,
-    required this.onHuntr,
-    required this.onProfile,
-    this.error,
-  });
-
-  final GuestLinkCard card;
-  final bool agreed;
-  final bool starting;
-  final String? error;
-  final ValueChanged<bool> onAgree;
-  final VoidCallback onStart;
-  final VoidCallback onHuntr;
-  final VoidCallback onProfile;
-
-  @override
-  Widget build(BuildContext context) {
-    final agreements = ServicesScope.agreementsOf(context);
-    return Scaffold(
-      body: SafeArea(
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 520),
-            child: ListView(
-              key: const Key('guestLanding'),
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
-              children: [
-                Row(children: [
-                  const Expanded(child: _Brand()),
-                  TextButton(onPressed: onHuntr, child: const Text('Log in')),
-                ]),
-                const SizedBox(height: 18),
-                _HostCard(
-                    card: card,
-                    line: 'wants to chat with you. Neither of you sees who '
-                        'the other is.'),
-                Center(
-                  child: TextButton.icon(
-                    onPressed: onProfile,
-                    icon: const Icon(Icons.person_outline_rounded, size: 18),
-                    label: const Text('View profile'),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                _Rules(minutes: card.idleMinutes),
-                const SizedBox(height: 18),
-                InkWell(
-                  borderRadius: BorderRadius.circular(12),
-                  onTap: () => onAgree(!agreed),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 6),
-                    child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Checkbox(
-                            key: const Key('guestAgree'),
-                            value: agreed,
-                            onChanged: (v) => onAgree(v ?? false),
-                          ),
-                          const SizedBox(width: 4),
-                          const Expanded(
-                            child: Padding(
-                              padding: EdgeInsets.only(top: 12),
-                              child: Text(
-                                  'I’m 18 or older and agree to the Community '
-                                  'Guidelines.',
-                                  style: TextStyle(height: 1.45)),
-                            ),
-                          ),
-                        ]),
-                  ),
-                ),
-                if (agreements != null)
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: TextButton(
-                      onPressed: () => Navigator.of(context).push(
-                          MaterialPageRoute(
-                              builder: (_) =>
-                                  AgreementScreen.communityGuidelines(
-                                      agreements: agreements))),
-                      child: const Text('Read the Community Guidelines'),
-                    ),
-                  ),
-                if (error != null) ...[
-                  const SizedBox(height: 8),
-                  Text(error!,
-                      key: const Key('guestStartError'),
-                      style: const TextStyle(color: Color(0xFFFF8A80))),
-                ],
-                const SizedBox(height: 20),
-                FilledButton.icon(
-                  key: const Key('guestStart'),
-                  style: FilledButton.styleFrom(
-                      minimumSize: const Size.fromHeight(56),
-                      textStyle: const TextStyle(
-                          fontFamily: huntrFontFamily,
-                          fontSize: 16.5,
-                          fontWeight: FontWeight.w800)),
-                  onPressed: agreed && !starting ? onStart : null,
-                  icon: starting
-                      ? const SizedBox.square(
-                          dimension: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2.5))
-                      : const Icon(Icons.chat_bubble_rounded),
-                  label: const Text('Start anonymous chat'),
-                ),
-                const SizedBox(height: 10),
-                const Text('No account needed',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: HuntrColors.muted)),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 /// The host's anonymous profile, as a guest sees it: the card only (no
 /// Threads), and joining HUNTR.
 class _HostProfile extends StatelessWidget {

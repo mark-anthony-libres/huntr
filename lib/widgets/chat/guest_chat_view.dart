@@ -274,23 +274,26 @@ class _Header extends StatelessWidget {
                 const SizedBox(width: 6),
                 const GuestTag(),
               ],
-              if (!ended) ...[
+              if (!ended && chat.started) ...[
                 const SizedBox(width: 6),
                 TimeLeftChip(minutes: chat.minutesLeft(now)),
               ],
             ]),
-            const SizedBox(height: 2),
-            Row(children: [
-              Icon(Icons.theater_comedy_outlined,
-                  size: 13, color: HuntrColors.orange),
-              const SizedBox(width: 4),
-              Flexible(
-                child: Text('You’re ${chat.myName} to them',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 12, color: HuntrColors.orange)),
-              ),
-            ]),
+            if (chat.started) ...[
+              const SizedBox(height: 2),
+              Row(children: [
+                Icon(Icons.theater_comedy_outlined,
+                    size: 13, color: HuntrColors.orange),
+                const SizedBox(width: 4),
+                Flexible(
+                  child: Text('You’re ${chat.myName} to them',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style:
+                          TextStyle(fontSize: 12, color: HuntrColors.orange)),
+                ),
+              ]),
+            ],
           ],
         ),
       ),
