@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'flows/guest_join.dart' show GuestStore;
 import 'screens/session_gate.dart';
 import 'services/agreement_service.dart';
 import 'services/album_service.dart';
@@ -275,6 +276,7 @@ class HuntrApp extends StatelessWidget {
                     },
                     home: _GuestLinkFirst(
                       code: guestLinkCode,
+                      sessions: sessions,
                       app: SessionGate(
                         sessions: sessions,
                         profiles: profiles,
@@ -322,10 +324,15 @@ String? guestLinkCode(Uri uri) {
 
 /// A guest link opened: its page, until they go to HUNTR itself (log in, or
 /// join to keep talking), when the address becomes HUNTR's own.
+/// A guest link (/g/<code>): its page for someone not on HUNTR. Someone
+/// signed in here goes to HUNTR instead, where the link owner's anonymous
+/// chat opens (as does someone who logs in from the page).
 class _GuestLinkFirst extends StatefulWidget {
-  const _GuestLinkFirst({required this.code, required this.app});
+  const _GuestLinkFirst(
+      {required this.code, required this.sessions, required this.app});
 
   final String? code;
+  final SessionService? sessions;
   final Widget app;
 
   @override
@@ -335,16 +342,43 @@ class _GuestLinkFirst extends StatefulWidget {
 class _GuestLinkFirstState extends State<_GuestLinkFirst> {
   bool _left = false;
 
+  /// Still looking for a saved session (signed in: no guest page).
+  bool _checking = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final sessions = widget.sessions;
+    if (widget.code != null && sessions != null) {
+      _checking = true;
+      unawaited(_signedInHere(sessions));
+    }
+  }
+
+  Future<void> _signedInHere(SessionService sessions) async {
+    String? token;
+    try {
+      token = await sessions.store.readToken();
+    } catch (_) {}
+    if (!mounted) return;
+    if (token != null) return _leave();
+    setState(() => _checking = false);
+  }
+
+  /// To HUNTR, where the link owner's anonymous chat opens once signed in.
+  Future<void> _leave() async {
+    await GuestStore.saveLink(widget.code!);
+    SystemNavigator.routeInformationUpdated(uri: Uri.parse('/'));
+    if (mounted) setState(() => _left = true);
+  }
+
   @override
   Widget build(BuildContext context) {
     final code = widget.code;
     if (code == null || _left) return widget.app;
-    return GuestPage(
-      code: code,
-      onLeave: () {
-        SystemNavigator.routeInformationUpdated(uri: Uri.parse('/'));
-        setState(() => _left = true);
-      },
-    );
+    if (_checking) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    return GuestPage(code: code, onLeave: _leave);
   }
 }

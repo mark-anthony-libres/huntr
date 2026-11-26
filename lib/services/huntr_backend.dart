@@ -3054,6 +3054,23 @@ Future<MessageTarget> messageThreadsAuthor(
       MessageTarget.fromJson,
     );
 
+/// POST .../guest/links/{code}/message: someone on HUNTR opened a guest
+/// link: our chat with its owner where both of us stay anonymous (or our
+/// direct one, once we've shown each other).
+Future<MessageTarget> messageGuestLinkOwner(
+        {required String backendUrl,
+        required String token,
+        required String code,
+        http.Client? client}) =>
+    _sendAuthorized(
+      client,
+      (httpClient) => httpClient.post(
+          _endpoint(
+              backendUrl, '/guest/links/${Uri.encodeComponent(code)}/message'),
+          headers: _json(token)),
+      MessageTarget.fromJson,
+    );
+
 Future<MessageTarget> startConversation(
         {required String backendUrl,
         required String token,

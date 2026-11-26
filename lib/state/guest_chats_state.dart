@@ -269,7 +269,8 @@ class GuestChatsState extends ChangeNotifier {
       gifs: gifs,
       // live events bring new messages; this only catches up after a gap
       pollEvery: const Duration(seconds: 15),
-      onEnded: () => _drop(chatId),
+      // ended (seen while open): kept in the list, to read
+      onEnded: () => _markEnded(chatId),
     );
     _open[chatId] = controller;
     return controller;
@@ -299,6 +300,8 @@ class GuestChatsState extends ChangeNotifier {
   /// Ended: still listed (to read), and an open screen stops sending.
   void _markEnded(int chatId) {
     _open[chatId]?.markEnded();
+    // already listed as ended: stays where it is
+    if (chats.any((c) => c.id == chatId && c.ended)) return;
     final ended = [
       for (final c in chats)
         if (c.id == chatId) c.copyWith(ended: true)

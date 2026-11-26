@@ -746,26 +746,21 @@ class _EndedBar extends StatelessWidget {
                 'open it anymore.',
                 style: TextStyle(color: HuntrColors.muted, height: 1.45)),
             const SizedBox(height: 14),
-            Row(children: [
-              Expanded(
-                child: OutlinedButton(
-                  style: OutlinedButton.styleFrom(
-                      minimumSize: const Size.fromHeight(48),
-                      shape: const StadiumBorder()),
-                  onPressed: onAgain,
-                  child: const Text('Start a new chat'),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: FilledButton(
-                  style: FilledButton.styleFrom(
-                      minimumSize: const Size.fromHeight(48)),
-                  onPressed: onJoin,
-                  child: const Text('Join HUNTR'),
-                ),
-              ),
-            ]),
+            // one above the other: each label on one line at any width
+            FilledButton(
+              style: FilledButton.styleFrom(
+                  minimumSize: const Size.fromHeight(48)),
+              onPressed: onJoin,
+              child: const Text('Join HUNTR'),
+            ),
+            const SizedBox(height: 10),
+            OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(48),
+                  shape: const StadiumBorder()),
+              onPressed: onAgain,
+              child: const Text('Start a new chat'),
+            ),
           ]),
         ),
       );

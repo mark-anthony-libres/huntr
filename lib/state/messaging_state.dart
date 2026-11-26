@@ -879,6 +879,14 @@ class MessagingState extends ChangeNotifier {
     return target == null ? null : _opened(target);
   }
 
+  /// A guest link opened while signed in: our chat with its owner where
+  /// both of us stay anonymous (not a guest chat). Throws what the backend
+  /// says (my own link, a block).
+  Future<MessageTarget?> messageGuestLinkOwner(String code) async {
+    final target = await _call((t) => service.messageGuestLinkOwner(t, code));
+    return target == null ? null : _opened(target);
+  }
+
   /// A chat Message just opened: an anonymous one is listed until the
   /// next refresh has it.
   MessageTarget _opened(MessageTarget target) {

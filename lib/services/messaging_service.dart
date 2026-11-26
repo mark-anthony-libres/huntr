@@ -117,6 +117,13 @@ class MessagingService {
           postId: postId,
           commentId: commentId);
 
+  /// A guest link opened while signed in: our chat with its owner where
+  /// both of us stay anonymous.
+  Future<MessageTarget> messageGuestLinkOwner(
+          String token, String code) async =>
+      backend.messageGuestLinkOwner(
+          backendUrl: await _url(), token: token, code: code);
+
   // ---- unmatching ----
 
   Future<List<UnmatchedPerson>> fetchUnmatches(String token) async =>

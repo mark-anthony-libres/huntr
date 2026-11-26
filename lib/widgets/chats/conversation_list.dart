@@ -37,7 +37,8 @@ class ConversationList extends StatefulWidget {
 
 /// Chats' filters: All, Online (connected or active in the last 30
 /// minutes), Favorites, Unread. The Anonymous tab has All and Unread.
-enum _ChatFilter { all, online, favorites, unread }
+/// [guests]: only my guest chats (the Anonymous tab only).
+enum _ChatFilter { all, online, favorites, unread, guests }
 
 class _ConversationListState extends State<ConversationList> {
   String _query = '';
@@ -72,7 +73,9 @@ class _ConversationListState extends State<ConversationList> {
         _anonymous ? messaging.anonymousLoadError : messaging.loadError;
     final unreadTotal =
         _anonymous ? messaging.anonymousUnread : messaging.directUnread;
-    final more = messaging.hasMore(anonymous: _anonymous);
+    // (guest chats all come at once: nothing more to load for them)
+    final more = _filter != _ChatFilter.guests &&
+        messaging.hasMore(anonymous: _anonymous);
     final loadMore = LoadMoreRow(
       // a new one per page, so each end asks again
       key: ValueKey('more-$_anonymous-${all?.length}'),
@@ -88,6 +91,7 @@ class _ConversationListState extends State<ConversationList> {
         : guestChats!.chats.where((g) {
             switch (_filter) {
               case _ChatFilter.all:
+              case _ChatFilter.guests:
                 break;
               case _ChatFilter.unread:
                 if (g.unread == 0) return false;
@@ -110,6 +114,8 @@ class _ConversationListState extends State<ConversationList> {
           if (!app.isFavorite(c.other.id)) return false;
         case _ChatFilter.unread:
           if (c.unreadCount == 0) return false;
+        case _ChatFilter.guests:
+          return false; // only guest chats
       }
       if (_query.isEmpty) return true;
       final q = _query.toLowerCase();
@@ -198,10 +204,14 @@ class _ConversationListState extends State<ConversationList> {
                     scrollDirection: Axis.horizontal,
                     child: Row(spacing: 6, children: [
                       for (final filter in _ChatFilter.values)
-                        // someone anonymous can't be a favourite
-                        if (!_anonymous ||
-                            filter == _ChatFilter.all ||
-                            filter == _ChatFilter.unread)
+                        // someone anonymous can't be a favourite; guest
+                        // chats are only anonymous (and only once I have one)
+                        if (_anonymous
+                            ? filter == _ChatFilter.all ||
+                                filter == _ChatFilter.unread ||
+                                (filter == _ChatFilter.guests &&
+                                    (anyGuests || _filter == filter))
+                            : filter != _ChatFilter.guests)
                           ChoiceChip(
                             key: Key(filter == _ChatFilter.unread
                                 ? 'unreadChats'
@@ -210,6 +220,7 @@ class _ConversationListState extends State<ConversationList> {
                               _ChatFilter.all => 'All',
                               _ChatFilter.online => 'Online',
                               _ChatFilter.favorites => 'Favorites',
+                              _ChatFilter.guests => 'Guests',
                               _ChatFilter.unread =>
                                 'Unread${unreadTotal > 0 ? ' ($unreadTotal)' : ''}',
                             }),
@@ -306,6 +317,7 @@ class _ConversationListState extends State<ConversationList> {
                                     'Nobody you chat with is online',
                                   _ChatFilter.favorites =>
                                     'No chats with your favorites',
+                                  _ChatFilter.guests => 'No guest chats',
                                   _ChatFilter.all => 'No chats match',
                                 },
                           style: const TextStyle(color: HuntrColors.muted)),
