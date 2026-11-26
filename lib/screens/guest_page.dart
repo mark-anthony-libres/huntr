@@ -57,9 +57,21 @@ class _GuestPageState extends State<GuestPage> {
       final card = await _api.linkCard(widget.code);
       if (!mounted) return;
       setState(() => _card = card);
-      // a chat already open here (a reload): back into it
+      // a chat already open here (a reload): back into it, unless it ended
+      // meanwhile (then forgotten: the link's page, to start a new one)
       final token = await GuestStore.token(widget.code);
-      if (token != null && mounted) _open(token);
+      if (token == null || !mounted) return;
+      try {
+        final page = await _api.guestChat(token);
+        if (!mounted) return;
+        _open(token);
+        _chat?.chat ??= page.chat;
+      } on GuestChatEndedException {
+        await GuestStore.forget(widget.code);
+      } catch (_) {
+        // can't tell now: try the chat (it says if it ended)
+        if (mounted) _open(token);
+      }
     } on BackendException catch (e) {
       if (mounted) setState(() => _cardError = e.message);
     } catch (_) {
