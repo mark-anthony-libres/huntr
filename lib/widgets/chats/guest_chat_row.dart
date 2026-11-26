@@ -55,12 +55,12 @@ class GuestChatRow extends StatelessWidget {
                   ]),
                 ),
                 const SizedBox(width: 8),
-                Text('${left}m left',
+                Text(chat.ended ? 'Ended' : '${left}m left',
                     key: Key('guestTimeLeft-${chat.id}'),
                     style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
-                        color: left <= 2
+                        color: !chat.ended && left <= 2
                             ? HuntrColors.orange
                             : HuntrColors.muted)),
               ]),

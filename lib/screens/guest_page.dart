@@ -228,7 +228,8 @@ class _GuestPageState extends State<GuestPage> {
             text: 'You’re both anonymous. They only see '
                 '${summary?.myName ?? 'your guest name'}, and you only see '
                 'an anonymous name. The chat ends ${card.idleMinutes} minutes '
-                'after your last message, and everything in it is deleted.',
+                'after your last message. After that you can’t open it, and '
+                'they can read it for 7 days.',
             actions: [
               FilledButton.icon(
                 key: const Key('guestJoin'),
@@ -384,8 +385,8 @@ class _Rules extends StatelessWidget {
       child: Column(children: [
         line(
             Icons.timer_outlined,
-            'The chat ends $minutes minutes after your last message, and '
-            'everything in it is deleted.'),
+            'The chat ends $minutes minutes after your last message. After '
+            'that you can’t open it, and they can read it for 7 days.'),
         const SizedBox(height: 12),
         line(
             Icons.visibility_outlined,
@@ -741,8 +742,8 @@ class _EndedBar extends StatelessWidget {
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
             const SizedBox(height: 6),
             const Text(
-                'There were no messages from you for a while, so it was '
-                'deleted with its messages.',
+                'There were no messages from you for a while. You can’t '
+                'open it anymore.',
                 style: TextStyle(color: HuntrColors.muted, height: 1.45)),
             const SizedBox(height: 14),
             Row(children: [

@@ -82,6 +82,8 @@ class GuestChatController extends ChangeNotifier {
       error = null;
       _notify();
       _markRead();
+      // an ended chat (its host reading it): nothing more comes
+      if (page.chat.ended) _end();
     } on GuestChatEndedException {
       _end();
     } on SessionRejectedException {
@@ -199,7 +201,8 @@ class GuestChatsState extends ChangeNotifier {
   /// Open chat screens, by chat id (live messages go straight to them).
   final Map<int, GuestChatController> _open = {};
 
-  int get unread => chats.fold(0, (sum, c) => sum + c.unread);
+  int get unread =>
+      chats.where((c) => !c.ended).fold(0, (sum, c) => sum + c.unread);
 
   Future<T?> _call<T>(Future<T> Function(String token) call) async {
     final t = token();
@@ -281,9 +284,33 @@ class GuestChatsState extends ChangeNotifier {
     _drop(chatId);
   }
 
+  /// Ends it now: kept to read.
   Future<void> end(int chatId) async {
     await _call((t) => api.hostEnd(t, chatId));
+    _markEnded(chatId);
+  }
+
+  /// Deletes it with its messages.
+  Future<void> delete(int chatId) async {
+    await _call((t) => api.hostDelete(t, chatId));
     _drop(chatId);
+  }
+
+  /// Ended: still listed (to read), and an open screen stops sending.
+  void _markEnded(int chatId) {
+    _open[chatId]?.markEnded();
+    final ended = [
+      for (final c in chats)
+        if (c.id == chatId) c.copyWith(ended: true)
+    ];
+    if (ended.isEmpty) return;
+    // open ones first, then ended ones
+    chats = [
+      ...chats.where((c) => c.id != chatId && !c.ended),
+      ...ended,
+      ...chats.where((c) => c.id != chatId && c.ended),
+    ];
+    notifyListeners();
   }
 
   void _setUnread(int chatId, int unread) {
@@ -319,6 +346,9 @@ class GuestChatsState extends ChangeNotifier {
         chats = [open == null ? summary : summary.copyWith(unread: 0), ...rest];
         notifyListeners();
       case 'guest.ended':
+        final id = event['chat_id'];
+        if (id is int) _markEnded(id);
+      case 'guest.removed':
       case 'guest.joined':
         final id = event['chat_id'];
         final moved = event['conversation_id'];

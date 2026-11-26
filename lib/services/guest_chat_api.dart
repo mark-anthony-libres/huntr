@@ -129,6 +129,8 @@ class GuestChatSummary {
     required this.lastMessage,
     required this.unread,
     required this.theyReadUpTo,
+    this.ended = false,
+    this.deletesAt,
   });
 
   factory GuestChatSummary.fromJson(Map<String, dynamic> json) {
@@ -144,6 +146,10 @@ class GuestChatSummary {
       lastMessage: last == null ? null : GuestChatMessage.fromJson(last),
       unread: json['unread'] as int? ?? 0,
       theyReadUpTo: json['read_up_to'] as int?,
+      ended: json['ended'] as bool? ?? false,
+      deletesAt: json['deletes_at'] == null
+          ? null
+          : DateTime.parse(json['deletes_at'] as String).toLocal(),
     );
   }
 
@@ -160,6 +166,11 @@ class GuestChatSummary {
   /// The newest of my messages they've read.
   final int? theyReadUpTo;
 
+  /// It ended: the guest can't open it; its host can read it (not answer)
+  /// until [deletesAt].
+  final bool ended;
+  final DateTime? deletesAt;
+
   /// Whole minutes left (at least 1 while it's open).
   int minutesLeft(DateTime now) {
     final left = endsAt.difference(now);
@@ -171,7 +182,8 @@ class GuestChatSummary {
           {GuestChatMessage? lastMessage,
           int? unread,
           DateTime? endsAt,
-          int? theyReadUpTo}) =>
+          int? theyReadUpTo,
+          bool? ended}) =>
       GuestChatSummary(
           id: id,
           name: name,
@@ -182,7 +194,9 @@ class GuestChatSummary {
           idleMinutes: idleMinutes,
           lastMessage: lastMessage ?? this.lastMessage,
           unread: unread ?? this.unread,
-          theyReadUpTo: theyReadUpTo ?? this.theyReadUpTo);
+          theyReadUpTo: theyReadUpTo ?? this.theyReadUpTo,
+          ended: ended ?? this.ended,
+          deletesAt: deletesAt);
 }
 
 /// A chat and its messages.
@@ -309,7 +323,12 @@ class GuestChatApi {
   Future<void> block(String token, int chatId) =>
       _send('POST', '/guest-chats/$chatId/block', token: token);
 
+  /// Ends it now (kept to read).
   Future<void> hostEnd(String token, int chatId) =>
+      _send('POST', '/guest-chats/$chatId/end', token: token);
+
+  /// Deletes it with its messages.
+  Future<void> hostDelete(String token, int chatId) =>
       _send('DELETE', '/guest-chats/$chatId', token: token);
 
   // ---- the guest ----

@@ -6,12 +6,13 @@ import '../services/guest_chat_api.dart';
 import '../state/guest_chats_state.dart';
 import '../state/messaging_state.dart';
 import '../theme.dart';
-import '../widgets/chat/anonymous_chat.dart' show AnonymousClosedBar;
 import '../widgets/chat/guest_chat_view.dart';
 import 'chat_screen.dart';
 
 /// A guest chat, as its host sees it (someone not on HUNTR, from my guest
-/// link): the shared guest chat view, with End chat and Block in the menu.
+/// link): the shared guest chat view, with End chat, Delete chat and Block
+/// in the menu. Once it ended it stays to read (not to answer) until it's
+/// deleted.
 class GuestChatScreen extends StatefulWidget {
   const GuestChatScreen({super.key, required this.chat});
 
@@ -53,15 +54,29 @@ class _GuestChatScreenState extends State<GuestChatScreen> {
   Future<void> _menu(String choice) async {
     final state = _state;
     if (state == null) return;
-    final block = choice == 'block';
+    final (title, text, action) = switch (choice) {
+      'block' => (
+          'Block this guest?',
+          'The chat is deleted, and they can’t start another one with you '
+              'for a day.',
+          'Block'
+        ),
+      'delete' => (
+          'Delete this chat?',
+          'It’s deleted with its messages. You can’t get it back.',
+          'Delete'
+        ),
+      _ => (
+          'End this chat?',
+          'They can’t write here anymore. You can still read it for 7 days.',
+          'End chat'
+        ),
+    };
     final sure = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(block ? 'Block this guest?' : 'End this chat?'),
-        content: Text(block
-            ? 'The chat ends and is deleted, and they can’t start another one '
-                'with you for a day.'
-            : 'The chat ends and is deleted for both of you.'),
+        title: Text(title),
+        content: Text(text),
         actions: [
           TextButton(
               onPressed: () => Navigator.of(context).pop(false),
@@ -69,13 +84,43 @@ class _GuestChatScreenState extends State<GuestChatScreen> {
           FilledButton(
               key: const Key('guestChatConfirm'),
               onPressed: () => Navigator.of(context).pop(true),
-              child: Text(block ? 'Block' : 'End chat')),
+              child: Text(action)),
         ],
       ),
     );
     if (sure != true || !mounted) return;
-    block ? await state.block(widget.chat.id) : await state.end(widget.chat.id);
+    switch (choice) {
+      case 'block':
+        await state.block(widget.chat.id);
+      case 'delete':
+        await state.delete(widget.chat.id);
+      default:
+        // ended: stays here, to read
+        await state.end(widget.chat.id);
+        return;
+    }
     if (mounted) Navigator.of(context).pop();
+  }
+
+  /// "Until Tue 2 Dec" (when an ended chat is deleted).
+  static String _until(DateTime? at) {
+    if (at == null) return 'for 7 days';
+    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec'
+    ];
+    return 'until ${days[at.weekday - 1]} ${at.day} ${months[at.month - 1]}';
   }
 
   /// The guest joined HUNTR: our chat moved to my anonymous chats.
@@ -100,6 +145,7 @@ class _GuestChatScreenState extends State<GuestChatScreen> {
       listenable: controller,
       builder: (context, _) {
         final moved = controller.joinedConversationId;
+        final ended = controller.ended;
         return GuestChatView(
           controller: controller,
           guestTag: true,
@@ -108,7 +154,8 @@ class _GuestChatScreenState extends State<GuestChatScreen> {
             title: '${chat.name} opened your guest link',
             text: 'They’re not on HUNTR. The chat ends '
                 '${chat.idleMinutes} minutes after their last message, and '
-                'your replies don’t extend it.',
+                'your replies don’t extend it. You can read it for 7 days '
+                'after it ends.',
           ),
           actions: [
             PopupMenuButton<String>(
@@ -116,12 +163,21 @@ class _GuestChatScreenState extends State<GuestChatScreen> {
               tooltip: 'More',
               onSelected: _menu,
               itemBuilder: (_) => [
+                if (!ended)
+                  const PopupMenuItem(
+                      value: 'end',
+                      child: Row(children: [
+                        Icon(Icons.close_rounded),
+                        SizedBox(width: 12),
+                        Text('End chat'),
+                      ])),
                 const PopupMenuItem(
-                    value: 'end',
+                    key: Key('deleteGuestChat'),
+                    value: 'delete',
                     child: Row(children: [
-                      Icon(Icons.close_rounded),
+                      Icon(Icons.delete_outline_rounded),
                       SizedBox(width: 12),
-                      Text('End chat'),
+                      Text('Delete chat'),
                     ])),
                 const PopupMenuItem(
                     key: Key('blockGuest'),
@@ -136,8 +192,9 @@ class _GuestChatScreenState extends State<GuestChatScreen> {
             ),
           ],
           ended: moved == null
-              ? const AnonymousClosedBar(
-                  message: 'This chat has ended and was deleted.')
+              ? _EndedBar(
+                  until: _until(controller.chat?.deletesAt),
+                  onDelete: () => _menu('delete'))
               : SafeArea(
                   top: false,
                   child: Container(
@@ -169,4 +226,41 @@ class _GuestChatScreenState extends State<GuestChatScreen> {
       },
     );
   }
+}
+
+/// An ended guest chat, for its host: still here to read until it's deleted,
+/// and Delete.
+class _EndedBar extends StatelessWidget {
+  const _EndedBar({required this.until, required this.onDelete});
+
+  final String until;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) => SafeArea(
+        top: false,
+        child: Container(
+          key: const Key('guestChatEndedBar'),
+          margin: const EdgeInsets.fromLTRB(12, 6, 12, 10),
+          padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
+          decoration: BoxDecoration(
+            color: HuntrColors.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: HuntrColors.border),
+          ),
+          child: Row(children: [
+            const Icon(Icons.lock_clock_outlined,
+                size: 20, color: HuntrColors.muted),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                  'This chat ended. You can read it $until; they can’t '
+                  'write here anymore.',
+                  style:
+                      const TextStyle(color: HuntrColors.muted, height: 1.4)),
+            ),
+            TextButton(onPressed: onDelete, child: const Text('Delete')),
+          ]),
+        ),
+      );
 }
