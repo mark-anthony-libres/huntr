@@ -3397,7 +3397,9 @@ Future<ChatMessage> sendChatMedia({
 Future<ChatMessage> sendChatVoice({
   required String backendUrl,
   required String token,
-  required int recipientId,
+  // a direct chat's other person, or an anonymous chat
+  int? recipientId,
+  int? conversationId,
   required List<int> bytes,
   required String filename,
   required String clientId,
@@ -3412,7 +3414,8 @@ Future<ChatMessage> sendChatVoice({
         final multipart = http.MultipartRequest('POST', uri)
           ..headers.addAll(_authorization(token))
           ..fields.addAll({
-            'recipient_id': '$recipientId',
+            if (recipientId != null) 'recipient_id': '$recipientId',
+            if (conversationId != null) 'conversation_id': '$conversationId',
             'client_id': clientId,
             if (replyToId != null) 'reply_to_id': '$replyToId',
           })
@@ -3786,7 +3789,9 @@ Future<TradedAlbumAccess> viewTradedAlbum(
 Future<ChatMessage> shareLocation({
   required String backendUrl,
   required String token,
-  required int recipientId,
+  // a direct chat's other person, or an anonymous chat
+  int? recipientId,
+  int? conversationId,
   required String clientId,
   required double latitude,
   required double longitude,
@@ -3803,7 +3808,8 @@ Future<ChatMessage> shareLocation({
             'Content-Type': 'application/json'
           },
           body: jsonEncode({
-            'recipient_id': recipientId,
+            if (recipientId != null) 'recipient_id': recipientId,
+            if (conversationId != null) 'conversation_id': conversationId,
             'client_id': clientId,
             'latitude': latitude,
             'longitude': longitude,

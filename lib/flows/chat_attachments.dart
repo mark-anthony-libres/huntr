@@ -151,7 +151,7 @@ Future<void> showAttachMenu(BuildContext context,
     case 'camera':
       await _camera(context, conversationId, recipient);
     case 'location':
-      await _location(context, conversationId, recipient);
+      await showLocationMenu(context, conversationId, recipient);
   }
 }
 
@@ -159,8 +159,11 @@ Future<void> showAttachMenu(BuildContext context,
 
 /// Sends where I am now (once), or asks them to share live locations both
 /// ways (nothing is shared until they accept). Positions are never stored.
-Future<void> _location(
-    BuildContext context, int conversationId, Profile recipient) async {
+/// [anonymous]: an anonymous chat, where only the one-time location goes
+/// (and it's said what it can tell them).
+Future<void> showLocationMenu(
+    BuildContext context, int conversationId, Profile recipient,
+    {bool anonymous = false}) async {
   final choice = await showModalBottomSheet<String>(
     context: context,
     showDragHandle: true,
@@ -177,25 +180,36 @@ Future<void> _location(
               style: TextStyle(color: HuntrColors.muted)),
           onTap: () => Navigator.of(context).pop('now'),
         ),
-        ListTile(
-          key: const Key('location-live'),
-          leading:
-              Icon(Icons.share_location_rounded, color: HuntrColors.orange),
-          title: const Text('Share live location',
-              style: TextStyle(fontWeight: FontWeight.w700)),
-          subtitle: const Text(
-              'Ask to see each other on a map until one of you stops',
-              style: TextStyle(color: HuntrColors.muted)),
-          onTap: () => Navigator.of(context).pop('live'),
-        ),
-        const Padding(
-          padding: EdgeInsets.fromLTRB(16, 8, 16, 12),
-          child: Text(
-            'Only the two of you see it. It’s never saved, and either of '
-            'you can stop live sharing any time.',
-            style: TextStyle(color: HuntrColors.muted, fontSize: 13),
+        if (anonymous)
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 8, 16, 12),
+            child: Text(
+              'They see exactly where you are, which can tell them who you '
+              'are. It’s never saved.',
+              style: TextStyle(color: HuntrColors.muted, fontSize: 13),
+            ),
           ),
-        ),
+        if (!anonymous) ...[
+          ListTile(
+            key: const Key('location-live'),
+            leading:
+                Icon(Icons.share_location_rounded, color: HuntrColors.orange),
+            title: const Text('Share live location',
+                style: TextStyle(fontWeight: FontWeight.w700)),
+            subtitle: const Text(
+                'Ask to see each other on a map until one of you stops',
+                style: TextStyle(color: HuntrColors.muted)),
+            onTap: () => Navigator.of(context).pop('live'),
+          ),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 8, 16, 12),
+            child: Text(
+              'Only the two of you see it. It’s never saved, and either of '
+              'you can stop live sharing any time.',
+              style: TextStyle(color: HuntrColors.muted, fontSize: 13),
+            ),
+          ),
+        ],
       ]),
     )),
   );

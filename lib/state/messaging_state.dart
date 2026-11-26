@@ -144,10 +144,14 @@ class MessagingState extends ChangeNotifier {
   /// Shares where I am now, once. Throws what went wrong (no permission,
   /// the backend) for the caller to show.
   Future<void> shareLocation(int conversationId, Profile recipient) async {
+    final anonymous = isAnonymous(conversationId);
+    if (!anonymous && recipient.backendId == null) return;
     final here = await location.current();
     final reply = replyingTo(conversationId);
     final saved = await _call((t) => service.shareLocation(t,
-        recipientId: recipient.backendId!,
+        // an anonymous chat by its id (whom it's with stays unsaid)
+        recipientId: anonymous ? null : recipient.backendId,
+        conversationId: anonymous ? conversationId : null,
         clientId: newClientId(),
         latitude: here.latitude,
         longitude: here.longitude,
@@ -1242,7 +1246,11 @@ class MessagingState extends ChangeNotifier {
   /// progress), then sends it; the backend processes it.
   Future<void> sendMedia(
       int conversationId, Profile recipient, LocalUpload upload) {
-    if (recipient.backendId == null) return Future.value();
+    // an anonymous chat takes voice messages (by its id), no photos or videos
+    final anonymous = isAnonymous(conversationId);
+    if (anonymous ? !upload.isVoice : recipient.backendId == null) {
+      return Future.value();
+    }
     final pending = ChatMessage(
       id: null,
       conversationId: conversationId,
@@ -1263,7 +1271,7 @@ class MessagingState extends ChangeNotifier {
         .add(pending);
     _touchSummary(conversationId, recipient, pending, unreadDelta: 0);
     notifyListeners();
-    return _deliverMedia(pending, recipient.backendId!);
+    return _deliverMedia(pending, anonymous ? null : recipient.backendId);
   }
 
   /// Sends a failed message again with the same client id (stored once).
@@ -1283,13 +1291,16 @@ class MessagingState extends ChangeNotifier {
         upload: failed.upload?.withProgress(0));
     thread.replace(failed, again);
     notifyListeners();
+    if (again.upload != null) {
+      return _deliverMedia(again, anonymous ? null : recipient.backendId);
+    }
     if (anonymous) return _deliverAnonymous(again);
-    return again.upload != null
-        ? _deliverMedia(again, recipient.backendId!)
-        : _deliver(again, recipient.backendId!);
+    return _deliver(again, recipient.backendId!);
   }
 
-  Future<void> _deliverMedia(ChatMessage pending, int recipientId) async {
+  /// [recipientId]: a direct chat's other person (null: an anonymous chat,
+  /// by its id; voice messages only).
+  Future<void> _deliverMedia(ChatMessage pending, int? recipientId) async {
     final thread = _threads[pending.conversationId]!;
     final upload = pending.upload!;
     var shown = 0.0;
@@ -1304,9 +1315,18 @@ class MessagingState extends ChangeNotifier {
     }
 
     try {
-      final saved = await _call((t) =>
-          (upload.isVoice ? service.sendVoice : service.sendMedia)(t,
+      final saved = await _call((t) => upload.isVoice
+          ? service.sendVoice(t,
               recipientId: recipientId,
+              conversationId:
+                  recipientId == null ? pending.conversationId : null,
+              bytes: upload.bytes,
+              filename: upload.filename,
+              clientId: pending.clientId!,
+              replyToId: pending.replyTo?.id,
+              onProgress: progress)
+          : service.sendMedia(t,
+              recipientId: recipientId!,
               bytes: upload.bytes,
               filename: upload.filename,
               clientId: pending.clientId!,

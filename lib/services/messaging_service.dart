@@ -234,8 +234,10 @@ class MessagingService {
           replyToId: replyToId,
           onProgress: onProgress);
 
+  /// [recipientId]'s direct chat, or the anonymous [conversationId].
   Future<ChatMessage> sendVoice(String token,
-          {required int recipientId,
+          {int? recipientId,
+          int? conversationId,
           required List<int> bytes,
           required String filename,
           required String clientId,
@@ -245,6 +247,7 @@ class MessagingService {
           backendUrl: await _url(),
           token: token,
           recipientId: recipientId,
+          conversationId: conversationId,
           bytes: bytes,
           filename: filename,
           clientId: clientId,
@@ -316,9 +319,11 @@ class MessagingService {
           conversationId: conversationId,
           active: active);
 
-  /// Where I am now, once.
+  /// Where I am now, once: [recipientId]'s direct chat, or the anonymous
+  /// [conversationId].
   Future<ChatMessage> shareLocation(String token,
-          {required int recipientId,
+          {int? recipientId,
+          int? conversationId,
           required String clientId,
           required double latitude,
           required double longitude,
@@ -328,6 +333,7 @@ class MessagingService {
           backendUrl: await _url(),
           token: token,
           recipientId: recipientId,
+          conversationId: conversationId,
           clientId: clientId,
           latitude: latitude,
           longitude: longitude,

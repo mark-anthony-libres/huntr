@@ -669,9 +669,9 @@ class _ChatScreenState extends State<ChatScreen> {
   /// Quick replies (while the box is empty) and the message box.
   /// The message box; [anonymous]: text and GIFs only (no attachments).
   List<Widget> _composer(Profile p, {bool anonymous = false}) {
-    // a voice message: direct chats only (a voice can tell who someone is);
-    // on a phone its mic sits inside the empty box, elsewhere beside it
-    final canRecord = _conversationId != null && !anonymous;
+    // a voice message (direct and anonymous chats); on a phone its mic
+    // sits inside the empty box, elsewhere beside it
+    final canRecord = _conversationId != null;
     final micInside = canRecord &&
         _input.text.trim().isEmpty &&
         MediaQuery.sizeOf(context).width < 600;
@@ -713,7 +713,7 @@ class _ChatScreenState extends State<ChatScreen> {
             child: child,
           ),
         ),
-        child: _recordingVoice && _conversationId != null && !anonymous
+        child: _recordingVoice && _conversationId != null
             ? SafeArea(
                 key: const ValueKey('voiceRecorderBox'),
                 top: false,
@@ -786,6 +786,23 @@ class _ChatScreenState extends State<ChatScreen> {
                                 ),
                                 const SizedBox(width: 6),
                               ],
+                              // an anonymous chat: where I am now, once
+                              if (_conversationId != null && anonymous) ...[
+                                IconButton(
+                                  key: const Key('anonymousLocationButton'),
+                                  tooltip: 'Send current location',
+                                  style: IconButton.styleFrom(
+                                    backgroundColor: HuntrColors.surfaceHigh,
+                                    minimumSize: const Size(44, 44),
+                                  ),
+                                  icon: Icon(Icons.place_outlined,
+                                      color: HuntrColors.orange),
+                                  onPressed: () => showLocationMenu(
+                                      context, _conversationId!, p,
+                                      anonymous: true),
+                                ),
+                                const SizedBox(width: 6),
+                              ],
                             ]),
                     ),
                     Expanded(
@@ -823,8 +840,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       duration: const Duration(milliseconds: 150),
                       curve: Curves.easeOut,
                       child: _input.text.trim().isEmpty
-                          // an empty box: a voice message instead (direct chats
-                          // only: a voice can tell who someone is)
+                          // an empty box: a voice message instead
                           ? canRecord && !micInside
                               ? Padding(
                                   padding: const EdgeInsets.only(left: 6),
