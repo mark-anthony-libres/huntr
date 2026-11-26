@@ -14,7 +14,6 @@ import '../state/messaging_state.dart';
 import '../state/tap_state.dart';
 import '../state/guest_chats_state.dart';
 import '../flows/guest_join.dart';
-import 'guest_chat_screen.dart';
 import 'chat_screen.dart';
 import 'chats_screen.dart';
 import 'explore_screen.dart';
@@ -69,15 +68,13 @@ class _HomeShellState extends State<HomeShell> {
   void _handleEvent(Map<String, dynamic> event) {
     _messaging?.handleEvent(event);
     _taps?.handleEvent(event);
+    // a guest chat ended, went, or moved (its guest joined): the chats reload
     _guestChats?.handleEvent(event);
-    // a guest joined: their chat moved into my anonymous chats
-    if (event['type'] == 'guest.joined') unawaited(_messaging?.refresh());
   }
 
   /// Back online: messages and taps re-sync, and blocks are checked again.
   Future<void> _reconnected() async {
     unawaited(_taps?.refresh());
-    unawaited(_guestChats?.refresh());
     await _messaging?.sync();
     if (mounted) await BlockScope.read(context)?.checkAll();
   }
@@ -129,7 +126,6 @@ class _HomeShellState extends State<HomeShell> {
         if (!mounted) return;
         unawaited(_messaging?.refresh());
         unawaited(_taps?.refresh());
-        unawaited(_guestChats?.refresh());
         // signed up from a guest chat: it moves here and opens
         unawaited(completeGuestJoin(context));
         // push notifications: this device, and a tapped one's place
@@ -184,15 +180,6 @@ class _HomeShellState extends State<HomeShell> {
         await Navigator.of(context).push(MaterialPageRoute(
             builder: (_) => ChatScreen.conversation(
                 conversationId: conversationId, other: chat.other)));
-      case OpenGuestChat(:final chatId):
-        _showTab(_chatsTab);
-        final guests = _guestChats;
-        if (guests == null) return;
-        await guests.refresh();
-        final chat = guests.chats.where((c) => c.id == chatId).firstOrNull;
-        if (chat == null || !mounted) return;
-        await Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => GuestChatScreen(chat: chat)));
     }
   }
 

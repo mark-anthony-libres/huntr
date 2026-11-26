@@ -9,10 +9,7 @@ import '../../state/app_state.dart';
 import '../../state/messaging_state.dart';
 import '../../theme.dart';
 import 'chat_row_frame.dart';
-import 'guest_chat_row.dart';
-import '../../screens/guest_chat_screen.dart';
-import '../../state/guest_chats_state.dart';
-import '../../services/guest_chat_api.dart' show GuestChatSummary;
+import '../chat/guest_chat_bits.dart' show GuestTag;
 import '../load_more_row.dart';
 import '../pill_tabs.dart';
 import '../anonymous_avatar.dart';
@@ -73,37 +70,16 @@ class _ConversationListState extends State<ConversationList> {
         _anonymous ? messaging.anonymousLoadError : messaging.loadError;
     final unreadTotal =
         _anonymous ? messaging.anonymousUnread : messaging.directUnread;
-    // (guest chats all come at once: nothing more to load for them)
-    final more = _filter != _ChatFilter.guests &&
-        messaging.hasMore(anonymous: _anonymous);
+    final more = messaging.hasMore(anonymous: _anonymous);
     final loadMore = LoadMoreRow(
       // a new one per page, so each end asks again
       key: ValueKey('more-$_anonymous-${all?.length}'),
       onVisible: () => messaging.loadMore(anonymous: _anonymous),
     );
     final app = AppScope.of(context);
-    // guest chats (from my guest link): first in the Anonymous tab, under
-    // the search, which (with Unread) picks among them too
-    final guestChats = GuestChatsScope.of(context);
-    final anyGuests = _anonymous && (guestChats?.chats.isNotEmpty ?? false);
-    final guests = !anyGuests
-        ? const <GuestChatSummary>[]
-        : guestChats!.chats.where((g) {
-            switch (_filter) {
-              case _ChatFilter.all:
-              case _ChatFilter.guests:
-                break;
-              case _ChatFilter.unread:
-                if (g.unread == 0) return false;
-              case _ChatFilter.online:
-              case _ChatFilter.favorites:
-                return false; // neither applies to a guest
-            }
-            if (_query.isEmpty) return true;
-            final q = _query.toLowerCase();
-            return g.name.toLowerCase().contains(q) ||
-                (g.lastMessage?.preview.toLowerCase().contains(q) ?? false);
-          }).toList();
+    // guest chats (from my guest link): anonymous chats, with their filter
+    final anyGuests =
+        _anonymous && (all ?? const []).any((c) => c.guest != null);
     final matching = (all ?? const []).where((c) {
       switch (_filter) {
         case _ChatFilter.all:
@@ -115,7 +91,7 @@ class _ConversationListState extends State<ConversationList> {
         case _ChatFilter.unread:
           if (c.unreadCount == 0) return false;
         case _ChatFilter.guests:
-          return false; // only guest chats
+          if (c.guest == null) return false;
       }
       if (_query.isEmpty) return true;
       final q = _query.toLowerCase();
@@ -179,8 +155,7 @@ class _ConversationListState extends State<ConversationList> {
                 child: _Tabs(
                   anonymous: _anonymous,
                   directUnread: messaging.directUnread,
-                  anonymousUnread:
-                      messaging.anonymousUnread + (guestChats?.unread ?? 0),
+                  anonymousUnread: messaging.anonymousUnread,
                   onChanged: (anonymous) => setState(() {
                     _anonymous = anonymous;
                     _filter = _ChatFilter.all;
@@ -258,7 +233,7 @@ class _ConversationListState extends State<ConversationList> {
                 sliver: const SliverToBoxAdapter(
                     child: LoadingRows(count: 4, height: 72)),
               )
-            else if (all.isEmpty && !anyGuests)
+            else if (all.isEmpty)
               SliverFillRemaining(
                 hasScrollBody: false,
                 child: _anonymous
@@ -278,24 +253,10 @@ class _ConversationListState extends State<ConversationList> {
                   ),
                 ),
               ),
-              if (guests.isNotEmpty)
-                SliverPadding(
-                  padding: EdgeInsets.fromLTRB(side - 8, 0, side - 8, 8),
-                  sliver: SliverList.list(children: [
-                    for (final g in guests)
-                      GuestChatRow(
-                        chat: g,
-                        now: now,
-                        onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute(
-                                builder: (_) => GuestChatScreen(chat: g))),
-                      ),
-                  ]),
-                ),
               // nothing matches among those loaded: look further
               if (list.isEmpty && more)
                 SliverToBoxAdapter(child: loadMore)
-              else if (list.isEmpty && guests.isEmpty)
+              else if (list.isEmpty)
                 SliverFillRemaining(
                   hasScrollBody: false,
                   child: Center(
@@ -733,6 +694,11 @@ class _ConversationRow extends StatelessWidget {
                       const SizedBox(width: 8),
                       _MaskBadge(name: a.shownAs),
                     ],
+                    // a guest chat (from my guest link)
+                    if (c.guest case final g? when !g.iAmGuest) ...[
+                      const SizedBox(width: 8),
+                      const GuestTag(),
+                    ],
                   ]),
                 ),
                 const SizedBox(width: 8),
@@ -745,7 +711,17 @@ class _ConversationRow extends StatelessWidget {
                         size: 19,
                         color: HuntrColors.orange),
                   ),
-                if (last != null)
+                // a guest chat: how long it has (or that it ended)
+                if (c.guest case final g?)
+                  Text(
+                      g.ended || !g.endsAt.isAfter(now)
+                          ? 'Ended'
+                          : '${g.endsAt.difference(now).inMinutes + 1}m left',
+                      key: Key('guestTimeLeft-${c.id}'),
+                      style: text.labelSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: HuntrColors.muted))
+                else if (last != null)
                   Text(timeLabel(last.sentAt, now),
                       style: text.labelSmall?.copyWith(
                           fontWeight:

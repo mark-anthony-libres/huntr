@@ -50,6 +50,8 @@ import 'my_album_screen.dart';
 import 'story_viewer_screen.dart';
 import 'anonymous_profile_screen.dart';
 import '../widgets/chat/anonymous_chat.dart';
+import '../widgets/chat/guest_chat_bits.dart';
+import '../state/guest_chats_state.dart';
 import '../widgets/page_title.dart';
 import '../widgets/emoticons.dart';
 import '../widgets/chat/album_interest.dart';
@@ -61,19 +63,25 @@ class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key, required String this.profileId})
       : conversationId = null,
         other = null,
-        onClose = null;
+        onClose = null,
+        guestSide = null;
 
   /// A direct-message conversation on the backend, with that person.
   const ChatScreen.conversation(
       {super.key,
       required int this.conversationId,
       required Profile this.other,
-      this.onClose})
+      this.onClose,
+      this.guestSide})
       : profileId = null;
 
   final String? profileId;
   final int? conversationId;
   final Profile? other;
+
+  /// The guest's own page (a guest link opened in a browser): what its menu
+  /// and its end do there.
+  final GuestSide? guestSide;
 
   /// Shown beside the chat list (wide screens): Back (and Esc) closes it
   /// here instead of leaving a page.
@@ -81,6 +89,19 @@ class ChatScreen extends StatefulWidget {
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
+}
+
+/// A guest's chat page (a guest link, in a browser): ending the chat, how
+/// it works, and what shows once it ended.
+class GuestSide {
+  const GuestSide(
+      {required this.onEnd, required this.onInfo, required this.ended});
+
+  final VoidCallback onEnd;
+  final VoidCallback onInfo;
+
+  /// In place of the message box once it ended.
+  final Widget ended;
 }
 
 class _ChatScreenState extends State<ChatScreen> {
@@ -668,7 +689,8 @@ class _ChatScreenState extends State<ChatScreen> {
 
   /// Quick replies (while the box is empty) and the message box.
   /// The message box; [anonymous]: text and GIFs only (no attachments).
-  List<Widget> _composer(Profile p, {bool anonymous = false}) {
+  List<Widget> _composer(Profile p,
+      {bool anonymous = false, bool glow = false}) {
     // a voice message (direct and anonymous chats); on a phone its mic
     // sits inside the empty box, elsewhere beside it
     final canRecord = _conversationId != null;
@@ -807,30 +829,33 @@ class _ChatScreenState extends State<ChatScreen> {
                     ),
                     Expanded(
                       // Enter sends; Shift+Enter adds a new line
-                      child: Focus(
-                        onKeyEvent: (_, event) => _enterSends(event, p),
-                        child: TextField(
-                          key: const Key('messageInput'),
-                          controller: _input,
-                          focusNode: _inputFocus,
-                          minLines: 1,
-                          maxLines: 5,
-                          textCapitalization: TextCapitalization.sentences,
-                          inputFormatters: const [EmoticonFormatter()],
-                          decoration: InputDecoration(
-                            hintText: 'Message ${p.name}…',
-                            // phones: the mic inside the box, on the right
-                            suffixIcon: micInside
-                                ? IconButton(
-                                    key: const Key('voiceButton'),
-                                    tooltip: 'Record a voice message',
-                                    icon: Icon(Icons.mic_none_rounded,
-                                        color: HuntrColors.orange),
-                                    onPressed: _startVoice,
-                                  )
-                                : null,
+                      child: GlowBox(
+                        on: glow,
+                        child: Focus(
+                          onKeyEvent: (_, event) => _enterSends(event, p),
+                          child: TextField(
+                            key: const Key('messageInput'),
+                            controller: _input,
+                            focusNode: _inputFocus,
+                            minLines: 1,
+                            maxLines: 5,
+                            textCapitalization: TextCapitalization.sentences,
+                            inputFormatters: const [EmoticonFormatter()],
+                            decoration: InputDecoration(
+                              hintText: 'Message ${p.name}…',
+                              // phones: the mic inside the box, on the right
+                              suffixIcon: micInside
+                                  ? IconButton(
+                                      key: const Key('voiceButton'),
+                                      tooltip: 'Record a voice message',
+                                      icon: Icon(Icons.mic_none_rounded,
+                                          color: HuntrColors.orange),
+                                      onPressed: _startVoice,
+                                    )
+                                  : null,
+                            ),
+                            onSubmitted: (v) => _send(p, v),
                           ),
-                          onSubmitted: (v) => _send(p, v),
                         ),
                       ),
                     ),
@@ -877,6 +902,116 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
       ),
     ];
+  }
+
+  /// A guest chat's header actions: the guest's How it works and End; the
+  /// host's End, Delete and Block (in a ⋯ menu).
+  List<Widget> _guestActions(int id, bool ended) {
+    final side = widget.guestSide;
+    if (side != null) {
+      return [
+        IconButton(
+          key: const Key('guestInfo'),
+          tooltip: 'How it works',
+          icon: const Icon(Icons.info_outline_rounded),
+          onPressed: side.onInfo,
+        ),
+        if (!ended)
+          TextButton(
+            key: const Key('guestEndChat'),
+            style:
+                TextButton.styleFrom(foregroundColor: const Color(0xFFFF8A80)),
+            onPressed: side.onEnd,
+            child: const Text('End'),
+          ),
+      ];
+    }
+    return [
+      PopupMenuButton<String>(
+        key: const Key('guestChatMenu'),
+        tooltip: 'More',
+        icon: const Icon(Icons.more_vert_rounded),
+        onSelected: (choice) => _guestMenu(id, choice),
+        itemBuilder: (_) => [
+          if (!ended)
+            const PopupMenuItem(
+                value: 'end',
+                child: Row(children: [
+                  Icon(Icons.close_rounded),
+                  SizedBox(width: 12),
+                  Text('End chat'),
+                ])),
+          const PopupMenuItem(
+              key: Key('deleteGuestChat'),
+              value: 'delete',
+              child: Row(children: [
+                Icon(Icons.delete_outline_rounded),
+                SizedBox(width: 12),
+                Text('Delete chat'),
+              ])),
+          const PopupMenuItem(
+              key: Key('blockGuest'),
+              value: 'block',
+              child: Row(children: [
+                Icon(Icons.block, color: Color(0xFFFF8A80)),
+                SizedBox(width: 12),
+                Text('Block guest', style: TextStyle(color: Color(0xFFFF8A80))),
+              ])),
+        ],
+      ),
+    ];
+  }
+
+  /// The host ends, deletes or blocks a guest chat, once confirmed.
+  Future<void> _guestMenu(int id, String choice) async {
+    final state = GuestChatsScope.read(context);
+    if (state == null) return;
+    final (title, text, action) = switch (choice) {
+      'block' => (
+          'Block this guest?',
+          'The chat is deleted, and they can’t start another one with you '
+              'for a day.',
+          'Block'
+        ),
+      'delete' => (
+          'Delete this chat?',
+          'It’s deleted with its messages. You can’t get it back.',
+          'Delete'
+        ),
+      _ => (
+          'End this chat?',
+          'They can’t write here anymore. You can still read it for 7 days.',
+          'End chat'
+        ),
+    };
+    final sure = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: Text(text),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel')),
+          FilledButton(
+              key: const Key('guestChatConfirm'),
+              onPressed: () => Navigator.of(context).pop(true),
+              child: Text(action)),
+        ],
+      ),
+    );
+    if (sure != true || !mounted) return;
+    final navigator = Navigator.of(context);
+    switch (choice) {
+      case 'block':
+        await state.block(id);
+      case 'delete':
+        await state.delete(id);
+      default:
+        await state.end(id); // stays here, to read
+        return;
+    }
+    if (mounted && navigator.canPop()) navigator.pop();
   }
 
   /// Records a voice message: the recording bar takes the box's place.
@@ -1116,12 +1251,19 @@ class _ChatScreenState extends State<ChatScreen> {
     final loaded = messaging.isLoaded(id);
     final older = messaging.hasOlder(id);
     final newestMine = msgs.where((m) => m.fromMe).firstOrNull;
+    // a guest chat (from a guest link): when it ends (the guest's newest
+    // message gives it its full time), and whether it has
+    final guest = summary?.guest;
+    final guestEndsAt = guest?.endsAfter(
+        msgs.where((m) => m.fromMe == guest.iAmGuest).firstOrNull?.sentAt);
+    final guestEnded =
+        guest != null && (guest.ended || !guestEndsAt!.isAfter(now));
     // a block between us: the history stays, nothing can be sent
     final block = _blockWith(p);
     final blocked = block?.blocked ?? false;
     final typing = !blocked && messaging.isTyping(id);
     // reactions and replies only while I can write here
-    final interactive = !blocked && closed == null;
+    final interactive = !blocked && closed == null && !guestEnded;
 
     Message asMessage(ChatMessage m) => Message(
           id: '${m.id ?? m.clientId}',
@@ -1206,15 +1348,18 @@ class _ChatScreenState extends State<ChatScreen> {
                 child: InkWell(
                   key: const Key('chatHeader'),
                   borderRadius: BorderRadius.circular(12),
-                  onTap: () => blocked
-                      ? Navigator.of(context).push(MaterialPageRoute(
-                          builder: (_) => BlockedScreen(status: block!)))
-                      // someone anonymous: only their anonymous profile
-                      : p.isAnonymous
+                  // (a guest's page: the host's anonymous card only)
+                  onTap: widget.guestSide != null
+                      ? null
+                      : () => blocked
                           ? Navigator.of(context).push(MaterialPageRoute(
-                              builder: (_) =>
-                                  AnonymousProfileScreen(conversationId: id)))
-                          : _openProfile(p),
+                              builder: (_) => BlockedScreen(status: block!)))
+                          // someone anonymous: only their anonymous profile
+                          : p.isAnonymous
+                              ? Navigator.of(context).push(MaterialPageRoute(
+                                  builder: (_) => AnonymousProfileScreen(
+                                      conversationId: id)))
+                              : _openProfile(p),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(vertical: 4),
                     child: Row(children: [
@@ -1248,6 +1393,20 @@ class _ChatScreenState extends State<ChatScreen> {
                                 if (p.verified) ...[
                                   const SizedBox(width: 4),
                                   VerifiedBadge(size: 16, name: p.name),
+                                ],
+                                // a guest chat: GUEST (to its host), and
+                                // the time it has left
+                                if (guest != null && !guest.iAmGuest) ...[
+                                  const SizedBox(width: 6),
+                                  const GuestTag(),
+                                ],
+                                if (guest != null && !guestEnded) ...[
+                                  const SizedBox(width: 6),
+                                  TimeLeftChip(
+                                      minutes: guestEndsAt!
+                                              .difference(now)
+                                              .inMinutes +
+                                          1),
                                 ],
                                 // my private note about them (direct chats)
                                 if (anonymous == null &&
@@ -1321,7 +1480,9 @@ class _ChatScreenState extends State<ChatScreen> {
               // an anonymous chat: the recipient's actions, in a ⋯ menu
               // (no Block; the one who wrote first can't unmatch here; in a
               // mutual chat, both have them)
-              if (anonymous != null &&
+              if (guest != null)
+                ..._guestActions(id, guestEnded)
+              else if (anonymous != null &&
                   anonymous.theyAreAnonymous &&
                   !blocked &&
                   !gone &&
@@ -1470,11 +1631,14 @@ class _ChatScreenState extends State<ChatScreen> {
                                   constraints:
                                       BoxConstraints(minHeight: box.maxHeight),
                                   child: Center(
-                                    child: anonymous != null &&
-                                            anonymous.iAmAnonymous
-                                        ? AnonymousIntro(
-                                            anonymous: anonymous, to: p.name)
-                                        : ChatIntro(profile: p),
+                                    child: guest != null && guest.iAmGuest
+                                        ? GuestIntro(to: p.name)
+                                        : anonymous != null &&
+                                                anonymous.iAmAnonymous
+                                            ? AnonymousIntro(
+                                                anonymous: anonymous,
+                                                to: p.name)
+                                            : ChatIntro(profile: p),
                                   ),
                                 ),
                               ),
@@ -1848,10 +2012,18 @@ class _ChatScreenState extends State<ChatScreen> {
               _BlockedBar(status: block!)
             else if (gone)
               const AnonymousClosedBar(message: 'This chat has ended.')
+            else if (guestEnded)
+              widget.guestSide?.ended ??
+                  _GuestEndedBar(
+                      until: guest.deletesAt,
+                      onDelete: () => _guestMenu(id, 'delete'))
             else if (closed != null)
               AnonymousClosedBar(message: closed)
             else
-              ..._composer(p, anonymous: anonymous != null),
+              ..._composer(p,
+                  anonymous: anonymous != null,
+                  // a guest's empty chat: the box draws the eye
+                  glow: guest != null && guest.iAmGuest && msgs.isEmpty),
           ]),
         ),
       ),
@@ -2112,4 +2284,58 @@ class _EditMessageDialogState extends State<_EditMessageDialog> {
       ],
     );
   }
+}
+
+/// An ended guest chat, for its host: still here to read until it's
+/// deleted, and Delete.
+class _GuestEndedBar extends StatelessWidget {
+  const _GuestEndedBar({required this.until, required this.onDelete});
+
+  final DateTime until;
+  final VoidCallback onDelete;
+
+  static const _days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  static const _months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec'
+  ];
+
+  @override
+  Widget build(BuildContext context) => SafeArea(
+        top: false,
+        child: Container(
+          key: const Key('guestChatEndedBar'),
+          margin: const EdgeInsets.fromLTRB(12, 6, 12, 10),
+          padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
+          decoration: BoxDecoration(
+            color: HuntrColors.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: HuntrColors.border),
+          ),
+          child: Row(children: [
+            const Icon(Icons.lock_clock_outlined,
+                size: 20, color: HuntrColors.muted),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                  'This chat ended. You can read it until '
+                  '${_days[until.weekday - 1]} ${until.day} '
+                  '${_months[until.month - 1]}; they can’t write here anymore.',
+                  style:
+                      const TextStyle(color: HuntrColors.muted, height: 1.4)),
+            ),
+            TextButton(onPressed: onDelete, child: const Text('Delete')),
+          ]),
+        ),
+      );
 }

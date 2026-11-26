@@ -106,7 +106,9 @@ void main() {
   guestChats = GuestChatsState(
       api: GuestChatApi(),
       token: () => state.sessionToken,
-      onSessionRejected: state.endSession);
+      onSessionRejected: state.endSession,
+      // guest chats are anonymous chats: they reload with them
+      onChatsChanged: messaging.refresh);
   runApp(HuntrApp(
     state: state,
     updates: AppUpdateGate(),

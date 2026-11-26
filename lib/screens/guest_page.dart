@@ -6,18 +6,18 @@ import '../flows/guest_join.dart';
 import '../services/guest_chat_api.dart';
 import '../services/huntr_backend.dart' show BackendException;
 import '../services/services_scope.dart';
-import '../state/guest_chats_state.dart';
+import '../state/app_state.dart';
+import '../state/messaging_state.dart';
 import '../theme.dart';
 import '../widgets/anonymous_avatar.dart';
-import '../widgets/chat/guest_chat_view.dart';
 import 'agreement_screen.dart';
+import 'chat_screen.dart';
 
 /// A guest link opened in a browser (huntr.online/g/<code>), by someone not
-/// on HUNTR: straight into a temporary anonymous chat with its owner (the
-/// shared guest chat view), and joining HUNTR to keep talking. The chat
-/// itself starts with the guest's first message (or GIF search), so opening
-/// the link leaves nothing behind. [onLeave] goes to HUNTR itself (sign up
-/// or log in).
+/// on HUNTR: straight into an anonymous chat with its owner, the same chat
+/// screen as the app's (a guest chat is an anonymous chat, with a hidden
+/// account for the guest: its login runs this page's session). [onLeave]
+/// goes to HUNTR itself (sign up or log in).
 class GuestPage extends StatefulWidget {
   const GuestPage(
       {super.key, required this.code, required this.onLeave, this.api});
@@ -35,12 +35,15 @@ class GuestPage extends StatefulWidget {
 class _GuestPageState extends State<GuestPage> {
   late final GuestChatApi _api = widget.api ?? GuestChatApi();
   GuestLinkCard? _card;
-  String? _cardError;
+  String? _error;
 
-  /// The chat's secret, once it started.
+  /// The guest's login, and their chat, once in it.
   String? _token;
-  Future<String>? _starting;
-  GuestChatController? _chat;
+  int? _conversationId;
+
+  /// It ended (their login stopped with it).
+  bool _ended = false;
+  AppState? _app;
 
   @override
   void initState() {
@@ -49,9 +52,23 @@ class _GuestPageState extends State<GuestPage> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _app ??= AppScope.read(context)..addListener(_sessionChanged);
+  }
+
+  @override
   void dispose() {
-    _chat?.dispose();
+    _app?.removeListener(_sessionChanged);
     super.dispose();
+  }
+
+  /// The guest's login stopped (the chat ended, or was deleted): ended.
+  void _sessionChanged() {
+    if (_token != null && !_ended && _app?.sessionToken != _token) {
+      setState(() => _ended = true);
+      ServicesScope.presenceOf(context)?.stop();
+    }
   }
 
   Future<void> _load() async {
@@ -62,108 +79,86 @@ class _GuestPageState extends State<GuestPage> {
       // a chat already open here (a reload): back into it, unless it ended
       // meanwhile (then forgotten: a new one)
       final token = await GuestStore.token(widget.code);
-      if (!mounted) return;
-      if (token == null) return _open(null);
-      try {
-        final page = await _api.guestChat(token);
-        if (!mounted) return;
-        _open(token);
-        _chat?.chat = page.chat;
-      } on GuestChatEndedException {
-        await GuestStore.forget(widget.code);
-        if (mounted) _open(null);
-      } catch (_) {
-        // can't tell now: try the chat (it says if it ended)
-        if (mounted) _open(token);
+      if (token != null) {
+        try {
+          final id = await _api.guestChat(token);
+          if (mounted) await _enter(token, id);
+          return;
+        } on GuestChatEndedException {
+          await GuestStore.forget(widget.code);
+        }
       }
+      if (mounted) await _start();
     } on BackendException catch (e) {
-      if (mounted) setState(() => _cardError = e.message);
+      if (mounted) setState(() => _error = e.message);
     } catch (_) {
       if (mounted) {
-        setState(() => _cardError = 'Check your connection and try again.');
+        setState(() => _error = 'Check your connection and try again.');
       }
     }
   }
 
-  /// The chat, open here: [token] its secret, or (null) not started yet:
-  /// shown empty, and started by the first message.
-  void _open(String? token) {
-    _chat?.dispose();
-    _token = token;
-    _starting = null;
-    final chat = GuestChatController(
-      fetch: (after) async {
-        final t = _token;
-        if (t == null) {
-          return GuestChatPage(
-              chat: GuestChatSummary.notStarted(_card!), messages: const []);
-        }
-        return _api.guestChat(t, after: after);
-      },
-      post: (
-              {String? body,
-              String? gifId,
-              int? replyToId,
-              required String clientId}) async =>
-          _api.guestSend(await _started(),
-              body: body,
-              gifId: gifId,
-              replyToId: replyToId,
-              clientId: clientId),
-      react: (messageId, emoji) async =>
-          _api.guestReact(await _started(), messageId, emoji),
-      read: (upTo) async {
-        final t = _token;
-        if (t != null) await _api.guestRead(t, upTo);
-      },
-      gifs: (
-              {required bool stickers,
-              String query = '',
-              int offset = 0}) async =>
-          _api.guestGifs(await _started(),
-              stickers: stickers, query: query, offset: offset),
-      onEnded: () => unawaited(GuestStore.forget(widget.code)),
-    );
-    setState(() => _chat = chat);
-    unawaited(chat.start());
+  /// A new chat on the link (nothing shows to its owner until something's
+  /// said; one where nothing is said goes when it ends).
+  Future<void> _start() async {
+    try {
+      final started = await _api.start(widget.code);
+      await GuestStore.saveToken(widget.code, started.token);
+      if (mounted) await _enter(started.token, started.conversationId);
+    } on BackendException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    }
   }
 
-  /// The chat's secret: it starts now if it hasn't (by sending, the guest
-  /// agrees: 18 or older, and the Community Guidelines). What stops it
-  /// (e.g. too many chats) is said.
-  Future<String> _started() {
-    final token = _token;
-    if (token != null) return Future.value(token);
-    return _starting ??= () async {
-      try {
-        final started = await _api.start(widget.code);
-        await GuestStore.saveToken(widget.code, started.token);
-        _token = started.token;
-        if (mounted) setState(() => _chat?.chat = started.chat);
-        return started.token;
-      } catch (e) {
-        _starting = null; // the next message tries again
-        if (mounted) {
-          ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(
-              content: Text(e is BackendException
-                  ? e.message
-                  : 'Check your connection and try again.')));
-        }
-        rethrow;
-      }
-    }();
+  /// In the chat: the guest's login runs the session (the chat's messages,
+  /// live updates), and the chat opens.
+  Future<void> _enter(String token, int conversationId) async {
+    final app = AppScope.read(context);
+    final messaging = MessagingScope.read(context);
+    final presence = ServicesScope.presenceOf(context);
+    _token = token;
+    app.startSession(token);
+    if (presence != null) {
+      presence.onEvent = messaging?.handleEvent;
+      presence.onConnected = () => unawaited(messaging?.sync());
+      presence.start(token);
+    }
+    // its chat (the list leaves out one where nothing's said yet)
+    await messaging?.openAnonymous(conversationId);
+    if (!mounted) return;
+    setState(() {
+      _conversationId = conversationId;
+      _ended = false;
+    });
+  }
+
+  /// Leaves the guest's session (for HUNTR itself, or a new chat).
+  void _leaveSession() {
+    ServicesScope.presenceOf(context)?.stop();
+    final app = AppScope.read(context);
+    _token = null;
+    if (app.sessionToken != null) app.endSession();
   }
 
   /// A new chat after one ended.
-  void _again() => _open(null);
+  Future<void> _again() async {
+    await GuestStore.forget(widget.code);
+    if (!mounted) return;
+    _leaveSession();
+    setState(() {
+      _conversationId = null;
+      _ended = false;
+    });
+    await _start();
+  }
 
   Future<void> _end() async {
     final sure = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('End this chat?'),
-        content: const Text(
-            'It’s deleted for both of you, and you can’t get it back.'),
+        content: const Text('You can’t write here anymore, and you can’t open '
+            'it again. They can still read it for 7 days.'),
         actions: [
           TextButton(
               onPressed: () => Navigator.of(context).pop(false),
@@ -179,25 +174,33 @@ class _GuestPageState extends State<GuestPage> {
     try {
       await _api.guestEnd(token);
     } catch (_) {}
-    _chat?.markEnded();
+    await GuestStore.forget(widget.code);
+    if (mounted) setState(() => _ended = true);
   }
 
-  /// "Join HUNTR to keep talking": what happens, then sign up.
+  /// "Join HUNTR to keep talking": what happens, then sign up; the chat
+  /// moves to the new account.
   Future<void> _join() async {
     final card = _card;
-    final chat = _chat?.chat;
-    final token = _token;
+    final summary = _conversationId == null
+        ? null
+        : MessagingScope.read(context)?.summary(_conversationId!);
+    final guest = summary?.guest;
+    final now = DateTime.now();
     final go = await Navigator.of(context).push<bool>(MaterialPageRoute(
         builder: (_) => _JoinIntro(
-            hostName: card?.name ?? chat?.name ?? '',
-            hostAnimal: card?.avatar ?? chat?.avatar ?? 'fox',
-            myName: chat?.myName,
-            myAnimal: chat?.myAvatar,
-            minutesLeft: chat?.minutesLeft(DateTime.now()))));
-    if (go != true) return;
-    if (token != null && !(_chat?.ended ?? true)) {
-      await GuestStore.saveJoin(token);
-    }
+            hostName: card?.name ?? '',
+            hostAnimal: card?.avatar ?? 'fox',
+            myName: summary?.anonymous?.myName,
+            myAnimal: summary?.anonymous?.myAvatar,
+            minutesLeft: guest == null || _ended
+                ? null
+                : guest.endsAt.difference(now).inMinutes + 1)));
+    if (go != true || !mounted) return;
+    final token = _token;
+    if (token != null && !_ended) await GuestStore.saveJoin(token);
+    if (!mounted) return;
+    _leaveSession();
     widget.onLeave();
   }
 
@@ -230,70 +233,57 @@ class _GuestPageState extends State<GuestPage> {
         ),
       );
 
-  void _profile() {
-    final card = _card;
-    if (card == null) return;
-    Navigator.of(context).push(MaterialPageRoute(
-        builder: (_) => _HostProfile(
-            card: card,
-            onJoin: () {
-              Navigator.of(context).pop();
-              _join();
-            })));
-  }
-
   @override
   Widget build(BuildContext context) {
     final card = _card;
-    final chat = _chat;
-    if (card == null || chat == null) {
+    final id = _conversationId;
+    final messaging = MessagingScope.of(context);
+    final summary = id == null ? null : messaging?.summary(id);
+    if (card == null || (id == null && !_ended)) {
       return Scaffold(
         body: Center(
-          child: _cardError == null
+          child: _error == null
               ? const CircularProgressIndicator()
-              : _Unavailable(message: _cardError!, onHuntr: widget.onLeave),
+              : _Unavailable(message: _error!, onHuntr: widget.onLeave),
         ),
       );
     }
-    final view = ListenableBuilder(
-      listenable: chat,
-      builder: (context, _) {
-        final summary = chat.chat;
-        final started = summary != null && summary.started;
-        return GuestChatView(
-          controller: chat,
-          onOpenProfile: _profile,
-          intro: GuestChatIntro(
-            animal: started ? summary.myAvatar : card.avatar,
-            title: started ? 'Hi, ${summary.myName}' : 'Say hi to ${card.name}',
-            // the rest is behind (i) in the header
-            text: started
-                ? 'You’re anonymous to each other.'
-                : 'You’re anonymous. No account needed.',
-          ),
-          actions: [
-            IconButton(
-              key: const Key('guestInfo'),
-              tooltip: 'How it works',
-              icon: const Icon(Icons.info_outline_rounded),
-              onPressed: () => _info(card.idleMinutes),
-            ),
-            if (!chat.ended && _token != null)
-              Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: TextButton(
-                  key: const Key('guestEndChat'),
-                  style: TextButton.styleFrom(
-                      foregroundColor: const Color(0xFFFF8A80)),
-                  onPressed: _end,
-                  child: const Text('End'),
+    final endedBar = _EndedBar(onAgain: _again, onJoin: _join);
+    // ended (their login stopped): only that, and a new chat or joining
+    final Widget view = _ended || summary == null
+        ? Scaffold(
+            body: SafeArea(
+              child: Column(children: [
+                const Spacer(),
+                SizedBox.square(
+                  dimension: 88,
+                  child:
+                      AnonymousArt(animal: card.avatar, radius: 44, size: 88),
                 ),
-              ),
-          ],
-          ended: _EndedBar(onAgain: _again, onJoin: widget.onLeave),
-        );
-      },
-    );
+                const SizedBox(height: 14),
+                Text(card.name,
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w700)),
+                const Spacer(),
+                _ended
+                    ? endedBar
+                    : const Padding(
+                        padding: EdgeInsets.all(24),
+                        child: CircularProgressIndicator()),
+              ]),
+            ),
+          )
+        : ChatScreen.conversation(
+            conversationId: id!,
+            other: summary.other,
+            guestSide: GuestSide(
+              onEnd: _end,
+              onInfo: () => _info(card.idleMinutes),
+              ended: endedBar,
+            ),
+          );
     // a computer: the host's card beside the chat
     if (MediaQuery.sizeOf(context).width < 1000) return view;
     return Scaffold(
@@ -462,57 +452,6 @@ class _JoinButton extends StatelessWidget {
 
 /// The link's page before a chat: the host's card, what to know, agreeing
 /// (18+, the rules), and Start anonymous chat.
-/// The host's anonymous profile, as a guest sees it: the card only (no
-/// Threads), and joining HUNTR.
-class _HostProfile extends StatelessWidget {
-  const _HostProfile({required this.card, required this.onJoin});
-
-  final GuestLinkCard card;
-  final VoidCallback onJoin;
-
-  @override
-  Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const Text('Anonymous profile')),
-        body: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 520),
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
-              children: [
-                _HostCard(card: card),
-                const SizedBox(height: 16),
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: HuntrColors.surface,
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: HuntrColors.border),
-                  ),
-                  child: const Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Who they are stays private',
-                          style: TextStyle(
-                              fontSize: 15, fontWeight: FontWeight.w700)),
-                      SizedBox(height: 10),
-                      Text(
-                          'Their name, photos and profile aren’t shown here. '
-                          'On HUNTR, you can both agree to swap profiles and '
-                          'see who the other is.',
-                          style:
-                              TextStyle(color: Color(0xFFC9CAD1), height: 1.5)),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 22),
-                _JoinButton(onPressed: onJoin),
-              ],
-            ),
-          ),
-        ),
-      );
-}
-
 /// Before signing up: the chat comes along, both stay anonymous.
 class _JoinIntro extends StatelessWidget {
   const _JoinIntro({

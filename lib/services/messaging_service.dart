@@ -7,6 +7,7 @@ import 'huntr_backend.dart'
         AnonymousProfile,
         ChatMessage,
         ConversationPage,
+        ConversationSummary,
         GifPage,
         MessageTarget,
         UnmatchedPerson,
@@ -35,6 +36,14 @@ class MessagingService {
           {String? before}) async =>
       backend.fetchAnonymousConversations(
           backendUrl: await _url(), token: token, before: before);
+
+  /// One anonymous conversation (also before its first message).
+  Future<ConversationSummary> fetchAnonymousConversation(
+          String token, int conversationId) async =>
+      backend.fetchAnonymousConversation(
+          backendUrl: await _url(),
+          token: token,
+          conversationId: conversationId);
 
   Future<ChatMessage> sendAnonymous(String token,
           {required int conversationId,

@@ -1,285 +1,29 @@
 import 'dart:async';
-import 'dart:math';
 
 import 'package:flutter/widgets.dart';
 
 import '../services/guest_chat_api.dart';
-import '../services/huntr_backend.dart'
-    show
-        BackendException,
-        ChatGif,
-        GifPage,
-        MessageReaction,
-        ReplyPreview,
-        SessionRejectedException;
+import '../services/huntr_backend.dart' show SessionRejectedException;
 
-typedef GuestGifLoader = Future<GifPage?> Function(
-    {required bool stickers, String query, int offset});
-
-typedef GuestPost = Future<GuestChatMessage> Function(
-    {String? body, String? gifId, int? replyToId, required String clientId});
-
-/// Sets my reaction on a message (null: removes it); the message after.
-typedef GuestReact = Future<GuestChatMessage> Function(
-    int messageId, String? emoji);
-
-final _random = Random.secure();
-
-String newGuestClientId() => List.generate(
-    16, (_) => _random.nextInt(256).toRadixString(16).padLeft(2, '0')).join();
-
-/// One guest chat, for either side (the host signed in, or the guest by the
-/// secret their browser holds): its messages, sending text and GIFs, read
-/// marks, replies and reactions, and catching up every [pollEvery]. The
-/// calls differ by side; what the chat does doesn't.
-class GuestChatController extends ChangeNotifier {
-  GuestChatController({
-    required Future<GuestChatPage> Function(int? after) fetch,
-    required GuestPost post,
-    this.react,
-    this.read,
-    this.gifs,
-    this.pollEvery = const Duration(seconds: 3),
-    this.onEnded,
-  })  : _fetch = fetch,
-        _post = post;
-
-  final Future<GuestChatPage> Function(int? after) _fetch;
-  final GuestPost _post;
-  final GuestReact? react;
-  final Future<void> Function(int upTo)? read;
-
-  /// GIF search for this side.
-  final GuestGifLoader? gifs;
-  final Duration pollEvery;
-
-  /// The chat ended (said once).
-  final VoidCallback? onEnded;
-
-  GuestChatSummary? chat;
-  final List<GuestChatMessage> messages = [];
-  bool ended = false;
-
-  /// The guest joined HUNTR: the chat moved to this anonymous conversation.
-  int? joinedConversationId;
-  bool loading = true;
-  String? error;
-  Timer? _poll;
-  bool _disposed = false;
-  int _readSent = 0;
-
-  int? get _newestId {
-    for (final m in messages.reversed) {
-      if (m.id != null) return m.id;
-    }
-    return null;
-  }
-
-  Future<void> start() async {
-    await refresh();
-    _poll = Timer.periodic(pollEvery, (_) => refresh());
-  }
-
-  /// Catches up: new messages (and the chat's ends-at).
-  Future<void> refresh() async {
-    if (ended || _disposed) return;
-    try {
-      final page = await _fetch(_newestId);
-      if (_disposed) return;
-      chat = page.chat;
-      for (final message in page.messages) {
-        _add(message);
-      }
-      _applyReactions(page.reactions);
-      loading = false;
-      error = null;
-      _notify();
-      _markRead();
-      // an ended chat (its host reading it): nothing more comes
-      if (page.chat.ended) _end();
-    } on GuestChatEndedException {
-      _end();
-    } on SessionRejectedException {
-      rethrow;
-    } catch (e) {
-      loading = false;
-      error = e is BackendException
-          ? e.message
-          : 'Check your connection and try again.';
-      _notify();
-    }
-  }
-
-  /// A message that came live (the host's apps get one per guest message).
-  void addIncoming(GuestChatMessage message, GuestChatSummary? summary) {
-    if (summary != null) chat = summary;
-    _add(message);
-    _notify();
-    _markRead();
-  }
-
-  /// Every reacted message's reactions: the rest have none.
-  void _applyReactions(Map<int, List<MessageReaction>>? reactions) {
-    if (reactions == null) return;
-    for (var i = 0; i < messages.length; i++) {
-      final m = messages[i];
-      if (m.id == null) continue;
-      final now = reactions[m.id] ?? const <MessageReaction>[];
-      if (!_sameReactions(m.reactions, now)) {
-        messages[i] = m.copyWith(reactions: now);
-      }
-    }
-  }
-
-  static bool _sameReactions(
-          List<MessageReaction> a, List<MessageReaction> b) =>
-      a.length == b.length &&
-      [
-        for (var i = 0; i < a.length; i++)
-          a[i].emoji == b[i].emoji && a[i].fromMe == b[i].fromMe
-      ].every((same) => same);
-
-  /// A message changed elsewhere (a reaction came live).
-  void updated(GuestChatMessage message) {
-    if (!messages.any((m) => m.id == message.id)) return;
-    _add(message);
-    _notify();
-  }
-
-  /// My reaction on their message: [emoji], or (the same as mine again)
-  /// none. Shown at once; put back if it fails.
-  Future<void> reactTo(GuestChatMessage message, String emoji) async {
-    final id = message.id;
-    if (react == null || id == null || message.mine || ended) return;
-    final mine = message.reactions.where((r) => r.fromMe).firstOrNull;
-    final next = mine?.emoji == emoji ? null : emoji;
-    _add(message.copyWith(reactions: [
-      ...message.reactions.where((r) => !r.fromMe),
-      if (next != null) MessageReaction(emoji: next, fromMe: true),
-    ]));
-    _notify();
-    try {
-      _add(await react!(id, next));
-    } on GuestChatEndedException {
-      _end();
-    } catch (_) {
-      _add(message);
-    }
-    _notify();
-  }
-
-  void _add(GuestChatMessage message) {
-    final i = messages.indexWhere((m) =>
-        (m.id != null && m.id == message.id) || m.clientId == message.clientId);
-    if (i >= 0) {
-      messages[i] = message;
-    } else {
-      messages.add(message);
-    }
-  }
-
-  void _markRead() {
-    final newest = messages.where((m) => !m.mine && m.id != null);
-    if (newest.isEmpty || read == null) return;
-    final upTo = newest.last.id!;
-    if (upTo <= _readSent) return;
-    _readSent = upTo;
-    unawaited(read!(upTo).catchError((_) {}));
-  }
-
-  /// [replyTo]: the message it answers.
-  Future<void> sendText(String text, {GuestChatMessage? replyTo}) => _send(
-      body: text.trim(),
-      replyTo: replyTo?.id == null ? null : _quote(replyTo!));
-
-  Future<void> sendGif(ChatGif gif, {GuestChatMessage? replyTo}) =>
-      _send(gif: gif, replyTo: replyTo?.id == null ? null : _quote(replyTo!));
-
-  static ReplyPreview _quote(GuestChatMessage m) =>
-      ReplyPreview.of(m.toChatMessage());
-
-  /// Shown at once, then saved; a failure marks it to try again.
-  Future<void> _send(
-      {String? body,
-      ChatGif? gif,
-      String? clientId,
-      ReplyPreview? replyTo}) async {
-    if (ended || ((body == null || body.isEmpty) && gif == null)) return;
-    final id = clientId ?? newGuestClientId();
-    final pending = GuestChatMessage(
-        id: null,
-        mine: true,
-        text: body ?? '',
-        gif: gif,
-        clientId: id,
-        sentAt: DateTime.now(),
-        replyTo: replyTo);
-    _add(pending);
-    _notify();
-    try {
-      final saved = await _post(
-          body: body, gifId: gif?.id, replyToId: replyTo?.id, clientId: id);
-      _add(saved);
-      // a guest's message gives the chat its full time again
-      await refresh();
-    } on GuestChatEndedException {
-      _end();
-    } catch (_) {
-      _add(pending.copyWith(failed: true));
-    }
-    _notify();
-  }
-
-  /// Tries a failed message again (the same client id: stored once).
-  Future<void> retry(GuestChatMessage failed) => _send(
-      body: failed.gif == null ? failed.text : null,
-      gif: failed.gif,
-      clientId: failed.clientId,
-      replyTo: failed.replyTo);
-
-  void markEnded({int? joinedConversationId}) {
-    this.joinedConversationId ??= joinedConversationId;
-    _end();
-  }
-
-  void _end() {
-    if (ended) return;
-    ended = true;
-    _poll?.cancel();
-    _notify();
-    onEnded?.call();
-  }
-
-  void _notify() {
-    if (!_disposed) notifyListeners();
-  }
-
-  @override
-  void dispose() {
-    _disposed = true;
-    _poll?.cancel();
-    super.dispose();
-  }
-}
-
-/// The host's side: my guest link, my guest chats (in the Anonymous tab),
-/// kept current by live events.
+/// The host's side of guest chats: my guest link, and ending, deleting or
+/// blocking a guest chat. The chats themselves are anonymous chats (in
+/// [MessagingState]); [onChatsChanged] reloads them after a change, or when
+/// a live event says one ended, went or moved.
 class GuestChatsState extends ChangeNotifier {
   GuestChatsState(
-      {required this.api, required this.token, this.onSessionRejected});
+      {required this.api,
+      required this.token,
+      this.onSessionRejected,
+      this.onChatsChanged});
 
   final GuestChatApi api;
   final String? Function() token;
   final VoidCallback? onSessionRejected;
 
+  /// Reload the chats (a guest chat ended, was deleted, or moved).
+  Future<void> Function()? onChatsChanged;
+
   GuestLinkInfo? link;
-  List<GuestChatSummary> chats = const [];
-
-  /// Open chat screens, by chat id (live messages go straight to them).
-  final Map<int, GuestChatController> _open = {};
-
-  int get unread =>
-      chats.where((c) => !c.ended).fold(0, (sum, c) => sum + c.unread);
 
   Future<T?> _call<T>(Future<T> Function(String token) call) async {
     final t = token();
@@ -289,17 +33,6 @@ class GuestChatsState extends ChangeNotifier {
     } on SessionRejectedException {
       onSessionRejected?.call();
       return null;
-    }
-  }
-
-  Future<void> refresh() async {
-    try {
-      final loaded = await _call(api.myChats);
-      if (loaded == null) return;
-      chats = loaded;
-      notifyListeners();
-    } catch (_) {
-      // kept as they were; the next refresh tries again
     }
   }
 
@@ -317,8 +50,8 @@ class GuestChatsState extends ChangeNotifier {
     final made = await _call(api.newLink);
     if (made != null) {
       link = made;
-      await refresh();
       notifyListeners();
+      unawaited(onChatsChanged?.call());
     }
     return made;
   }
@@ -331,138 +64,39 @@ class GuestChatsState extends ChangeNotifier {
     }
   }
 
-  /// A chat screen's controller (the host's side; [gifs]: my GIF search).
-  GuestChatController open(int chatId, {GuestGifLoader? gifs}) {
-    final controller = GuestChatController(
-      fetch: (after) async =>
-          (await _call((t) => api.hostMessages(t, chatId, after: after)))!,
-      post: (
-              {String? body,
-              String? gifId,
-              int? replyToId,
-              required String clientId}) async =>
-          (await _call((t) => api.hostSend(t, chatId,
-              body: body,
-              gifId: gifId,
-              replyToId: replyToId,
-              clientId: clientId)))!,
-      react: (messageId, emoji) async =>
-          (await _call((t) => api.hostReact(t, chatId, messageId, emoji)))!,
-      read: (upTo) async {
-        await _call((t) => api.hostRead(t, chatId, upTo));
-        _setUnread(chatId, 0);
-      },
-      gifs: gifs,
-      // live events bring new messages; this only catches up after a gap
-      pollEvery: const Duration(seconds: 15),
-      // ended (seen while open): kept in the list, to read
-      onEnded: () => _markEnded(chatId),
-    );
-    _open[chatId] = controller;
-    return controller;
+  /// Ends a guest chat now: kept to read.
+  Future<void> end(int conversationId) async {
+    await _call((t) => api.hostEnd(t, conversationId));
+    await onChatsChanged?.call();
   }
 
-  void close(int chatId, GuestChatController controller) {
-    if (_open[chatId] == controller) _open.remove(chatId);
+  /// Deletes a guest chat with everything in it.
+  Future<void> delete(int conversationId) async {
+    await _call((t) => api.hostDelete(t, conversationId));
+    await onChatsChanged?.call();
   }
 
-  Future<void> block(int chatId) async {
-    await _call((t) => api.block(t, chatId));
-    _drop(chatId);
+  /// Deletes it; its guest can't start another one for a day.
+  Future<void> block(int conversationId) async {
+    await _call((t) => api.block(t, conversationId));
+    await onChatsChanged?.call();
   }
 
-  /// Ends it now: kept to read.
-  Future<void> end(int chatId) async {
-    await _call((t) => api.hostEnd(t, chatId));
-    _markEnded(chatId);
-  }
-
-  /// Deletes it with its messages.
-  Future<void> delete(int chatId) async {
-    await _call((t) => api.hostDelete(t, chatId));
-    _drop(chatId);
-  }
-
-  /// Ended: still listed (to read), and an open screen stops sending.
-  void _markEnded(int chatId) {
-    _open[chatId]?.markEnded();
-    // already listed as ended: stays where it is
-    if (chats.any((c) => c.id == chatId && c.ended)) return;
-    final ended = [
-      for (final c in chats)
-        if (c.id == chatId) c.copyWith(ended: true)
-    ];
-    if (ended.isEmpty) return;
-    // open ones first, then ended ones
-    chats = [
-      ...chats.where((c) => c.id != chatId && !c.ended),
-      ...ended,
-      ...chats.where((c) => c.id != chatId && c.ended),
-    ];
-    notifyListeners();
-  }
-
-  void _setUnread(int chatId, int unread) {
-    chats = [
-      for (final c in chats) c.id == chatId ? c.copyWith(unread: unread) : c
-    ];
-    notifyListeners();
-  }
-
-  void _drop(int chatId, {int? joinedConversationId}) {
-    _open.remove(chatId)?.markEnded(joinedConversationId: joinedConversationId);
-    chats = chats.where((c) => c.id != chatId).toList();
-    notifyListeners();
-  }
-
-  /// A live event: guest.started / message / read / ended / joined.
+  /// A live event: a guest chat ended, went, or its guest joined HUNTR.
   void handleEvent(Map<String, dynamic> event) {
     final type = event['type'];
-    if (type is! String || !type.startsWith('guest.')) return;
-    switch (type) {
-      case 'guest.message':
-        final chatJson = event['chat'];
-        final messageJson = event['message'];
-        if (chatJson is! Map<String, dynamic> ||
-            messageJson is! Map<String, dynamic>) {
-          return;
-        }
-        final summary = GuestChatSummary.fromJson(chatJson);
-        final message = GuestChatMessage.fromJson(messageJson);
-        final open = _open[summary.id];
-        open?.addIncoming(message, summary);
-        final rest = chats.where((c) => c.id != summary.id);
-        chats = [open == null ? summary : summary.copyWith(unread: 0), ...rest];
-        notifyListeners();
-      case 'guest.reacted':
-        final id = event['chat_id'];
-        final messageJson = event['message'];
-        if (id is int && messageJson is Map<String, dynamic>) {
-          _open[id]?.updated(GuestChatMessage.fromJson(messageJson));
-        }
-      case 'guest.ended':
-        final id = event['chat_id'];
-        if (id is int) _markEnded(id);
-      case 'guest.removed':
-      case 'guest.joined':
-        final id = event['chat_id'];
-        final moved = event['conversation_id'];
-        if (id is int) {
-          _drop(id, joinedConversationId: moved is int ? moved : null);
-        }
-      default:
-        unawaited(refresh());
+    if (type is String && type.startsWith('guest.')) {
+      unawaited(onChatsChanged?.call());
     }
   }
 
   void clear() {
     link = null;
-    chats = const [];
-    _open.clear(); // their screens close them
     notifyListeners();
   }
 }
 
+/// [GuestChatsState] for the widgets below (null: no backend, e.g. in tests).
 class GuestChatsScope extends InheritedNotifier<GuestChatsState> {
   const GuestChatsScope(
       {super.key, required GuestChatsState? state, required super.child})

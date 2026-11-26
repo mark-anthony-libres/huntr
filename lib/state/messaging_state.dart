@@ -891,6 +891,17 @@ class MessagingState extends ChangeNotifier {
     return target == null ? null : _opened(target);
   }
 
+  /// One anonymous chat by its id, e.g. a guest's (also before its first
+  /// message, which the list leaves out): known here until the list has it.
+  Future<ConversationSummary?> openAnonymous(int conversationId) async {
+    final loaded = await _call(
+        (t) => service.fetchAnonymousConversation(t, conversationId));
+    if (loaded == null) return null;
+    if (summary(conversationId) == null) _started[conversationId] = loaded;
+    notifyListeners();
+    return loaded;
+  }
+
   /// A chat Message just opened: an anonymous one is listed until the
   /// next refresh has it.
   MessageTarget _opened(MessageTarget target) {

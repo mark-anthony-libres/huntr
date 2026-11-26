@@ -2443,6 +2443,7 @@ class ConversationSummary {
     this.canSend = true,
     this.unmatched = false,
     this.pinned = false,
+    this.guest,
   });
 
   factory ConversationSummary.fromJson(Map<String, dynamic> json) {
@@ -2466,10 +2467,16 @@ class ConversationSummary {
       canSend: json['can_send'] as bool? ?? true,
       unmatched: json['unmatched'] as bool? ?? false,
       pinned: json['pinned'] as bool? ?? false,
+      guest: json['guest'] == null
+          ? null
+          : GuestInfo.fromJson(json['guest'] as Map<String, dynamic>),
     );
   }
 
   final int id;
+
+  /// A guest chat (from a guest link): who's the guest, when it ends.
+  final GuestInfo? guest;
 
   /// I pinned it: at the top of my Chats (on every device).
   final bool pinned;
@@ -2507,7 +2514,42 @@ class ConversationSummary {
           reveal: reveal ?? this.reveal,
           canSend: canSend ?? this.canSend,
           unmatched: unmatched,
-          pinned: pinned ?? this.pinned);
+          pinned: pinned ?? this.pinned,
+          guest: guest);
+}
+
+/// A guest chat: an anonymous chat with someone not on HUNTR, from a guest
+/// link. It ends [idleMinutes] after the guest's last message (or when
+/// either ends it); the host can read it until [deletesAt].
+class GuestInfo {
+  const GuestInfo(
+      {required this.iAmGuest,
+      required this.endsAt,
+      required this.ended,
+      required this.deletesAt,
+      required this.idleMinutes});
+
+  factory GuestInfo.fromJson(Map<String, dynamic> json) => GuestInfo(
+        iAmGuest: json['i_am_guest'] as bool? ?? false,
+        endsAt: DateTime.parse(json['ends_at'] as String).toLocal(),
+        ended: json['ended'] as bool? ?? false,
+        deletesAt: DateTime.parse(json['deletes_at'] as String).toLocal(),
+        idleMinutes: json['idle_minutes'] as int? ?? 10,
+      );
+
+  /// I'm the guest (not the link's owner).
+  final bool iAmGuest;
+  final DateTime endsAt;
+  final bool ended;
+  final DateTime deletesAt;
+  final int idleMinutes;
+
+  /// When it ends, given the guest's newest message [lastGuestMessage] (the
+  /// list's time can be behind it).
+  DateTime endsAfter(DateTime? lastGuestMessage) {
+    final fresh = lastGuestMessage?.add(Duration(minutes: idleMinutes));
+    return fresh != null && fresh.isAfter(endsAt) ? fresh : endsAt;
+  }
 }
 
 /// Who is anonymous in an anonymous conversation, and as what.
@@ -2664,6 +2706,22 @@ Future<ConversationPage> fetchAnonymousConversations(
           _page(_anonymous(backendUrl, '/conversations'), before),
           headers: _authorization(token)),
       ConversationPage.fromJson,
+    );
+
+/// GET .../anonymous/conversations/{id}: one of my anonymous conversations,
+/// as the list shows it (also before its first message, which the list
+/// leaves out).
+Future<ConversationSummary> fetchAnonymousConversation(
+        {required String backendUrl,
+        required String token,
+        required int conversationId,
+        http.Client? client}) =>
+    _sendAuthorized(
+      client,
+      (httpClient) => httpClient.get(
+          _anonymous(backendUrl, '/conversations/$conversationId'),
+          headers: _authorization(token)),
+      ConversationSummary.fromJson,
     );
 
 /// POST .../anonymous/conversations/{id}/messages: text, or a GIF/sticker

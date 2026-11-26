@@ -3,22 +3,15 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../config/google_oauth_config.dart';
-import 'huntr_backend.dart'
-    show
-        BackendException,
-        ChatGif,
-        ChatMessage,
-        ChatMessageType,
-        GifPage,
-        MessageReaction,
-        ReplyPreview,
-        SessionRejectedException;
+import 'huntr_backend.dart' show BackendException, SessionRejectedException;
 
 /// Guest chats (a guest link: people not on HUNTR chat anonymously with its
-/// owner). The guest's side is public and opened by a secret only their
-/// browser holds; the host's side is signed in.
+/// owner). A guest chat is an ordinary anonymous chat: the guest gets a
+/// login for a hidden account that reaches only that chat, and both sides
+/// use the anonymous chat itself. This is the rest: the link, starting a
+/// chat, and ending, deleting or blocking one.
 
-/// The chat ended (no message from the guest for a while) or doesn't exist.
+/// The chat ended, or doesn't exist (any more).
 class GuestChatEndedException implements Exception {
   const GuestChatEndedException();
 }
@@ -72,229 +65,13 @@ class GuestLinkCard {
   final int idleMinutes;
 }
 
-/// One message in a guest chat: text, or a GIF/sticker. [id] is null while
-/// mine is being sent; [failed] when it didn't go through.
-class GuestChatMessage {
-  const GuestChatMessage({
-    required this.id,
-    required this.mine,
-    required this.text,
-    required this.sentAt,
-    required this.clientId,
-    this.gif,
-    this.failed = false,
-    this.replyTo,
-    this.reactions = const [],
-  });
-
-  factory GuestChatMessage.fromJson(Map<String, dynamic> json) {
-    final isGif = json['type'] == 'gif';
-    final body = json['body'];
-    return GuestChatMessage(
-      id: json['id'] as int,
-      mine: json['mine'] as bool,
-      text: isGif ? '' : body as String,
-      gif: isGif ? ChatGif.fromJson(body as Map<String, dynamic>) : null,
-      clientId: json['client_id'] as String,
-      sentAt: DateTime.parse(json['created_at'] as String).toLocal(),
-      replyTo: json['reply_to'] == null
-          ? null
-          : ReplyPreview.fromJson(json['reply_to'] as Map<String, dynamic>),
-      reactions: reactionsFromJson(json['reactions']),
-    );
-  }
-
-  final int? id;
-  final bool mine;
-  final String text;
-  final ChatGif? gif;
-  final String clientId;
-  final DateTime sentAt;
-  final bool failed;
-
-  /// The message it replies to (as chats show it).
-  final ReplyPreview? replyTo;
-
-  /// Each side's reaction (one each, as in chats).
-  final List<MessageReaction> reactions;
-
-  /// As a chat message, for what chats show and do with one (the bubble,
-  /// reactions, reply, copy).
-  ChatMessage toChatMessage() => ChatMessage(
-      id: id,
-      conversationId: 0,
-      fromMe: mine,
-      body: text,
-      sentAt: sentAt,
-      clientId: clientId,
-      failed: failed,
-      type: gif == null ? ChatMessageType.text : ChatMessageType.gif,
-      gif: gif,
-      replyTo: replyTo,
-      reactions: reactions);
-
-  /// A line for a chat list.
-  String get preview => gif == null
-      ? text
-      : gif!.isSticker
-          ? 'Sticker'
-          : 'GIF';
-
-  GuestChatMessage copyWith({bool? failed, List<MessageReaction>? reactions}) =>
-      GuestChatMessage(
-          id: id,
-          mine: mine,
-          text: text,
-          gif: gif,
-          clientId: clientId,
-          sentAt: sentAt,
-          failed: failed ?? this.failed,
-          replyTo: replyTo,
-          reactions: reactions ?? this.reactions);
-}
-
-/// Reactions as chats send them: [{"emoji", "from_me"}].
-List<MessageReaction> reactionsFromJson(Object? json) => [
-      for (final r in json as List? ?? const [])
-        MessageReaction.fromJson(r as Map<String, dynamic>),
-    ];
-
-/// A guest chat as either side sees it: the other's anonymous name and
-/// animal, mine, when it ends, the last message and how many are unread.
-class GuestChatSummary {
-  const GuestChatSummary({
-    required this.id,
-    required this.name,
-    required this.avatar,
-    required this.myName,
-    required this.myAvatar,
-    required this.endsAt,
-    required this.idleMinutes,
-    required this.lastMessage,
-    required this.unread,
-    required this.theyReadUpTo,
-    this.ended = false,
-    this.deletesAt,
-  });
-
-  /// The chat a guest sees before their first message (nothing exists
-  /// yet): its host's card; id 0, no name of mine yet.
-  factory GuestChatSummary.notStarted(GuestLinkCard card) => GuestChatSummary(
-      id: 0,
-      name: card.name,
-      avatar: card.avatar,
-      myName: '',
-      myAvatar: card.avatar,
-      endsAt: DateTime.now().add(Duration(minutes: card.idleMinutes)),
-      idleMinutes: card.idleMinutes,
-      lastMessage: null,
-      unread: 0,
-      theyReadUpTo: null);
-
-  /// It exists (see [GuestChatSummary.notStarted]).
-  bool get started => id != 0;
-
-  factory GuestChatSummary.fromJson(Map<String, dynamic> json) {
-    final last = json['last_message'] as Map<String, dynamic>?;
-    return GuestChatSummary(
-      id: json['id'] as int,
-      name: json['name'] as String,
-      avatar: json['avatar'] as String,
-      myName: json['my_name'] as String,
-      myAvatar: json['my_avatar'] as String,
-      endsAt: DateTime.parse(json['ends_at'] as String).toLocal(),
-      idleMinutes: json['idle_minutes'] as int? ?? 10,
-      lastMessage: last == null ? null : GuestChatMessage.fromJson(last),
-      unread: json['unread'] as int? ?? 0,
-      theyReadUpTo: json['read_up_to'] as int?,
-      ended: json['ended'] as bool? ?? false,
-      deletesAt: json['deletes_at'] == null
-          ? null
-          : DateTime.parse(json['deletes_at'] as String).toLocal(),
-    );
-  }
-
-  final int id;
-  final String name;
-  final String avatar;
-  final String myName;
-  final String myAvatar;
-  final DateTime endsAt;
-  final int idleMinutes;
-  final GuestChatMessage? lastMessage;
-  final int unread;
-
-  /// The newest of my messages they've read.
-  final int? theyReadUpTo;
-
-  /// It ended: the guest can't open it; its host can read it (not answer)
-  /// until [deletesAt].
-  final bool ended;
-  final DateTime? deletesAt;
-
-  /// Whole minutes left (at least 1 while it's open).
-  int minutesLeft(DateTime now) {
-    final left = endsAt.difference(now);
-    if (left.isNegative) return 0;
-    return (left.inSeconds / 60).ceil().clamp(1, idleMinutes);
-  }
-
-  GuestChatSummary copyWith(
-          {GuestChatMessage? lastMessage,
-          int? unread,
-          DateTime? endsAt,
-          int? theyReadUpTo,
-          bool? ended}) =>
-      GuestChatSummary(
-          id: id,
-          name: name,
-          avatar: avatar,
-          myName: myName,
-          myAvatar: myAvatar,
-          endsAt: endsAt ?? this.endsAt,
-          idleMinutes: idleMinutes,
-          lastMessage: lastMessage ?? this.lastMessage,
-          unread: unread ?? this.unread,
-          theyReadUpTo: theyReadUpTo ?? this.theyReadUpTo,
-          ended: ended ?? this.ended,
-          deletesAt: deletesAt);
-}
-
-/// A chat and its messages.
-class GuestChatPage {
-  const GuestChatPage(
-      {required this.chat, required this.messages, this.reactions});
-
-  factory GuestChatPage.fromJson(Map<String, dynamic> json) => GuestChatPage(
-        chat: GuestChatSummary.fromJson(json['chat'] as Map<String, dynamic>),
-        messages: [
-          for (final m in json['messages'] as List<dynamic>)
-            GuestChatMessage.fromJson(m as Map<String, dynamic>),
-        ],
-        reactions: json['reactions'] is! Map
-            ? null
-            : {
-                for (final e in (json['reactions'] as Map).entries)
-                  int.parse(e.key as String): reactionsFromJson(e.value),
-              },
-      );
-
-  final GuestChatSummary chat;
-
-  /// The new messages.
-  final List<GuestChatMessage> messages;
-
-  /// Every reacted message's reactions, by id (null: not said): the others
-  /// have none. How a reaction on an older message arrives.
-  final Map<int, List<MessageReaction>>? reactions;
-}
-
-/// A chat just started: its secret (kept by the browser) and the chat.
+/// A chat just started: the guest's login (kept by the browser) and the
+/// anonymous conversation.
 class GuestStart {
-  const GuestStart({required this.token, required this.chat});
+  const GuestStart({required this.token, required this.conversationId});
 
   final String token;
-  final GuestChatSummary chat;
+  final int conversationId;
 }
 
 /// The guest chat API, for both sides.
@@ -333,15 +110,18 @@ class GuestChatApi {
     if (response.statusCode == 200) {
       return jsonDecode(response.body) as Map<String, dynamic>;
     }
+    // the chat ended (or is gone)
+    if (response.statusCode == 410 ||
+        (response.statusCode == 404 && path.startsWith('/guest/chat'))) {
+      throw const GuestChatEndedException();
+    }
+    // a guest's login that stopped (its chat ended): as ended
+    if (response.statusCode == 401 && path.startsWith('/guest/chat')) {
+      throw const GuestChatEndedException();
+    }
     if (token != null &&
         (response.statusCode == 401 || response.statusCode == 403)) {
       throw const SessionRejectedException();
-    }
-    // the chat ended (or its secret opens nothing anymore)
-    if (response.statusCode == 410 ||
-        (response.statusCode == 404 && path.startsWith('/guest/chat')) ||
-        (response.statusCode == 404 && path.startsWith('/guest-chats/'))) {
-      throw const GuestChatEndedException();
     }
     String? message;
     try {
@@ -369,120 +149,46 @@ class GuestChatApi {
       GuestLinkInfo.fromJson(_data(await _send('PUT', '/guest-link/on',
           token: token, body: {'on': on})));
 
-  Future<List<GuestChatSummary>> myChats(String token) async {
-    final body = await _send('GET', '/guest-chats', token: token);
-    return [
-      for (final c in body['data'] as List<dynamic>)
-        GuestChatSummary.fromJson(c as Map<String, dynamic>),
-    ];
-  }
+  /// Ends a guest chat now (kept to read).
+  Future<void> hostEnd(String token, int conversationId) =>
+      _send('POST', '/guest-chats/$conversationId/end', token: token);
 
-  Future<GuestChatPage> hostMessages(String token, int chatId,
-          {int? after}) async =>
-      GuestChatPage.fromJson(_data(await _send('GET',
-          '/guest-chats/$chatId/messages${after == null ? '' : '?after=$after'}',
-          token: token)));
+  /// Deletes a guest chat with everything in it.
+  Future<void> hostDelete(String token, int conversationId) =>
+      _send('DELETE', '/guest-chats/$conversationId', token: token);
 
-  Future<GuestChatMessage> hostSend(String token, int chatId,
-          {String? body,
-          String? gifId,
-          int? replyToId,
-          required String clientId}) async =>
-      GuestChatMessage.fromJson(_data(await _send(
-          'POST', '/guest-chats/$chatId/messages',
-          token: token,
-          body: {
-            'body': body,
-            'gif_id': gifId,
-            'client_id': clientId,
-            if (replyToId != null) 'reply_to_id': replyToId,
-          })));
-
-  /// My reaction on their message (null: removed).
-  Future<GuestChatMessage> hostReact(
-          String token, int chatId, int messageId, String? emoji) async =>
-      GuestChatMessage.fromJson(_data(await _send(
-          emoji == null ? 'DELETE' : 'PUT',
-          '/guest-chats/$chatId/messages/$messageId/reaction',
-          token: token,
-          body: emoji == null ? null : {'emoji': emoji})));
-
-  Future<void> hostRead(String token, int chatId, int upTo) =>
-      _send('POST', '/guest-chats/$chatId/read',
-          token: token, body: {'up_to': upTo});
-
-  Future<void> block(String token, int chatId) =>
-      _send('POST', '/guest-chats/$chatId/block', token: token);
-
-  /// Ends it now (kept to read).
-  Future<void> hostEnd(String token, int chatId) =>
-      _send('POST', '/guest-chats/$chatId/end', token: token);
-
-  /// Deletes it with its messages.
-  Future<void> hostDelete(String token, int chatId) =>
-      _send('DELETE', '/guest-chats/$chatId', token: token);
+  /// Deletes it; its guest can't start another one for a day.
+  Future<void> block(String token, int conversationId) =>
+      _send('POST', '/guest-chats/$conversationId/block', token: token);
 
   // ---- the guest ----
 
   Future<GuestLinkCard> linkCard(String code) async =>
       GuestLinkCard.fromJson(_data(await _send('GET', '/guest/links/$code')));
 
+  /// A new chat: the guest's login and the conversation.
   Future<GuestStart> start(String code) async {
     final data = _data(await _send('POST', '/guest/links/$code/chats',
         body: {'agreed': true}));
     return GuestStart(
         token: data['token'] as String,
-        chat: GuestChatSummary.fromJson(data['chat'] as Map<String, dynamic>));
+        conversationId: data['conversation_id'] as int);
   }
 
-  Future<GuestChatPage> guestChat(String guestToken, {int? after}) async =>
-      GuestChatPage.fromJson(_data(await _send(
-          'GET', '/guest/chat${after == null ? '' : '?after=$after'}',
-          guestToken: guestToken)));
+  /// The guest's chat (its conversation), while it's open; ended:
+  /// [GuestChatEndedException].
+  Future<int> guestChat(String guestToken) async {
+    final data = _data(await _send('GET', '/guest/chat', token: guestToken));
+    if (data['ended'] == true) throw const GuestChatEndedException();
+    return data['conversation_id'] as int;
+  }
 
-  Future<GuestChatMessage> guestSend(String guestToken,
-          {String? body,
-          String? gifId,
-          int? replyToId,
-          required String clientId}) async =>
-      GuestChatMessage.fromJson(_data(await _send(
-          'POST', '/guest/chat/messages',
-          guestToken: guestToken,
-          body: {
-            'body': body,
-            'gif_id': gifId,
-            'client_id': clientId,
-            if (replyToId != null) 'reply_to_id': replyToId,
-          })));
-
-  /// My reaction on the host's message (null: removed).
-  Future<GuestChatMessage> guestReact(
-          String guestToken, int messageId, String? emoji) async =>
-      GuestChatMessage.fromJson(_data(await _send(
-          emoji == null ? 'DELETE' : 'PUT',
-          '/guest/chat/messages/$messageId/reaction',
-          guestToken: guestToken,
-          body: emoji == null ? null : {'emoji': emoji})));
-
-  Future<void> guestRead(String guestToken, int upTo) =>
-      _send('POST', '/guest/chat/read',
-          guestToken: guestToken, body: {'up_to': upTo});
-
+  /// The guest ends it.
   Future<void> guestEnd(String guestToken) =>
-      _send('DELETE', '/guest/chat', guestToken: guestToken);
+      _send('DELETE', '/guest/chat', token: guestToken);
 
-  Future<GifPage> guestGifs(String guestToken,
-      {required bool stickers, String query = '', int offset = 0}) async {
-    final kind = stickers ? 'sticker' : 'gif';
-    final path = query.isEmpty
-        ? '/guest/gifs/trending?kind=$kind&offset=$offset'
-        : '/guest/gifs/search?kind=$kind&offset=$offset&q=${Uri.encodeQueryComponent(query)}';
-    return GifPage.fromJson(
-        _data(await _send('GET', path, guestToken: guestToken)));
-  }
-
-  /// Signed in now: the chat moves into our mutual anonymous conversation;
-  /// its id.
+  /// Signed in now: the guest chat (its login [guestToken]) moves to my
+  /// account; the conversation's id.
   Future<int> join(String token, String guestToken) async {
     final data = _data(await _send('POST', '/guest/chat/join',
         token: token, guestToken: guestToken));
