@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
@@ -490,8 +491,8 @@ class _MessageBox extends StatelessWidget {
   }
 }
 
-/// A soft orange glow that breathes around [child] while [on] (still with
-/// reduced motion).
+/// While [on]: a light that travels around [child]'s edge over a soft
+/// glow that breathes with it (one still glow with reduced motion).
 class _Glow extends StatefulWidget {
   const _Glow({required this.on, required this.child});
 
@@ -503,8 +504,9 @@ class _Glow extends StatefulWidget {
 }
 
 class _GlowState extends State<_Glow> with SingleTickerProviderStateMixin {
-  late final _pulse = AnimationController(
-      vsync: this, duration: const Duration(milliseconds: 1200));
+  // one turn of the light around the edge (two breaths of the glow)
+  late final _turn = AnimationController(
+      vsync: this, duration: const Duration(milliseconds: 2400));
 
   @override
   void didChangeDependencies() {
@@ -518,50 +520,91 @@ class _GlowState extends State<_Glow> with SingleTickerProviderStateMixin {
     _run();
   }
 
+  bool get _still => MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+
   void _run() {
-    final still = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
-    if (widget.on && !still) {
-      if (!_pulse.isAnimating) _pulse.repeat(reverse: true);
+    if (widget.on && !_still) {
+      if (!_turn.isAnimating) _turn.repeat();
     } else {
-      _pulse.stop();
-      _pulse.value = widget.on ? 1 : 0;
+      _turn.stop();
     }
   }
 
   @override
   void dispose() {
-    _pulse.dispose();
+    _turn.dispose();
     super.dispose();
   }
 
   @override
-  Widget build(BuildContext context) => AnimatedBuilder(
-        animation: _pulse,
-        child: widget.child,
-        builder: (context, child) {
-          final t = widget.on ? Curves.easeInOut.transform(_pulse.value) : 0.0;
-          // (drawn as it is each frame: the pulse is the animation)
-          return Container(
-            key: const Key('guestMessageGlow'),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(28),
-              border: Border.all(
-                  color: widget.on
-                      ? HuntrColors.orange.withValues(alpha: 0.35 + 0.65 * t)
-                      : Colors.transparent,
-                  width: 1.5),
-              boxShadow: widget.on
-                  ? [
-                      BoxShadow(
-                          color: HuntrColors.orange
-                              .withValues(alpha: 0.15 + 0.6 * t),
-                          blurRadius: 6 + 26 * t,
-                          spreadRadius: 6 * t),
-                    ]
-                  : const [],
-            ),
+  Widget build(BuildContext context) {
+    if (!widget.on) return widget.child;
+    return AnimatedBuilder(
+      animation: _turn,
+      child: widget.child,
+      builder: (context, child) {
+        final turn = _still ? 0.0 : _turn.value;
+        // the glow breathes twice a turn: 0..1..0..1..0
+        final breath = _still ? 0.5 : (1 - math.cos(turn * 4 * math.pi)) / 2;
+        return Container(
+          key: const Key('guestMessageGlow'),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(28),
+            boxShadow: [
+              BoxShadow(
+                  color: HuntrColors.orange
+                      .withValues(alpha: 0.10 + 0.22 * breath),
+                  blurRadius: 10 + 14 * breath),
+            ],
+          ),
+          child: CustomPaint(
+            foregroundPainter: _EdgeLight(turn: turn, still: _still),
             child: child,
-          );
-        },
-      );
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// The edge: a faint orange line, and a brighter light along it at [turn]
+/// (0..1 around).
+class _EdgeLight extends CustomPainter {
+  const _EdgeLight({required this.turn, required this.still});
+
+  final double turn;
+  final bool still;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    final edge = RRect.fromRectAndRadius(
+        rect.deflate(0.75), Radius.circular(math.min(28, size.height / 2)));
+    canvas.drawRRect(
+        edge,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.5
+          ..color = HuntrColors.orange.withValues(alpha: still ? 0.8 : 0.35));
+    if (still) return;
+    canvas.drawRRect(
+        edge,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2
+          ..shader = SweepGradient(
+            colors: [
+              HuntrColors.orange.withValues(alpha: 0),
+              HuntrColors.orange,
+              const Color(0xFFFFC48A),
+              HuntrColors.orange,
+              HuntrColors.orange.withValues(alpha: 0),
+            ],
+            stops: const [0.0, 0.08, 0.12, 0.16, 0.24],
+            transform: GradientRotation(turn * 2 * math.pi),
+          ).createShader(rect));
+  }
+
+  @override
+  bool shouldRepaint(_EdgeLight old) => old.turn != turn || old.still != still;
 }
