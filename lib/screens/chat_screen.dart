@@ -1696,7 +1696,8 @@ class _ChatScreenState extends State<ChatScreen> {
                                         // a story reply is a text with "Replied to your story" over it
                                         ChatMessageType.text ||
                                         ChatMessageType.storyReply ||
-                                        ChatMessageType.photoReply =>
+                                        ChatMessageType.photoReply ||
+                                        ChatMessageType.bioReply =>
                                           Reactable(
                                             message: m,
                                             enabled: interactive,

@@ -864,6 +864,14 @@ class MessagingState extends ChangeNotifier {
     return target == null ? null : _opened(target).conversationId;
   }
 
+  /// A reply or reaction (an emoji) to their bio: a message in our direct
+  /// chat. Throws what the backend says (a block, the bio gone).
+  Future<void> replyToBio(int userId, String body) async {
+    final sent = await _call((t) =>
+        service.replyToBio(t, userId, body: body, clientId: newClientId()));
+    if (sent != null) unawaited(refresh());
+  }
+
   /// A reply or reaction (an emoji) to their profile photo: a message in
   /// our direct chat (which then shows in Chats). Throws what the backend
   /// says (a block, the photo gone).

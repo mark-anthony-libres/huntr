@@ -1450,6 +1450,10 @@ enum ChatMessageType {
   /// said; [ChatMessage.photoId] the photo).
   photoReply,
 
+  /// A reply or reaction to someone's bio ([ChatMessage.body] is what was
+  /// said; [ChatMessage.bioQuote] the bio as it was).
+  bioReply,
+
   /// Its sender is interested in my album (they said so after viewing it
   /// in a trade): "❤️ Sam is interested in your album!".
   albumInterest,
@@ -1469,6 +1473,7 @@ enum ChatMessageType {
         'gif' => gif,
         'story_reply' => storyReply,
         'photo_reply' => photoReply,
+        'bio_reply' => bioReply,
         'tap' => tap,
         'reveal' => reveal,
         'reveal_request' => revealRequest,
@@ -1520,6 +1525,7 @@ class ChatMessage {
     this.photoId,
     this.photoAvailable = false,
     this.photoThumbnailUrl,
+    this.bioQuote,
     this.edited = false,
     this.unsent = false,
     this.editableUntil,
@@ -1587,6 +1593,8 @@ class ChatMessage {
             false,
         photoThumbnailUrl: (json['photo_reply']
             as Map<String, dynamic>?)?['thumbnail_url'] as String?,
+        bioQuote:
+            (json['bio_reply'] as Map<String, dynamic>?)?['bio'] as String?,
         edited: json['edited'] as bool? ?? false,
         unsent: json['unsent'] as bool? ?? false,
         editableUntil: json['editable_until'] == null
@@ -1626,6 +1634,7 @@ class ChatMessage {
       (type == ChatMessageType.text ||
           type == ChatMessageType.storyReply ||
           type == ChatMessageType.photoReply ||
+          type == ChatMessageType.bioReply ||
           type == ChatMessageType.gif ||
           type == ChatMessageType.image ||
           type == ChatMessageType.video ||
@@ -1637,7 +1646,8 @@ class ChatMessage {
       : switch (type) {
           ChatMessageType.text ||
           ChatMessageType.storyReply ||
-          ChatMessageType.photoReply =>
+          ChatMessageType.photoReply ||
+          ChatMessageType.bioReply =>
             body.isEmpty ? null : body,
           _ => null,
         };
@@ -1656,6 +1666,9 @@ class ChatMessage {
   final int? photoId;
   final bool photoAvailable;
   final String? photoThumbnailUrl;
+
+  /// A bio reply: the bio it answered, as it was then.
+  final String? bioQuote;
 
   final ChatMessageType type;
 
@@ -1765,6 +1778,7 @@ class ChatMessage {
           photoId: photoId,
           photoAvailable: photoAvailable,
           photoThumbnailUrl: photoThumbnailUrl,
+          bioQuote: bioQuote,
           reactions: reactions ?? this.reactions,
           replyTo: replyTo ?? this.replyTo,
           edited: edited,
@@ -1795,6 +1809,7 @@ class ChatMessage {
         ChatMessageType.gif => gif?.isSticker == true ? 'Sticker' : '🎞️ GIF',
         ChatMessageType.storyReply => '↩ Story reply: $body',
         ChatMessageType.photoReply => '↩ Photo reply: $body',
+        ChatMessageType.bioReply => '↩ Bio reply: $body',
         ChatMessageType.albumInterest =>
           fromMe ? 'You said you’re interested' : 'Interested in your album',
         ChatMessageType.sticker => '${sticker?.name ?? 'Sticker'} sticker',
@@ -1934,7 +1949,8 @@ class ReplyPreview {
               // a story reply's body is what was said
               ChatMessageType.text ||
               ChatMessageType.storyReply ||
-              ChatMessageType.photoReply =>
+              ChatMessageType.photoReply ||
+              ChatMessageType.bioReply =>
                 message.body,
               ChatMessageType.albumTrade =>
                 message.trade?.offeredAlbum?.name ?? '',
@@ -1967,7 +1983,10 @@ class ReplyPreview {
         ChatMessageType.revealRequest => 'Asked to see your profile',
         ChatMessageType.tap => '👋 Tap',
         ChatMessageType.gif => '🎞️ GIF',
-        ChatMessageType.storyReply || ChatMessageType.photoReply => '↩ $body',
+        ChatMessageType.storyReply ||
+        ChatMessageType.photoReply ||
+        ChatMessageType.bioReply =>
+          '↩ $body',
         ChatMessageType.albumInterest => 'Interested in an album',
         ChatMessageType.sticker => body.isEmpty ? 'Sticker' : '$body sticker',
         ChatMessageType.voice => '🎤 Voice message',
@@ -3727,6 +3746,24 @@ Future<ChatMessage> replyToPhoto(
       client,
       (httpClient) => httpClient.post(
           _endpoint(backendUrl, '/photos/$photoId/reply'),
+          headers: _json(token),
+          body: jsonEncode({'body': body, 'client_id': clientId})),
+      ChatMessage.fromJson,
+    );
+
+/// POST .../profile/{id}/bio/reply: a reply or reaction (an emoji) to
+/// someone's bio, in our direct chat.
+Future<ChatMessage> replyToBio(
+        {required String backendUrl,
+        required String token,
+        required int userId,
+        required String body,
+        required String clientId,
+        http.Client? client}) =>
+    _sendAuthorized(
+      client,
+      (httpClient) => httpClient.post(
+          _endpoint(backendUrl, '/profile/$userId/bio/reply'),
           headers: _json(token),
           body: jsonEncode({'body': body, 'client_id': clientId})),
       ChatMessage.fromJson,

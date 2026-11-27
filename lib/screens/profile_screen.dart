@@ -26,6 +26,7 @@ import '../widgets/profile/gradient_button.dart';
 import '../widgets/profile/status_pill.dart';
 import '../widgets/profile/profile_meta.dart';
 import '../widgets/profile/profile_section.dart';
+import '../widgets/profile/bio_reply_row.dart';
 import '../widgets/notes/person_note.dart';
 import '../widgets/profile/looking_for_pill.dart';
 import '../widgets/profile/photo_gallery.dart';
@@ -303,9 +304,22 @@ class ProfileScreen extends StatelessWidget {
             if (p.bio.isNotEmpty)
               ProfileSection(
                   title: 'About',
-                  child: Text(p.bio,
-                      style: const TextStyle(
-                          fontSize: 17, height: 1.5, color: Colors.white))),
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(p.bio,
+                            style: const TextStyle(
+                                fontSize: 17,
+                                height: 1.5,
+                                color: Colors.white)),
+                        // someone else's: react, or reply (in our chat)
+                        if (!_isPreview &&
+                            p.backendId != null &&
+                            !p.blockedByMe &&
+                            !p.blockedMe &&
+                            MessagingScope.of(context) != null)
+                          BioReplyRow(profile: p),
+                      ])),
             // my private note about them (only I see it)
             if (!_isPreview && canHaveNote(p))
               PersonNoteSection(

@@ -15,12 +15,16 @@ class StoryReplyLabel extends StatelessWidget {
       required this.fromMe,
       required this.otherName,
       required this.reaction,
-      this.photo = false});
+      this.photo = false,
+      this.bio = false});
 
   final bool fromMe;
 
   /// A reply to a profile photo, not a story.
   final bool photo;
+
+  /// A reply to a bio, not a story.
+  final bool bio;
 
   /// The other person's name (empty: "their").
   final String otherName;
@@ -33,7 +37,8 @@ class StoryReplyLabel extends StatelessWidget {
   static Widget over(ChatMessage message, Widget bubble,
           {required String otherName, VoidCallback? onOpenStory}) =>
       message.type != ChatMessageType.storyReply &&
-              message.type != ChatMessageType.photoReply
+              message.type != ChatMessageType.photoReply &&
+              message.type != ChatMessageType.bioReply
           ? bubble
           : Column(
               crossAxisAlignment: message.fromMe
@@ -45,9 +50,12 @@ class StoryReplyLabel extends StatelessWidget {
                     fromMe: message.fromMe,
                     otherName: otherName,
                     reaction: isReaction(message.body),
-                    photo: message.type == ChatMessageType.photoReply),
+                    photo: message.type == ChatMessageType.photoReply,
+                    bio: message.type == ChatMessageType.bioReply),
                 if (message.type == ChatMessageType.photoReply)
                   PhotoReplyPreview(message: message)
+                else if (message.type == ChatMessageType.bioReply)
+                  BioReplyQuote(message: message)
                 else if (message.storyId != null)
                   StoryReplyPreview(message: message, onOpen: onOpenStory),
                 bubble,
@@ -62,12 +70,22 @@ class StoryReplyLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     final verb = reaction ? 'reacted to' : 'replied to';
     final whose = otherName.trim().isEmpty ? 'a' : "${otherName.trim()}'s";
-    final what = photo ? 'photo' : 'story';
+    final what = bio
+        ? 'bio'
+        : photo
+            ? 'photo'
+            : 'story';
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 6, 12, 2),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(photo ? Icons.photo_outlined : Icons.auto_stories_outlined,
-            size: 14, color: HuntrColors.orange),
+        Icon(
+            bio
+                ? Icons.format_quote_rounded
+                : photo
+                    ? Icons.photo_outlined
+                    : Icons.auto_stories_outlined,
+            size: 14,
+            color: HuntrColors.orange),
         const SizedBox(width: 4),
         Flexible(
           child: Text(
@@ -80,6 +98,39 @@ class StoryReplyLabel extends StatelessWidget {
           ),
         ),
       ]),
+    );
+  }
+}
+
+/// The bio a reply answered, as it was then: a quote over the reply.
+class BioReplyQuote extends StatelessWidget {
+  const BioReplyQuote({super.key, required this.message});
+
+  final ChatMessage message;
+
+  @override
+  Widget build(BuildContext context) {
+    final bio = message.bioQuote?.trim() ?? '';
+    return Padding(
+      key: Key('bioReplyQuote-${message.id}'),
+      padding: const EdgeInsets.fromLTRB(4, 4, 4, 6),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 280),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+          decoration: BoxDecoration(
+            color: HuntrColors.surface,
+            borderRadius: BorderRadius.circular(12),
+            border:
+                Border(left: BorderSide(color: HuntrColors.orange, width: 3)),
+          ),
+          child: Text(bio.isEmpty ? 'Bio unavailable' : bio,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                  color: HuntrColors.muted, fontSize: 13, height: 1.35)),
+        ),
+      ),
     );
   }
 }
