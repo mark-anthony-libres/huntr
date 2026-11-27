@@ -94,15 +94,23 @@ class ProfileTile extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Expanded(
-                        child: Wrap(spacing: 4, runSpacing: 4, children: [
-                          if (profile.online)
-                            compact ? const _OnlineMark() : const _OnlinePill()
+                        // one line: the tag gets the room left beside the
+                        // dot (and the badges), the globe alone when
+                        // "Roaming" doesn't fit
+                        child: Row(children: [
+                          if (profile.online) ...[
+                            compact ? const _OnlineMark() : const _OnlinePill(),
+                            const SizedBox(width: 4),
+                          ]
                           // or the blue dot: active in the last day
-                          else if (profile.recentlyActiveAt(DateTime.now()))
+                          else if (profile
+                              .recentlyActiveAt(DateTime.now())) ...[
                             _ActiveMark(until: profile.activeUntil!),
+                            const SizedBox(width: 4),
+                          ],
                           // somewhere else, looking around here
                           if (profile.roaming != null)
-                            RoamingTag(small: compact),
+                            Flexible(child: RoamingTag(small: compact)),
                         ]),
                       ),
                       const SizedBox(width: 4),
