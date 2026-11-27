@@ -25,8 +25,8 @@ class GuestChatsState extends ChangeNotifier {
 
   GuestLinkInfo? link;
 
-  /// The ready-made story cards (null until loaded).
-  List<ReadyStoryCard>? readyCards;
+  /// The ready-made story cards, by group (null until loaded).
+  List<ReadyStoryGroup>? readyCards;
 
   Future<void> loadReadyCards() async {
     final loaded = await _call(api.storyCards);

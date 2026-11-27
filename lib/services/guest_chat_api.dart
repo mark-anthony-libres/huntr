@@ -83,6 +83,25 @@ class ReadyStoryCard {
   final String url;
 }
 
+/// A group of ready-made story cards (e.g. Cute, Pets, Bold), in order.
+class ReadyStoryGroup {
+  const ReadyStoryGroup(
+      {required this.id, required this.name, required this.cards});
+
+  factory ReadyStoryGroup.fromJson(Map<String, dynamic> json) =>
+      ReadyStoryGroup(
+          id: json['id'] as int,
+          name: json['name'] as String,
+          cards: [
+            for (final c in json['cards'] as List<dynamic>)
+              ReadyStoryCard.fromJson(c as Map<String, dynamic>),
+          ]);
+
+  final int id;
+  final String name;
+  final List<ReadyStoryCard> cards;
+}
+
 /// A chat just started: the guest's login (kept by the browser) and the
 /// anonymous conversation.
 class GuestStart {
@@ -167,12 +186,12 @@ class GuestChatApi {
       GuestLinkInfo.fromJson(_data(await _send('PUT', '/guest-link/on',
           token: token, body: {'on': on})));
 
-  /// The ready-made story cards, in order.
-  Future<List<ReadyStoryCard>> storyCards(String token) async {
+  /// The ready-made story cards, by group, in order.
+  Future<List<ReadyStoryGroup>> storyCards(String token) async {
     final body = await _send('GET', '/guest-link/cards', token: token);
     return [
-      for (final c in body['data'] as List<dynamic>)
-        ReadyStoryCard.fromJson(c as Map<String, dynamic>),
+      for (final g in body['data'] as List<dynamic>)
+        ReadyStoryGroup.fromJson(g as Map<String, dynamic>),
     ];
   }
 

@@ -9,7 +9,7 @@ import 'package:share_plus/share_plus.dart';
 import '../flows/chat_attachments.dart' show ChatMediaPicker;
 import '../services/save_image.dart';
 import '../services/story_share.dart';
-import '../services/guest_chat_api.dart' show ReadyStoryCard;
+import '../services/guest_chat_api.dart' show ReadyStoryGroup;
 import '../state/guest_chats_state.dart';
 import '../theme.dart';
 import '../widgets/anonymous_avatar.dart';
@@ -143,6 +143,9 @@ class _GuestLinkScreenState extends State<GuestLinkScreen> {
   /// one shown.
   bool _readyMade = false;
   int _ready = 0;
+
+  /// The group of ready-made cards shown (its id; null: the first).
+  int? _readyGroup;
   PageController? _readyPages;
   bool _loading = true;
   bool _sharing = false;
@@ -257,13 +260,13 @@ class _GuestLinkScreenState extends State<GuestLinkScreen> {
 
   /// The ready-made cards across the width, swiped for the next (the one
   /// shown is the one shared), and where I am among them.
-  Widget _readyStrip(List<ReadyStoryCard>? cards) {
-    if (cards == null) {
+  Widget _readyStrip(List<ReadyStoryGroup>? groups) {
+    if (groups == null) {
       return SizedBox(
           height: _cardWidth * 16 / 9,
           child: const Center(child: CircularProgressIndicator()));
     }
-    if (cards.isEmpty) {
+    if (groups.isEmpty) {
       return const Padding(
         padding: EdgeInsets.all(28),
         child: Center(
@@ -271,8 +274,45 @@ class _GuestLinkScreenState extends State<GuestLinkScreen> {
                 style: TextStyle(color: HuntrColors.muted))),
       );
     }
+    final group = groups.firstWhere((g) => g.id == _readyGroup,
+        orElse: () => groups.first);
+    final cards = group.cards;
     final shown = _ready.clamp(0, cards.length - 1);
     return Column(children: [
+      // the groups (e.g. Cute, Pets, Bold): one at a time
+      if (groups.length > 1)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 16),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final g in groups)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: ChoiceChip(
+                      key: Key('guestReadyGroup-${g.id}'),
+                      label: Text(g.name),
+                      selected: g.id == group.id,
+                      showCheckmark: false,
+                      onSelected: (_) {
+                        if (g.id == group.id) return;
+                        setState(() {
+                          _readyGroup = g.id;
+                          _ready = 0;
+                        });
+                        if (_readyPages?.hasClients ?? false) {
+                          _readyPages!.jumpToPage(0);
+                        }
+                      },
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
       LayoutBuilder(builder: (context, box) {
         final width = box.maxWidth.clamp(0.0, 720.0);
         _readyPages ??= PageController(
@@ -294,7 +334,7 @@ class _GuestLinkScreenState extends State<GuestLinkScreen> {
               blendMode: BlendMode.dstIn,
               child: SwipeAnyDevice(
                 child: PageView.builder(
-                  key: const Key('guestReadyCards'),
+                  key: ValueKey('guestReadyCards-${group.id}'),
                   controller: _readyPages,
                   itemCount: cards.length,
                   onPageChanged: (i) => setState(() => _ready = i),
