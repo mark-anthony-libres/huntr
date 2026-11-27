@@ -65,6 +65,24 @@ class GuestLinkCard {
   final int idleMinutes;
 }
 
+/// A ready-made story card (a finished picture, kept on the server) to
+/// share a guest link with.
+class ReadyStoryCard {
+  const ReadyStoryCard(
+      {required this.id, required this.name, required this.url});
+
+  factory ReadyStoryCard.fromJson(Map<String, dynamic> json) => ReadyStoryCard(
+      id: json['id'] as int,
+      name: json['name'] as String,
+      url: json['url'] as String);
+
+  final int id;
+  final String name;
+
+  /// A short-lived link to its picture.
+  final String url;
+}
+
 /// A chat just started: the guest's login (kept by the browser) and the
 /// anonymous conversation.
 class GuestStart {
@@ -148,6 +166,15 @@ class GuestChatApi {
   Future<GuestLinkInfo> setLinkOn(String token, bool on) async =>
       GuestLinkInfo.fromJson(_data(await _send('PUT', '/guest-link/on',
           token: token, body: {'on': on})));
+
+  /// The ready-made story cards, in order.
+  Future<List<ReadyStoryCard>> storyCards(String token) async {
+    final body = await _send('GET', '/guest-link/cards', token: token);
+    return [
+      for (final c in body['data'] as List<dynamic>)
+        ReadyStoryCard.fromJson(c as Map<String, dynamic>),
+    ];
+  }
 
   /// Ends a guest chat now (kept to read).
   Future<void> hostEnd(String token, int conversationId) =>

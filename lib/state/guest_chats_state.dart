@@ -25,6 +25,17 @@ class GuestChatsState extends ChangeNotifier {
 
   GuestLinkInfo? link;
 
+  /// The ready-made story cards (null until loaded).
+  List<ReadyStoryCard>? readyCards;
+
+  Future<void> loadReadyCards() async {
+    final loaded = await _call(api.storyCards);
+    if (loaded != null) {
+      readyCards = loaded;
+      notifyListeners();
+    }
+  }
+
   Future<T?> _call<T>(Future<T> Function(String token) call) async {
     final t = token();
     if (t == null) return null;
@@ -92,6 +103,7 @@ class GuestChatsState extends ChangeNotifier {
 
   void clear() {
     link = null;
+    readyCards = null;
     notifyListeners();
   }
 }

@@ -9,9 +9,11 @@ import 'package:share_plus/share_plus.dart';
 import '../flows/chat_attachments.dart' show ChatMediaPicker;
 import '../services/save_image.dart';
 import '../services/story_share.dart';
+import '../services/guest_chat_api.dart' show ReadyStoryCard;
 import '../state/guest_chats_state.dart';
 import '../theme.dart';
 import '../widgets/anonymous_avatar.dart';
+import '../widgets/pill_tabs.dart';
 import '../widgets/photos/viewer_controls.dart' show SwipeAnyDevice;
 import 'guest_story_how_to_screen.dart';
 
@@ -136,6 +138,12 @@ class _GuestLinkScreenState extends State<GuestLinkScreen> {
   PageController? _pages;
   static const _cardWidth = 236.0;
   int _look = 0;
+
+  /// The ready-made cards (finished pictures) instead of my own, and the
+  /// one shown.
+  bool _readyMade = false;
+  int _ready = 0;
+  PageController? _readyPages;
   bool _loading = true;
   bool _sharing = false;
   String? _error;
@@ -149,6 +157,7 @@ class _GuestLinkScreenState extends State<GuestLinkScreen> {
   @override
   void dispose() {
     _pages?.dispose();
+    _readyPages?.dispose();
     super.dispose();
   }
 
@@ -160,6 +169,7 @@ class _GuestLinkScreenState extends State<GuestLinkScreen> {
       _error = null;
     });
     try {
+      unawaited(state.loadReadyCards());
       var link = await state.loadLink();
       // the first time: a link is made for me
       if (link != null && link.code == null) link = await state.newLink();
@@ -193,7 +203,7 @@ class _GuestLinkScreenState extends State<GuestLinkScreen> {
   /// Share to story: how to add the link (My Day or Instagram), then the
   /// last step shares the card through the phone's share sheet.
   Future<void> _stepsThenShare(String url) async {
-    if (_onOwnWords && _ownWords.isEmpty) {
+    if (!_readyMade && _onOwnWords && _ownWords.isEmpty) {
       await _writeOwn();
       if (_ownWords.isEmpty || !mounted) return;
     }
@@ -207,7 +217,7 @@ class _GuestLinkScreenState extends State<GuestLinkScreen> {
   /// either way, for the link sticker.
   Future<void> _share(String url, StoryApp app) async {
     if (_sharing) return;
-    if (_onOwnWords && _ownWords.isEmpty) {
+    if (!_readyMade && _onOwnWords && _ownWords.isEmpty) {
       await _writeOwn();
       if (_ownWords.isEmpty) return;
     }
@@ -243,6 +253,91 @@ class _GuestLinkScreenState extends State<GuestLinkScreen> {
     } catch (_) {
       if (mounted) _say("The image couldn't be saved. Please try again.");
     }
+  }
+
+  /// The ready-made cards across the width, swiped for the next (the one
+  /// shown is the one shared), and where I am among them.
+  Widget _readyStrip(List<ReadyStoryCard>? cards) {
+    if (cards == null) {
+      return SizedBox(
+          height: _cardWidth * 16 / 9,
+          child: const Center(child: CircularProgressIndicator()));
+    }
+    if (cards.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.all(28),
+        child: Center(
+            child: Text('No ready-made cards yet.',
+                style: TextStyle(color: HuntrColors.muted))),
+      );
+    }
+    final shown = _ready.clamp(0, cards.length - 1);
+    return Column(children: [
+      LayoutBuilder(builder: (context, box) {
+        final width = box.maxWidth.clamp(0.0, 720.0);
+        _readyPages ??= PageController(
+            viewportFraction: ((_cardWidth + 28) / width).clamp(0.3, 1.0));
+        return Center(
+          child: SizedBox(
+            width: width,
+            height: _cardWidth * 16 / 9,
+            child: ShaderMask(
+              shaderCallback: (rect) => const LinearGradient(
+                colors: [
+                  Colors.transparent,
+                  Colors.black,
+                  Colors.black,
+                  Colors.transparent,
+                ],
+                stops: [0, 0.06, 0.94, 1],
+              ).createShader(rect),
+              blendMode: BlendMode.dstIn,
+              child: SwipeAnyDevice(
+                child: PageView.builder(
+                  key: const Key('guestReadyCards'),
+                  controller: _readyPages,
+                  itemCount: cards.length,
+                  onPageChanged: (i) => setState(() => _ready = i),
+                  itemBuilder: (_, i) => Center(
+                    child: SizedBox(
+                      width: _cardWidth,
+                      height: _cardWidth * 16 / 9,
+                      // the one shown is the one shared
+                      child: RepaintBoundary(
+                        key: i == shown ? _card : null,
+                        child: Image.network(
+                          cards[i].url,
+                          key: Key('guestReadyCard-${cards[i].id}'),
+                          fit: BoxFit.cover,
+                          semanticLabel: cards[i].name,
+                          loadingBuilder: (context, child, progress) =>
+                              progress == null
+                                  ? child
+                                  : const ColoredBox(
+                                      color: HuntrColors.surface,
+                                      child: Center(
+                                          child: CircularProgressIndicator())),
+                          errorBuilder: (context, error, stack) =>
+                              const ColoredBox(
+                                  color: HuntrColors.surface,
+                                  child: Center(
+                                      child: Icon(Icons.broken_image_outlined,
+                                          color: HuntrColors.muted))),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      }),
+      const SizedBox(height: 14),
+      Text('${shown + 1} of ${cards.length} · Swipe for more designs',
+          key: const Key('guestReadyCount'),
+          style: const TextStyle(color: HuntrColors.muted, fontSize: 13)),
+    ]);
   }
 
   Future<void> _menu(String choice, GuestChatsState state) async {
@@ -332,56 +427,81 @@ class _GuestLinkScreenState extends State<GuestLinkScreen> {
                         child:
                             _OffNotice(onTurnOn: () => state!.setLinkOn(true)),
                       ),
-                    const SizedBox(height: 28),
-                    // the cards across the whole width: swipe for other
-                    // words, the next one peeking at the side
-                    LayoutBuilder(builder: (context, box) {
-                      final width = box.maxWidth.clamp(0.0, 720.0);
-                      _pages ??= PageController(
-                          viewportFraction:
-                              ((_cardWidth + 28) / width).clamp(0.3, 1.0));
-                      return Center(
-                        child: SizedBox(
-                          width: width,
-                          height: _cardWidth * 16 / 9,
-                          // the cards fade out at the strip's ends
-                          child: ShaderMask(
-                            shaderCallback: (rect) => const LinearGradient(
-                              colors: [
-                                Colors.transparent,
-                                Colors.black,
-                                Colors.black,
-                                Colors.transparent,
-                              ],
-                              stops: [0, 0.06, 0.94, 1],
-                            ).createShader(rect),
-                            blendMode: BlendMode.dstIn,
-                            child: SwipeAnyDevice(
-                              child: PageView.builder(
-                                key: const Key('guestStoryCards'),
-                                controller: _pages,
-                                itemCount: guestStoryPrompts.length + 1,
-                                onPageChanged: (i) =>
-                                    setState(() => _prompt = i),
-                                itemBuilder: (_, i) => Center(
-                                  child: GestureDetector(
-                                    // my own words: tap to write them
-                                    onTap: i == guestStoryPrompts.length
-                                        ? _writeOwn
-                                        : null,
-                                    child: SizedBox(
-                                      width: _cardWidth,
-                                      // the one shown is the one shared
-                                      child: RepaintBoundary(
-                                        key: i == _prompt ? _card : null,
-                                        child: GuestStoryCard(
-                                          animal: link.avatar,
-                                          prompt: _words(i),
-                                          colors: guestStoryLooks[
-                                              _look < 0 ? 0 : _look],
-                                          photo: _look < 0 && _photo != null
-                                              ? MemoryImage(_photo!)
-                                              : null,
+                    const SizedBox(height: 20),
+                    // my own card (words and background), or a ready-made one
+                    Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 360),
+                        child: PillTabs(
+                          tabs: const [
+                            PillTab(
+                                key: Key('guestStoryOwnTab'),
+                                icon: Icons.edit_rounded,
+                                label: 'Your own'),
+                            PillTab(
+                                key: Key('guestStoryReadyTab'),
+                                icon: Icons.auto_awesome_rounded,
+                                label: 'Ready-made'),
+                          ],
+                          selected: _readyMade ? 1 : 0,
+                          onChanged: (i) => setState(() => _readyMade = i == 1),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    if (_readyMade)
+                      _readyStrip(state?.readyCards)
+                    else ...[
+                      // the cards across the whole width: swipe for other
+                      // words, the next one peeking at the side
+                      LayoutBuilder(builder: (context, box) {
+                        final width = box.maxWidth.clamp(0.0, 720.0);
+                        _pages ??= PageController(
+                            viewportFraction:
+                                ((_cardWidth + 28) / width).clamp(0.3, 1.0));
+                        return Center(
+                          child: SizedBox(
+                            width: width,
+                            height: _cardWidth * 16 / 9,
+                            // the cards fade out at the strip's ends
+                            child: ShaderMask(
+                              shaderCallback: (rect) => const LinearGradient(
+                                colors: [
+                                  Colors.transparent,
+                                  Colors.black,
+                                  Colors.black,
+                                  Colors.transparent,
+                                ],
+                                stops: [0, 0.06, 0.94, 1],
+                              ).createShader(rect),
+                              blendMode: BlendMode.dstIn,
+                              child: SwipeAnyDevice(
+                                child: PageView.builder(
+                                  key: const Key('guestStoryCards'),
+                                  controller: _pages,
+                                  itemCount: guestStoryPrompts.length + 1,
+                                  onPageChanged: (i) =>
+                                      setState(() => _prompt = i),
+                                  itemBuilder: (_, i) => Center(
+                                    child: GestureDetector(
+                                      // my own words: tap to write them
+                                      onTap: i == guestStoryPrompts.length
+                                          ? _writeOwn
+                                          : null,
+                                      child: SizedBox(
+                                        width: _cardWidth,
+                                        // the one shown is the one shared
+                                        child: RepaintBoundary(
+                                          key: i == _prompt ? _card : null,
+                                          child: GuestStoryCard(
+                                            animal: link.avatar,
+                                            prompt: _words(i),
+                                            colors: guestStoryLooks[
+                                                _look < 0 ? 0 : _look],
+                                            photo: _look < 0 && _photo != null
+                                                ? MemoryImage(_photo!)
+                                                : null,
+                                          ),
                                         ),
                                       ),
                                     ),
@@ -390,83 +510,86 @@ class _GuestLinkScreenState extends State<GuestLinkScreen> {
                               ),
                             ),
                           ),
-                        ),
-                      );
-                    }),
-                    const SizedBox(height: 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        for (var i = 0; i <= guestStoryPrompts.length; i++)
-                          GestureDetector(
-                            onTap: () => _pages?.animateToPage(i,
-                                duration: const Duration(milliseconds: 250),
-                                curve: Curves.easeOut),
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 200),
-                              margin: const EdgeInsets.symmetric(horizontal: 4),
-                              width: i == _prompt ? 22 : 8,
-                              height: 8,
-                              decoration: BoxDecoration(
-                                color: i == _prompt
-                                    ? HuntrColors.orange
-                                    : HuntrColors.border,
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Center(
-                      child: _onOwnWords
-                          ? TextButton.icon(
-                              key: const Key('guestStoryEditWords'),
-                              onPressed: _writeOwn,
-                              icon: const Icon(Icons.edit_rounded, size: 18),
-                              label: Text(_ownWords.isEmpty
-                                  ? 'Write your own words'
-                                  : 'Change your words'),
-                            )
-                          : const Padding(
-                              padding: EdgeInsets.symmetric(vertical: 12),
-                              child: Text('Swipe the card for other words',
-                                  style: TextStyle(
-                                      color: HuntrColors.muted, fontSize: 13)),
-                            ),
-                    ),
-                    // ---- its background ----
-                    _Column(
-                      top: 24,
-                      child: _Panel(
-                        icon: Icons.palette_outlined,
-                        title: 'Background',
-                        child: LayoutBuilder(builder: (context, box) {
-                          // six on one line: as big as fits, up to 52
-                          final size =
-                              ((box.maxWidth - 5 * 12) / 6).clamp(36.0, 52.0);
-                          return Wrap(
-                            spacing: 12,
-                            runSpacing: 12,
-                            children: [
-                              _PhotoSwatch(
-                                size: size,
-                                photo: _photo,
-                                selected: _look < 0,
-                                onTap: _pickPhoto,
-                              ),
-                              for (var i = 0; i < guestStoryLooks.length; i++)
-                                _Swatch(
-                                  size: size,
-                                  colors: guestStoryLooks[i],
-                                  selected: i == _look,
-                                  onTap: () => setState(() => _look = i),
+                        );
+                      }),
+                      const SizedBox(height: 16),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          for (var i = 0; i <= guestStoryPrompts.length; i++)
+                            GestureDetector(
+                              onTap: () => _pages?.animateToPage(i,
+                                  duration: const Duration(milliseconds: 250),
+                                  curve: Curves.easeOut),
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 200),
+                                margin:
+                                    const EdgeInsets.symmetric(horizontal: 4),
+                                width: i == _prompt ? 22 : 8,
+                                height: 8,
+                                decoration: BoxDecoration(
+                                  color: i == _prompt
+                                      ? HuntrColors.orange
+                                      : HuntrColors.border,
+                                  borderRadius: BorderRadius.circular(4),
                                 ),
-                            ],
-                          );
-                        }),
+                              ),
+                            ),
+                        ],
                       ),
-                    ),
+                      const SizedBox(height: 6),
+                      Center(
+                        child: _onOwnWords
+                            ? TextButton.icon(
+                                key: const Key('guestStoryEditWords'),
+                                onPressed: _writeOwn,
+                                icon: const Icon(Icons.edit_rounded, size: 18),
+                                label: Text(_ownWords.isEmpty
+                                    ? 'Write your own words'
+                                    : 'Change your words'),
+                              )
+                            : const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 12),
+                                child: Text('Swipe the card for other words',
+                                    style: TextStyle(
+                                        color: HuntrColors.muted,
+                                        fontSize: 13)),
+                              ),
+                      ),
+                    ],
+                    // ---- its background (my own card's) ----
+                    if (!_readyMade)
+                      _Column(
+                        top: 24,
+                        child: _Panel(
+                          icon: Icons.palette_outlined,
+                          title: 'Background',
+                          child: LayoutBuilder(builder: (context, box) {
+                            // six on one line: as big as fits, up to 52
+                            final size =
+                                ((box.maxWidth - 5 * 12) / 6).clamp(36.0, 52.0);
+                            return Wrap(
+                              spacing: 12,
+                              runSpacing: 12,
+                              children: [
+                                _PhotoSwatch(
+                                  size: size,
+                                  photo: _photo,
+                                  selected: _look < 0,
+                                  onTap: _pickPhoto,
+                                ),
+                                for (var i = 0; i < guestStoryLooks.length; i++)
+                                  _Swatch(
+                                    size: size,
+                                    colors: guestStoryLooks[i],
+                                    selected: i == _look,
+                                    onTap: () => setState(() => _look = i),
+                                  ),
+                              ],
+                            );
+                          }),
+                        ),
+                      ),
                     // ---- sharing it ----
                     _Column(
                       top: 16,
