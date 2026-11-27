@@ -50,7 +50,7 @@ class _FilterSheetState extends State<FilterSheet> {
               contentPadding: EdgeInsets.zero,
               title: const Text('Active only'),
               subtitle: const Text(
-                  'People with the green dot: online now or active recently'),
+                  'People with a green or blue dot: online now or active in the last day'),
               value: f.onlineOnly,
               onChanged: (v) => setState(() => f = f.copyWith(onlineOnly: v)),
             ),

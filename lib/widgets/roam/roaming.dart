@@ -227,8 +227,9 @@ class RoamWhereSheet extends StatelessWidget {
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                        'This is the area $name chose to look around, not where '
-                        '$name is. A location shared in chat is always real.',
+                        '${person.name.isEmpty ? 'They are' : '$name is'} only '
+                        'browsing this area, not actually here. Any location '
+                        'they share in chat shows where they really are.',
                         style: const TextStyle(
                             color: HuntrColors.muted, height: 1.4)),
                   ),

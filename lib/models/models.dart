@@ -508,6 +508,10 @@ class Profile {
     return connected || (until != null ? !now.isAfter(until) : online);
   }
 
+  /// Active at [now]: a green or a blue dot (Explore's and Chats' Active
+  /// filter).
+  bool activeAt(DateTime now) => onlineNowAt(now) || recentlyActiveAt(now);
+
   /// Active within the window at [now] (still at its very end).
   bool recentlyActiveAt(DateTime now) {
     final until = activeUntil;
@@ -909,8 +913,8 @@ class ExploreFilters {
       };
 
   bool matches(Profile p, {DateTime? now}) {
-    // "Active": the green dot (connected, or active lately)
-    if (onlineOnly && !p.onlineNowAt(now ?? DateTime.now())) {
+    // "Active": a green or blue dot
+    if (onlineOnly && !p.activeAt(now ?? DateTime.now())) {
       return false;
     }
     // A hidden distance never counts as near (nor reveals anything).

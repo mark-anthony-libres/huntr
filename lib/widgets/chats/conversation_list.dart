@@ -85,7 +85,7 @@ class _ConversationListState extends State<ConversationList> {
         case _ChatFilter.all:
           break;
         case _ChatFilter.online:
-          if (!c.other.onlineNowAt(now)) return false;
+          if (!c.other.activeAt(now)) return false;
         case _ChatFilter.favorites:
           if (!app.isFavorite(c.other.id)) return false;
         case _ChatFilter.unread:
