@@ -152,6 +152,9 @@ class _ReactableState extends State<Reactable> {
         widget.onEdit?.call();
       case MessageAction.unsend:
         widget.onUnsend?.call();
+      // (a message replies by swiping, or its hover arrow)
+      case MessageAction.reply:
+        widget.onReply?.call();
       case null:
         widget.onReact(picked);
     }
@@ -363,6 +366,7 @@ class ReactionPill extends StatelessWidget {
 
 /// What can be done to a message from its menu (besides reacting).
 enum MessageAction {
+  reply('Reply', Icons.reply_rounded),
   copy('Copy', Icons.copy_rounded),
   edit('Edit', Icons.edit_outlined),
   unsend('Unsend', Icons.undo_rounded, destructive: true);

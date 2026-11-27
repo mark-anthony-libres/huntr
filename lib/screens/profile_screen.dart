@@ -26,7 +26,7 @@ import '../widgets/profile/gradient_button.dart';
 import '../widgets/profile/status_pill.dart';
 import '../widgets/profile/profile_meta.dart';
 import '../widgets/profile/profile_section.dart';
-import '../widgets/profile/bio_reply_row.dart';
+import '../widgets/profile/bio_reactable.dart';
 import '../widgets/notes/person_note.dart';
 import '../widgets/profile/looking_for_pill.dart';
 import '../widgets/profile/photo_gallery.dart';
@@ -308,14 +308,14 @@ class ProfileScreen extends StatelessWidget {
                     final bio = Text(p.bio,
                         style: const TextStyle(
                             fontSize: 17, height: 1.5, color: Colors.white));
-                    // someone else's: react (or double-tap it), or reply
+                    // someone else's: hold it to react or reply (double tap: react)
                     // (in our chat)
                     return !_isPreview &&
                             p.backendId != null &&
                             !p.blockedByMe &&
                             !p.blockedMe &&
                             MessagingScope.of(context) != null
-                        ? BioReplyRow(profile: p, bio: bio)
+                        ? BioReactable(profile: p, bio: bio)
                         : bio;
                   }()),
             // my private note about them (only I see it)

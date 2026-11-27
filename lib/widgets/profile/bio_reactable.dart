@@ -1,16 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../models/models.dart';
 import '../../services/huntr_backend.dart' show BackendException;
 import '../../state/messaging_state.dart';
 import '../../theme.dart';
-import '../chat/reactions.dart' show firstReactionOf, quickReactionsOf;
+import '../chat/reactions.dart'
+    show MessageAction, firstReactionOf, showReactionBar;
 
-/// Someone's bio, and under it: react with one of my quick reactions (a
-/// double tap on the bio gives the first, as on a message), or reply. Each
-/// goes to our direct chat, with their bio quoted over it.
-class BioReplyRow extends StatefulWidget {
-  const BioReplyRow({super.key, required this.profile, required this.bio});
+/// Someone's bio, to react to or answer as a message is: hold it (or
+/// right-click) for the reaction bar, with Reply and Copy; a double tap
+/// gives the first quick reaction. Each goes to our direct chat, with
+/// their bio quoted over it. Nothing shows until then.
+class BioReactable extends StatefulWidget {
+  const BioReactable({super.key, required this.profile, required this.bio});
 
   final Profile profile;
 
@@ -18,12 +21,11 @@ class BioReplyRow extends StatefulWidget {
   final Widget bio;
 
   @override
-  State<BioReplyRow> createState() => _BioReplyRowState();
+  State<BioReactable> createState() => _BioReactableState();
 }
 
-class _BioReplyRowState extends State<BioReplyRow> {
-  /// The reaction just sent (shown picked for a moment).
-  String? _sent;
+class _BioReactableState extends State<BioReactable> {
+  final _area = GlobalKey();
   bool _sending = false;
 
   String get _name =>
@@ -52,10 +54,29 @@ class _BioReplyRowState extends State<BioReplyRow> {
   }
 
   Future<void> _react(String emoji) async {
-    setState(() => _sent = emoji);
     if (await _send(emoji) && mounted) _say('$emoji sent to $_name');
-    await Future<void>.delayed(const Duration(milliseconds: 900));
-    if (mounted && _sent == emoji) setState(() => _sent = null);
+  }
+
+  /// The reaction bar over the bio, with Reply and Copy.
+  Future<void> _menu() async {
+    final box = _area.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null || !box.attached) return;
+    HapticFeedback.selectionClick();
+    final picked = await showReactionBar(context,
+        anchor: box.localToGlobal(Offset.zero) & box.size,
+        actions: const [MessageAction.reply, MessageAction.copy]);
+    if (picked == null || !mounted) return;
+    switch (MessageAction.of(picked)) {
+      case MessageAction.reply:
+        await _reply();
+      case MessageAction.copy:
+        await Clipboard.setData(ClipboardData(text: widget.profile.bio));
+        if (mounted) _say('Copied');
+      case MessageAction.edit || MessageAction.unsend:
+        break;
+      case null:
+        await _react(picked);
+    }
   }
 
   Future<void> _reply() async {
@@ -70,56 +91,14 @@ class _BioReplyRowState extends State<BioReplyRow> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    final reactions = quickReactionsOf(context).take(4).toList();
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      GestureDetector(
+  Widget build(BuildContext context) => GestureDetector(
         key: const Key('bioText'),
         behavior: HitTestBehavior.opaque,
         onDoubleTap: () => _react(firstReactionOf(context)),
-        child: widget.bio,
-      ),
-      Padding(
-        padding: const EdgeInsets.only(top: 12),
-        child: Wrap(
-          key: const Key('bioReplyRow'),
-          spacing: 8,
-          runSpacing: 8,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            for (final emoji in reactions)
-              InkWell(
-                key: Key('bioReact-$emoji'),
-                borderRadius: BorderRadius.circular(20),
-                onTap: () => _react(emoji),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: _sent == emoji
-                        ? HuntrColors.orange.withValues(alpha: 0.22)
-                        : HuntrColors.surface,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                        color: _sent == emoji
-                            ? HuntrColors.orange
-                            : HuntrColors.border),
-                  ),
-                  child: Text(emoji, style: const TextStyle(fontSize: 18)),
-                ),
-              ),
-            TextButton.icon(
-              key: const Key('bioReplyButton'),
-              onPressed: _reply,
-              icon: const Icon(Icons.reply_rounded, size: 18),
-              label: const Text('Reply'),
-            ),
-          ],
-        ),
-      ),
-    ]);
-  }
+        onLongPress: _menu,
+        onSecondaryTap: _menu,
+        child: KeyedSubtree(key: _area, child: widget.bio),
+      );
 }
 
 /// Writing a reply to a bio (the bio over it): its text, when sent.
