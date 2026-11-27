@@ -116,7 +116,7 @@ void main() {
 
     final everyone = state.visibleProfiles.length;
     expect(everyone, greaterThan(10));
-    await tester.tap(find.text('Online now'));
+    await tester.tap(find.text('Active'));
     await tester.pumpAndSettle();
     expect(state.visibleProfiles.length, lessThan(everyone));
     expect(state.visibleProfiles.every((p) => p.online), isTrue);

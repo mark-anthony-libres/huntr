@@ -373,7 +373,7 @@ class _OnlinePill extends StatelessWidget {
       child: const Row(mainAxisSize: MainAxisSize.min, children: [
         OnlineDot(size: 9),
         SizedBox(width: 5),
-        Text('Online now',
+        Text('Active',
             style: TextStyle(
                 color: Colors.white,
                 fontSize: 11,

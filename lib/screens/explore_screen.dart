@@ -365,7 +365,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
         f.onlineOnly,
         PillChip(
           leading: const OnlineDot(size: 10),
-          label: 'Online now',
+          label: 'Active',
           selected: f.onlineOnly,
           onSelected: (v) => app.filters = f.copyWith(onlineOnly: v),
         )

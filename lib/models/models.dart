@@ -688,9 +688,11 @@ class Profile {
   }
 
   String activeLabel(DateTime now) {
-    if (online) return 'Online now';
+    if (connected) return 'Active now';
     // no last-seen time for someone anonymous, or someone who hides it
-    if (isAnonymous || !lastActiveKnown) return 'Offline';
+    if (isAnonymous || !lastActiveKnown) {
+      return online ? 'Active recently' : 'Offline';
+    }
     final d = now.difference(lastActive);
     // A time ahead of this device's clock (clock skew) is just now.
     if (d.inMinutes < 1) return 'Active just now';
@@ -907,7 +909,7 @@ class ExploreFilters {
       };
 
   bool matches(Profile p, {DateTime? now}) {
-    // "Online now": the green dot (connected, or active lately)
+    // "Active": the green dot (connected, or active lately)
     if (onlineOnly && !p.onlineNowAt(now ?? DateTime.now())) {
       return false;
     }

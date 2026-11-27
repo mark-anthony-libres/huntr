@@ -130,7 +130,7 @@ void main() {
     await tester.tap(find.byKey(const Key('viewMyProfile')));
     await tester.pumpAndSettle();
     expect(find.text('Distance hidden'), findsOneWidget);
-    expect(find.text('Online now'), findsNothing);
+    expect(find.text('Active now'), findsNothing);
   });
 
   test('only the changed setting is sent', () async {

@@ -270,7 +270,7 @@ class _Hero extends StatelessWidget {
                             ? const OnlineDot(size: 9)
                             : const Icon(Icons.circle_outlined,
                                 size: 10, color: HuntrColors.muted),
-                        label: online ? 'Online now' : 'Offline',
+                        label: online ? 'Active' : 'Offline',
                         color: online ? HuntrColors.online : HuntrColors.muted,
                       ),
                     if (distance ??

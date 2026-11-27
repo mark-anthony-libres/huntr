@@ -366,7 +366,7 @@ void main() {
     expect(find.byKey(const Key('anonymousName')), findsOneWidget);
     expect(find.byKey(const Key('anonymousAnimal-wolf')), findsOneWidget);
     expect(find.text('About 3 km away'), findsOneWidget);
-    expect(find.text('Online now'), findsOneWidget);
+    expect(find.text('Active'), findsOneWidget);
     expect(fake.calls, ['profile 5']);
 
     // ask to see their profile

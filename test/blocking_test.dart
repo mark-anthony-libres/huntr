@@ -204,7 +204,7 @@ void main() {
       expect(find.text('You are blocked by this person'), findsOneWidget);
       expect(find.byKey(const Key('messageInput')), findsNothing);
       expect(find.byKey(const Key('attachButton')), findsNothing);
-      expect(find.text('Online now'), findsNothing);
+      expect(find.text('Active now'), findsNothing);
       expect(
           tester.widget<Avatar>(find.byType(Avatar).first).showOnline, isFalse);
       expect(find.byKey(const Key('replyButton-1')), findsNothing);

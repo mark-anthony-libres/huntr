@@ -193,7 +193,7 @@ class _ConversationListState extends State<ConversationList> {
                                 : 'chatFilter-${filter.name}'),
                             label: Text(switch (filter) {
                               _ChatFilter.all => 'All',
-                              _ChatFilter.online => 'Online',
+                              _ChatFilter.online => 'Active',
                               _ChatFilter.favorites => 'Favorites',
                               _ChatFilter.guests => 'Guests',
                               _ChatFilter.unread =>
@@ -275,7 +275,7 @@ class _ConversationListState extends State<ConversationList> {
                               : switch (_filter) {
                                   _ChatFilter.unread => "You're all caught up",
                                   _ChatFilter.online =>
-                                    'Nobody you chat with is online',
+                                    'Nobody you chat with is active',
                                   _ChatFilter.favorites =>
                                     'No chats with your favorites',
                                   _ChatFilter.guests => 'No guest chats',
