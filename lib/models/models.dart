@@ -377,10 +377,19 @@ class Profile {
     this.storySeen = false,
     this.stickers,
     this.activeUntil,
+    this.onlineUntil,
+    bool? connected,
     this.hasPlace = false,
     this.socialLinks = const SocialLinks(),
     this.roaming,
-  });
+  }) : connected = connected ?? online;
+
+  /// The green dot (online) from the backend's presence: connected, or
+  /// until [onlineUntil] (its PRESENCE_ONLINE_MINUTES after their last
+  /// activity).
+  static bool _onlineFrom(Map<String, dynamic> json) =>
+      const {'online', 'stale'}.contains(json['presence']) ||
+      (_time(json['online_until'])?.isAfter(DateTime.now()) ?? false);
 
   /// Someone anonymous to me (the sender of an anonymous conversation): only
   /// their anonymous name, animal and whether they're online - no user id,
@@ -398,7 +407,9 @@ class Profile {
       bio: '',
       interests: const [],
       lookingFor: const {},
-      online: const {'online', 'stale'}.contains(json['presence']),
+      online: _onlineFrom(json),
+      connected: const {'online', 'stale'}.contains(json['presence']),
+      onlineUntil: _time(json['online_until']),
       lastActive: DateTime.now(),
       hue: 24,
       anonymousAvatar: json['anonymous_avatar'] as String? ?? 'fox',
@@ -439,8 +450,10 @@ class Profile {
             if (option.name == choice) option,
       },
       // Connected counts as online, in front ("online") or in the background
-      // ("stale"); only a closed app or lost connection is offline.
-      online: const {'online', 'stale'}.contains(json['presence']),
+      // ("stale"); and so does someone active lately (until online_until).
+      online: _onlineFrom(json),
+      connected: const {'online', 'stale'}.contains(json['presence']),
+      onlineUntil: _time(json['online_until']),
       lastActive: lastSeen == null
           ? DateTime.now()
           : DateTime.parse(lastSeen).toLocal(),
@@ -474,17 +487,26 @@ class Profile {
   /// as roaming, never with a distance.
   final RoamSpot? roaming;
 
-  /// Until when they count as recently active (the blue dot in chats): the
-  /// server's last activity plus its window. Null when they hide it, or it
-  /// isn't known (only chats send it).
+  /// Until when they count as recently active (the blue dot): the server's
+  /// last activity plus PRESENCE_RECENTLY_ACTIVE_MINUTES. Null when they
+  /// hide it, or it isn't known.
   final DateTime? activeUntil;
 
-  /// Online now (Explore's and Chats' filter): connected, or last seen
-  /// within [ExploreFilters.onlineWindow] of [now].
-  bool onlineNowAt(DateTime now) =>
-      online ||
-      (lastActiveKnown &&
-          now.difference(lastActive) <= ExploreFilters.onlineWindow);
+  /// Until when they count as online (the green dot, and the Online
+  /// filter): the server's last activity plus PRESENCE_ONLINE_MINUTES. Null
+  /// when they hide it, or it isn't known.
+  final DateTime? onlineUntil;
+
+  /// Connected right now (an app open, in front or behind).
+  final bool connected;
+
+  /// Online at [now] (the green dot; Explore's and Chats' filter):
+  /// connected, or active lately (until [onlineUntil]; the backend's window,
+  /// so the app has no copy of it).
+  bool onlineNowAt(DateTime now) {
+    final until = onlineUntil;
+    return connected || (until != null ? !now.isAfter(until) : online);
+  }
 
   /// Active within the window at [now] (still at its very end).
   bool recentlyActiveAt(DateTime now) {
@@ -559,6 +581,8 @@ class Profile {
         stats: stats,
         anonymousAvatar: anonymousAvatar,
         activeUntil: activeUntil,
+        onlineUntil: onlineUntil,
+        connected: connected,
         unmatched: unmatched,
         hasStory: hasStory ?? this.hasStory,
         storySeen: storySeen ?? this.storySeen,
@@ -788,9 +812,6 @@ class ExploreFilters {
   static const minAge = 18.0;
   static const maxAge = 60.0;
 
-  /// Online now: connected, or last seen this recently (as on the backend).
-  static const onlineWindow = Duration(minutes: 30);
-
   const ExploreFilters({
     this.sort = ExploreSort.nearest,
     this.onlineOnly = false,
@@ -886,8 +907,7 @@ class ExploreFilters {
       };
 
   bool matches(Profile p, {DateTime? now}) {
-    // "Online now": connected (the green dot), or last seen within
-    // [onlineWindow]
+    // "Online now": the green dot (connected, or active lately)
     if (onlineOnly && !p.onlineNowAt(now ?? DateTime.now())) {
       return false;
     }

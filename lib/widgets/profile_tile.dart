@@ -96,7 +96,10 @@ class ProfileTile extends StatelessWidget {
                       Expanded(
                         child: Wrap(spacing: 4, runSpacing: 4, children: [
                           if (profile.online)
-                            compact ? const _OnlineMark() : const _OnlinePill(),
+                            compact ? const _OnlineMark() : const _OnlinePill()
+                          // or the blue dot: active in the last day
+                          else if (profile.recentlyActiveAt(DateTime.now()))
+                            _ActiveMark(until: profile.activeUntil!),
                           // somewhere else, looking around here
                           if (profile.roaming != null)
                             RoamingTag(small: compact),
@@ -229,7 +232,12 @@ class ProfileRowTile extends StatelessWidget {
                     tag: 'art-${profile.id}',
                     child: ProfileArt(profile: profile, fontSize: 28)),
                 if (profile.online)
-                  const Positioned(top: 7, left: 7, child: _OnlineMark()),
+                  const Positioned(top: 7, left: 7, child: _OnlineMark())
+                else if (profile.recentlyActiveAt(DateTime.now()))
+                  Positioned(
+                      top: 7,
+                      left: 7,
+                      child: _ActiveMark(until: profile.activeUntil!)),
                 if (profile.roaming != null)
                   const Positioned(
                       left: 6, bottom: 6, child: RoamingTag(small: true)),
@@ -373,6 +381,24 @@ class _OnlinePill extends StatelessWidget {
       ]),
     );
   }
+}
+
+/// The blue dot (recently active), on a dark ring like the green one.
+class _ActiveMark extends StatelessWidget {
+  const _ActiveMark({required this.until});
+
+  final DateTime until;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        key: const Key('activeMark'),
+        padding: const EdgeInsets.all(3),
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.5),
+          shape: BoxShape.circle,
+        ),
+        child: RecentlyActiveDot(until: until, size: 9),
+      );
 }
 
 /// Just the green dot, on a dark ring (narrow tiles: no room for "Online").
