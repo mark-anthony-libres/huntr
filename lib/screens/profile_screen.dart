@@ -304,22 +304,20 @@ class ProfileScreen extends StatelessWidget {
             if (p.bio.isNotEmpty)
               ProfileSection(
                   title: 'About',
-                  child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(p.bio,
-                            style: const TextStyle(
-                                fontSize: 17,
-                                height: 1.5,
-                                color: Colors.white)),
-                        // someone else's: react, or reply (in our chat)
-                        if (!_isPreview &&
+                  child: () {
+                    final bio = Text(p.bio,
+                        style: const TextStyle(
+                            fontSize: 17, height: 1.5, color: Colors.white));
+                    // someone else's: react (or double-tap it), or reply
+                    // (in our chat)
+                    return !_isPreview &&
                             p.backendId != null &&
                             !p.blockedByMe &&
                             !p.blockedMe &&
-                            MessagingScope.of(context) != null)
-                          BioReplyRow(profile: p),
-                      ])),
+                            MessagingScope.of(context) != null
+                        ? BioReplyRow(profile: p, bio: bio)
+                        : bio;
+                  }()),
             // my private note about them (only I see it)
             if (!_isPreview && canHaveNote(p))
               PersonNoteSection(

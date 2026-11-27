@@ -4,14 +4,18 @@ import '../../models/models.dart';
 import '../../services/huntr_backend.dart' show BackendException;
 import '../../state/messaging_state.dart';
 import '../../theme.dart';
-import '../chat/reactions.dart' show quickReactionsOf;
+import '../chat/reactions.dart' show firstReactionOf, quickReactionsOf;
 
-/// Under someone's bio: react with one of my quick reactions, or reply. Each
+/// Someone's bio, and under it: react with one of my quick reactions (a
+/// double tap on the bio gives the first, as on a message), or reply. Each
 /// goes to our direct chat, with their bio quoted over it.
 class BioReplyRow extends StatefulWidget {
-  const BioReplyRow({super.key, required this.profile});
+  const BioReplyRow({super.key, required this.profile, required this.bio});
 
   final Profile profile;
+
+  /// The bio itself.
+  final Widget bio;
 
   @override
   State<BioReplyRow> createState() => _BioReplyRowState();
@@ -68,45 +72,53 @@ class _BioReplyRowState extends State<BioReplyRow> {
   @override
   Widget build(BuildContext context) {
     final reactions = quickReactionsOf(context).take(4).toList();
-    return Padding(
-      padding: const EdgeInsets.only(top: 12),
-      child: Wrap(
-        key: const Key('bioReplyRow'),
-        spacing: 8,
-        runSpacing: 8,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        children: [
-          for (final emoji in reactions)
-            InkWell(
-              key: Key('bioReact-$emoji'),
-              borderRadius: BorderRadius.circular(20),
-              onTap: () => _react(emoji),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: _sent == emoji
-                      ? HuntrColors.orange.withValues(alpha: 0.22)
-                      : HuntrColors.surface,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                      color: _sent == emoji
-                          ? HuntrColors.orange
-                          : HuntrColors.border),
-                ),
-                child: Text(emoji, style: const TextStyle(fontSize: 18)),
-              ),
-            ),
-          TextButton.icon(
-            key: const Key('bioReplyButton'),
-            onPressed: _reply,
-            icon: const Icon(Icons.reply_rounded, size: 18),
-            label: const Text('Reply'),
-          ),
-        ],
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      GestureDetector(
+        key: const Key('bioText'),
+        behavior: HitTestBehavior.opaque,
+        onDoubleTap: () => _react(firstReactionOf(context)),
+        child: widget.bio,
       ),
-    );
+      Padding(
+        padding: const EdgeInsets.only(top: 12),
+        child: Wrap(
+          key: const Key('bioReplyRow'),
+          spacing: 8,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            for (final emoji in reactions)
+              InkWell(
+                key: Key('bioReact-$emoji'),
+                borderRadius: BorderRadius.circular(20),
+                onTap: () => _react(emoji),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: _sent == emoji
+                        ? HuntrColors.orange.withValues(alpha: 0.22)
+                        : HuntrColors.surface,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                        color: _sent == emoji
+                            ? HuntrColors.orange
+                            : HuntrColors.border),
+                  ),
+                  child: Text(emoji, style: const TextStyle(fontSize: 18)),
+                ),
+              ),
+            TextButton.icon(
+              key: const Key('bioReplyButton'),
+              onPressed: _reply,
+              icon: const Icon(Icons.reply_rounded, size: 18),
+              label: const Text('Reply'),
+            ),
+          ],
+        ),
+      ),
+    ]);
   }
 }
 
