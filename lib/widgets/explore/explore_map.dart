@@ -39,6 +39,7 @@ class MapTiles {
       {required this.url,
       required this.attributions,
       this.night = false,
+      this.grey = false,
       this.maxNativeZoom = ExploreMap.tileMaxZoom,
       this.fallback});
 
@@ -49,6 +50,10 @@ class MapTiles {
   /// A light, colourful map made dark like the app: near black, with
   /// streets' names and water in the accent.
   final bool night;
+
+  /// A dark map drawn in greys only (its rivers' blue lines fade into the
+  /// ground; what's on it keeps its colours).
+  final bool grey;
 
   /// The closest zoom this provider has images for; closer in, those are
   /// enlarged (never asked for: a provider refuses zooms it doesn't have,
@@ -98,6 +103,7 @@ class MapTiles {
           url: 'https://api.maptiler.com/maps/dataviz-dark/{z}/{x}/{y}{r}.png'
               '?key=$_mapTilerKey',
           attributions: const ['MapTiler', 'OpenStreetMap contributors'],
+          grey: true,
           fallback: _configuredFallback);
     }
     return const MapTiles(
@@ -605,10 +611,11 @@ class _MarkMarker extends StatelessWidget {
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: HuntrColors.surface,
+            // the theme's accent (thicker with a story to watch)
             border: Border.all(
                 color: story
                     ? HuntrColors.orange
-                    : Colors.white.withValues(alpha: 0.85),
+                    : HuntrColors.orange.withValues(alpha: 0.85),
                 width: story ? 2.5 : 1.5),
             boxShadow: const [BoxShadow(color: Colors.black54, blurRadius: 6)],
           ),
@@ -647,10 +654,10 @@ class _FaceMarker extends StatelessWidget {
         key: const Key('mapFace'),
         decoration: BoxDecoration(
           shape: BoxShape.circle,
+          // the theme's accent around their photo (a story draws its own ring)
           border: profile.hasStory
               ? null
-              : Border.all(
-                  color: Colors.white.withValues(alpha: 0.85), width: 1.5),
+              : Border.all(color: HuntrColors.orange, width: 2),
           boxShadow: const [BoxShadow(color: Colors.black54, blurRadius: 6)],
         ),
         child: Avatar(profile: profile, size: size, animateStory: false),
@@ -743,4 +750,3 @@ class _MapLocationsInfo extends StatelessWidget {
         ),
       );
 }
-

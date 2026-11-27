@@ -482,100 +482,176 @@ class _ThreadsTabState extends State<ThreadsTab> {
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
     final full = text.headlineMedium?.fontSize ?? 28;
-    return Scaffold(
-      // scrolled (the + beside the filters gone by): a floating + to post
-      floatingActionButton: IgnorePointer(
-        ignoring: !_compact,
-        child: AnimatedScale(
-          scale: _compact ? 1 : 0,
-          duration: const Duration(milliseconds: 220),
-          curve: _compact ? Curves.easeOutBack : Curves.easeIn,
-          child: FloatingActionButton(
-            key: const Key('threadsFloatingCompose'),
-            tooltip: 'New thread',
-            shape: const CircleBorder(),
-            backgroundColor: HuntrColors.orange,
-            foregroundColor: Colors.black,
-            // a light lift, no dark ring around it
-            elevation: 2,
-            highlightElevation: 4,
-            onPressed: () => _feed.currentState?.compose(),
-            child: const Icon(Icons.add_rounded, size: 30),
+    // Feed and Events, as an anonymous profile's tabs
+    return DefaultTabController(
+        length: 2,
+        child: Scaffold(
+          // scrolled (the + beside the filters gone by): a floating + to post
+          floatingActionButton: IgnorePointer(
+            ignoring: !_compact,
+            child: AnimatedScale(
+              scale: _compact ? 1 : 0,
+              duration: const Duration(milliseconds: 220),
+              curve: _compact ? Curves.easeOutBack : Curves.easeIn,
+              child: FloatingActionButton(
+                key: const Key('threadsFloatingCompose'),
+                tooltip: 'New thread',
+                shape: const CircleBorder(),
+                backgroundColor: HuntrColors.orange,
+                foregroundColor: Colors.black,
+                // a light lift, no dark ring around it
+                elevation: 2,
+                highlightElevation: 4,
+                onPressed: () => _feed.currentState?.compose(),
+                child: const Icon(Icons.add_rounded, size: 30),
+              ),
+            ),
           ),
-        ),
-      ),
-      body: SafeArea(
-        bottom: false,
-        child:
-            Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          // 0: full size; 1: compact
-          TweenAnimationBuilder<double>(
-            key: const Key('threadsHeader'),
-            tween: Tween(end: _compact ? 1 : 0),
-            duration: const Duration(milliseconds: 220),
-            curve: Curves.easeOut,
-            builder: (context, t, _) => Padding(
-              padding: EdgeInsets.fromLTRB(20, lerpDouble(12, 6, t)!, 16, 0),
-              child: Row(children: [
-                Expanded(
-                  child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        ShaderMask(
-                          shaderCallback:
-                              HuntrColors.accentGradient.createShader,
-                          child: Text('Threads',
-                              style: text.headlineMedium?.copyWith(
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: lerpDouble(full, 22, t),
-                                  color: Colors.white)),
+          body: SafeArea(
+            bottom: false,
+            child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // 0: full size; 1: compact
+                  TweenAnimationBuilder<double>(
+                    key: const Key('threadsHeader'),
+                    tween: Tween(end: _compact ? 1 : 0),
+                    duration: const Duration(milliseconds: 220),
+                    curve: Curves.easeOut,
+                    builder: (context, t, _) => Padding(
+                      padding:
+                          EdgeInsets.fromLTRB(20, lerpDouble(12, 6, t)!, 16, 0),
+                      child: Row(children: [
+                        Expanded(
+                          child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                ShaderMask(
+                                  shaderCallback:
+                                      HuntrColors.accentGradient.createShader,
+                                  child: Text('Threads',
+                                      style: text.headlineMedium?.copyWith(
+                                          fontWeight: FontWeight.w800,
+                                          fontSize: lerpDouble(full, 22, t),
+                                          color: Colors.white)),
+                                ),
+                                // the description folds away
+                                ClipRect(
+                                  child: Align(
+                                    alignment: Alignment.topLeft,
+                                    heightFactor: 1 - t,
+                                    child: Opacity(
+                                      opacity: 1 - t,
+                                      child: const Padding(
+                                        padding: EdgeInsets.only(top: 2),
+                                        child: Text(
+                                            'Anonymous posts from people around you',
+                                            key: Key('threadsDescription'),
+                                            style: TextStyle(
+                                                color: HuntrColors.muted)),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ]),
                         ),
-                        // the description folds away
-                        ClipRect(
-                          child: Align(
-                            alignment: Alignment.topLeft,
-                            heightFactor: 1 - t,
-                            child: Opacity(
-                              opacity: 1 - t,
-                              child: const Padding(
-                                padding: EdgeInsets.only(top: 2),
-                                child: Text(
-                                    'Anonymous posts from people around you',
-                                    key: Key('threadsDescription'),
-                                    style: TextStyle(color: HuntrColors.muted)),
-                              ),
-                            ),
-                          ),
+                        // notifications: not working yet, only its place
+                        IconButton(
+                          key: const Key('threadsNotifications'),
+                          tooltip: 'Notifications',
+                          onPressed: () {},
+                          icon: Icon(Icons.notifications_none_rounded,
+                              size: lerpDouble(28, 22, t)),
                         ),
+                        Container(
+                            width: 1,
+                            height: lerpDouble(28, 20, t),
+                            margin: const EdgeInsets.symmetric(horizontal: 8),
+                            color: HuntrColors.border),
+                        _MyAnonymousButton(size: lerpDouble(46, 34, t)!),
                       ]),
-                ),
-                // notifications: not working yet, only its place
-                IconButton(
-                  key: const Key('threadsNotifications'),
-                  tooltip: 'Notifications',
-                  onPressed: () {},
-                  icon: Icon(Icons.notifications_none_rounded,
-                      size: lerpDouble(28, 22, t)),
-                ),
-                Container(
-                    width: 1,
-                    height: lerpDouble(28, 20, t),
-                    margin: const EdgeInsets.symmetric(horizontal: 8),
-                    color: HuntrColors.border),
-                _MyAnonymousButton(size: lerpDouble(46, 34, t)!),
-              ]),
-            ),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 720),
+                      child: TabBar(
+                        key: const Key('threadsTabs'),
+                        tabs: const [
+                          Tab(key: Key('threadsFeedTab'), text: 'Feed'),
+                          Tab(key: Key('threadsEventsTab'), text: 'Events'),
+                        ],
+                        indicatorColor: HuntrColors.orange,
+                        labelColor: Colors.white,
+                        unselectedLabelColor: HuntrColors.muted,
+                        dividerColor: HuntrColors.border,
+                        labelStyle:
+                            const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: TabBarView(children: [
+                      // kept while on Events (where it was, what's loaded)
+                      _KeptAlive(
+                        child: NotificationListener<ScrollNotification>(
+                          onNotification: _scrolled,
+                          child: NearbyScreen(key: _feed),
+                        ),
+                      ),
+                      const _Events(),
+                    ]),
+                  ),
+                ]),
           ),
-          const SizedBox(height: 6),
-          Expanded(
-            child: NotificationListener<ScrollNotification>(
-              onNotification: _scrolled,
-              child: NearbyScreen(key: _feed),
-            ),
-          ),
-        ]),
-      ),
-    );
+        ));
+  }
+}
+
+/// Threads' Events: none yet.
+class _Events extends StatelessWidget {
+  const _Events();
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+        builder: (context, box) {
+          final side = box.maxWidth > 752 ? (box.maxWidth - 720) / 2 : 16.0;
+          return ListView(
+            key: const Key('threadsEvents'),
+            padding: EdgeInsets.fromLTRB(side, 24, side, 24),
+            children: const [
+              EmptyStateCard(
+                key: Key('threadsNoEvents'),
+                icon: Icons.event_outlined,
+                title: 'No events yet',
+                message: 'Events near you will show here.',
+              ),
+            ],
+          );
+        },
+      );
+}
+
+/// Keeps [child] (and its state) while its tab isn't shown.
+class _KeptAlive extends StatefulWidget {
+  const _KeptAlive({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_KeptAlive> createState() => _KeptAliveState();
+}
+
+class _KeptAliveState extends State<_KeptAlive>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return widget.child;
   }
 }
 

@@ -36,3 +36,15 @@ Widget nightMap(Widget map) {
     child: map,
   );
 }
+
+/// [map] in greys only: its colours (e.g. a dark map's blue rivers) become
+/// the grey of their brightness, so they fade into the ground.
+Widget greyMap(Widget map) => ColorFiltered(
+      colorFilter: const ColorFilter.matrix([
+        0.2126, 0.7152, 0.0722, 0, 0, //
+        0.2126, 0.7152, 0.0722, 0, 0, //
+        0.2126, 0.7152, 0.0722, 0, 0, //
+        0, 0, 0, 1, 0,
+      ]),
+      child: map,
+    );
