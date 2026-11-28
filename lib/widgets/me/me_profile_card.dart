@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart' show PointerDeviceKind;
 
@@ -45,14 +47,31 @@ class MeProfileCard extends StatefulWidget {
 }
 
 class _MeProfileCardState extends State<MeProfileCard> {
+  /// How often the photos move on by themselves.
+  static const _every = Duration(seconds: 1);
+  static const _slide = Duration(milliseconds: 400);
+
   final _pages = PageController();
+
+  /// The page shown; the pages go round, so the photo is this modulo the
+  /// number of photos.
   int _page = 0;
+  Timer? _timer;
+
+  int get _count => widget.photos.length;
+  int get _photo => _count == 0 ? 0 : _page % _count;
+
+  @override
+  void initState() {
+    super.initState();
+    _restart();
+  }
 
   @override
   void didUpdateWidget(MeProfileCard old) {
     super.didUpdateWidget(old);
-    // a photo was removed or reordered: back to the main one
-    if (_page >= widget.photos.length ||
+    // a photo was added, removed or reordered: back to the main one
+    if (old.photos.length != _count ||
         old.photos.firstOrNull?.id != widget.photos.firstOrNull?.id) {
       _page = 0;
       if (_pages.hasClients) _pages.jumpToPage(0);
@@ -61,24 +80,43 @@ class _MeProfileCardState extends State<MeProfileCard> {
 
   @override
   void dispose() {
+    _timer?.cancel();
     _pages.dispose();
     super.dispose();
   }
 
-  void _show(int index) => _pages.animateToPage(index,
-      duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
+  /// Starts the clock again (after a touch, so it doesn't jump right away).
+  void _restart() {
+    _timer?.cancel();
+    _timer = Timer.periodic(_every, (_) {
+      // not while another screen covers Me, or with one photo
+      if (_count > 1 &&
+          _pages.hasClients &&
+          TickerMode.getValuesNotifier(context).value.enabled) {
+        _go(_page + 1);
+      }
+    });
+  }
 
-  /// The next (1) or previous (-1) photo, if there is one.
+  void _go(int page) =>
+      _pages.animateToPage(page, duration: _slide, curve: Curves.easeInOut);
+
+  /// Shows photo [index] (from the row of photos).
+  void _show(int index) {
+    _restart();
+    _go(_page - _photo + index);
+  }
+
+  /// The next (1) or previous (-1) photo.
   void _step(int by) {
-    final next = _page + by;
-    if (next >= 0 && next < widget.photos.length) _show(next);
+    if (_count > 1 && _page + by >= 0) _go(_page + by);
   }
 
   @override
   Widget build(BuildContext context) {
     final photos = widget.photos;
     return LayoutBuilder(builder: (context, box) {
-      final height = (box.maxWidth * 0.95).clamp(300.0, 460.0);
+      final height = (box.maxWidth * 1.2).clamp(380.0, 640.0);
       return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Container(
           height: height,
@@ -93,20 +131,25 @@ class _MeProfileCardState extends State<MeProfileCard> {
             if (photos.isEmpty)
               widget.placeholder
             else
-              // swipe, drag with a mouse, or tap the left or right side
-              GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTapUp: (tap) =>
-                    _step(tap.localPosition.dx < box.maxWidth / 2 ? -1 : 1),
-                child: ScrollConfiguration(
-                  behavior: ScrollConfiguration.of(context)
-                      .copyWith(dragDevices: PointerDeviceKind.values.toSet()),
-                  child: PageView.builder(
-                    key: const Key('mePhotos'),
-                    controller: _pages,
-                    itemCount: photos.length,
-                    onPageChanged: (page) => setState(() => _page = page),
-                    itemBuilder: (_, i) => CachedPhotoImage(photos[i]),
+              // swipe, drag with a mouse, or tap the left or right side;
+              // a touch holds the clock
+              Listener(
+                onPointerDown: (_) => _restart(),
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTapUp: (tap) =>
+                      _step(tap.localPosition.dx < box.maxWidth / 2 ? -1 : 1),
+                  child: ScrollConfiguration(
+                    behavior: ScrollConfiguration.of(context).copyWith(
+                        dragDevices: PointerDeviceKind.values.toSet()),
+                    child: PageView.builder(
+                      key: const Key('mePhotos'),
+                      controller: _pages,
+                      // no count: it goes round
+                      onPageChanged: (page) => setState(() => _page = page),
+                      itemBuilder: (_, i) =>
+                          CachedPhotoImage(photos[i % photos.length]),
+                    ),
                   ),
                 ),
               ),
@@ -122,31 +165,13 @@ class _MeProfileCardState extends State<MeProfileCard> {
                 onPreview: widget.onPreview,
               ),
             ),
-            if (_page > 0)
-              Align(
-                alignment: const Alignment(-1, -0.2),
-                child: _Arrow(
-                    key: const Key('mePhotoPrevious'),
-                    icon: Icons.chevron_left_rounded,
-                    tooltip: 'Previous photo',
-                    onTap: () => _step(-1)),
-              ),
-            if (_page < photos.length - 1)
-              Align(
-                alignment: const Alignment(1, -0.2),
-                child: _Arrow(
-                    key: const Key('mePhotoNext'),
-                    icon: Icons.chevron_right_rounded,
-                    tooltip: 'Next photo',
-                    onTap: () => _step(1)),
-              ),
             if (photos.length > 1)
               Positioned(
                 top: 12,
                 left: 12,
                 child: _Count(
                     key: const Key('mePhotoCount'),
-                    text: '${_page + 1} of ${photos.length}'),
+                    text: '${_photo + 1} of ${photos.length}'),
               ),
             Positioned(top: 12, right: 12, child: widget.story),
           ]),
@@ -155,7 +180,7 @@ class _MeProfileCardState extends State<MeProfileCard> {
         _PhotoRow(
           photos: photos,
           canAdd: widget.maxPhotos == null || photos.length < widget.maxPhotos!,
-          selected: _page,
+          selected: _photo,
           onOpen: _show,
           onAdd: widget.onEdit,
         ),
@@ -296,36 +321,6 @@ class _NameAndActions extends StatelessWidget {
         ),
       ),
     ]);
-  }
-}
-
-/// A round arrow on the side of the photo.
-class _Arrow extends StatelessWidget {
-  const _Arrow(
-      {super.key,
-      required this.icon,
-      required this.tooltip,
-      required this.onTap});
-
-  final IconData icon;
-  final String tooltip;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      child: IconButton(
-        tooltip: tooltip,
-        onPressed: onTap,
-        style: IconButton.styleFrom(
-          backgroundColor: HuntrColors.night.withValues(alpha: 0.55),
-          foregroundColor: Colors.white,
-          minimumSize: const Size(40, 40),
-        ),
-        icon: Icon(icon, size: 26),
-      ),
-    );
   }
 }
 
