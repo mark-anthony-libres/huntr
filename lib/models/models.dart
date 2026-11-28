@@ -893,6 +893,46 @@ class ExploreFilters {
     );
   }
 
+  /// What this device remembers of them (not the search text).
+  Map<String, Object?> toJson() => {
+        'sort': sort.name,
+        'online': onlineOnly,
+        'max_km': maxDistanceKm,
+        'age': [ageRange.start, ageRange.end],
+        'looking_for': [for (final l in lookingFor) l.name],
+        'positions': [for (final p in positions) p.name],
+        'has_place': hasPlace,
+        'favorites': favoritesOnly,
+        'notes': notesOnly,
+      };
+
+  /// Filters this device remembered ([toJson]); what isn't known, the
+  /// default.
+  factory ExploreFilters.fromJson(Map<String, dynamic> json) {
+    final age = json['age'] as List?;
+    return ExploreFilters(
+      sort:
+          ExploreSort.values.where((s) => s.name == json['sort']).firstOrNull ??
+              ExploreSort.nearest,
+      onlineOnly: json['online'] == true,
+      maxDistanceKm: (json['max_km'] as num?)?.toDouble(),
+      ageRange: age != null && age.length == 2
+          ? RangeValues((age[0] as num).toDouble(), (age[1] as num).toDouble())
+          : const RangeValues(minAge, maxAge),
+      lookingFor: {
+        for (final name in json['looking_for'] as List? ?? const [])
+          ...LookingFor.values.where((l) => l.name == name),
+      },
+      positions: {
+        for (final name in json['positions'] as List? ?? const [])
+          ...SexualPosition.values.where((p) => p.name == name),
+      },
+      hasPlace: json['has_place'] == true,
+      favoritesOnly: json['favorites'] == true,
+      notesOnly: json['notes'] == true,
+    );
+  }
+
   /// The backend's /explore/nearby parameters for these filters (the
   /// order too): Explore loads people with them, so every page is filtered.
   Map<String, Object> get backendQuery => {

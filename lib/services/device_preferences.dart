@@ -18,6 +18,10 @@ abstract class DevicePreferences {
   Future<List<String>?> readQuickReactions();
   Future<void> saveQuickReactions(List<String> reactions);
 
+  /// Explore's filters (ExploreFilters.toJson, as JSON); null until set.
+  Future<String?> readExploreFilters();
+  Future<void> saveExploreFilters(String json);
+
   /// The voice messages I received and played here (their ids, oldest
   /// first); empty until one was played.
   Future<List<int>> readPlayedVoices();
@@ -33,6 +37,7 @@ class SecureDevicePreferences implements DevicePreferences {
   static const _exploreLayoutKey = 'huntr_explore_layout';
   static const _quickReactionsKey = 'huntr_quick_reactions';
   static const _playedVoicesKey = 'huntr_played_voices';
+  static const _exploreFiltersKey = 'huntr_explore_filters';
   static const _storage = FlutterSecureStorage();
 
   @override
@@ -48,6 +53,14 @@ class SecureDevicePreferences implements DevicePreferences {
   @override
   Future<void> saveExploreLayout(String name) =>
       _storage.write(key: _exploreLayoutKey, value: name);
+
+  @override
+  Future<String?> readExploreFilters() =>
+      _storage.read(key: _exploreFiltersKey);
+
+  @override
+  Future<void> saveExploreFilters(String json) =>
+      _storage.write(key: _exploreFiltersKey, value: json);
 
   @override
   Future<List<String>?> readQuickReactions() async {

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter/widgets.dart';
@@ -437,8 +438,15 @@ class AppState extends ChangeNotifier {
   ExploreFilters _filters = const ExploreFilters();
   ExploreFilters get filters => _filters;
   set filters(ExploreFilters f) {
+    final remembered = jsonEncode(f.toJson());
+    final changed = remembered != jsonEncode(_filters.toJson());
     _filters = f;
     notifyListeners();
+    // remembered on this device (not the search text)
+    if (changed) {
+      unawaited(devicePreferences?.saveExploreFilters(remembered).catchError(
+          (Object error) => debugPrint('Filters not saved: $error')));
+    }
   }
 
   /// Choices kept on this device between launches (none in tests).
@@ -542,6 +550,17 @@ class AppState extends ChangeNotifier {
         notifyListeners();
       }
       _playedVoices.addAll(await devicePreferences?.readPlayedVoices() ?? []);
+      final filters = await devicePreferences?.readExploreFilters();
+      if (filters != null) {
+        try {
+          _filters = ExploreFilters.fromJson(
+                  jsonDecode(filters) as Map<String, dynamic>)
+              .copyWith(query: _filters.query);
+          notifyListeners();
+        } catch (_) {
+          // unreadable: the defaults
+        }
+      }
       final layout =
           ExploreLayout.fromName(await devicePreferences?.readExploreLayout());
       if (layout != null && layout != _exploreLayout) {
