@@ -48,7 +48,7 @@ class MeProfileCard extends StatefulWidget {
 
 class _MeProfileCardState extends State<MeProfileCard> {
   /// How often the photos move on by themselves.
-  static const _every = Duration(seconds: 1);
+  static const _every = Duration(seconds: 2);
   static const _slide = Duration(milliseconds: 400);
 
   final _pages = PageController();
