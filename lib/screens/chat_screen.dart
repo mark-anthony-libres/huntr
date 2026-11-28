@@ -689,10 +689,10 @@ class _ChatScreenState extends State<ChatScreen> {
 
   /// Quick replies (while the box is empty) and the message box.
   /// The message box; [anonymous]: text and GIFs only (no attachments).
-  /// [centred]: a guest's empty chat, the box in the middle: bigger, no
-  /// quick replies.
   List<Widget> _composer(Profile p,
-      {bool anonymous = false, bool glow = false, bool centred = false}) {
+      {bool anonymous = false,
+      bool glow = false,
+      bool showQuickReplies = true}) {
     // a voice message (direct and anonymous chats); on a phone its mic
     // sits inside the empty box, elsewhere beside it
     final canRecord = _conversationId != null;
@@ -710,7 +710,7 @@ class _ChatScreenState extends State<ChatScreen> {
         )
       // ---- quick replies keep the first message low-effort ----
       // (not while recording a voice message)
-      else if (_input.text.isEmpty && !_recordingVoice && !centred)
+      else if (_input.text.isEmpty && !_recordingVoice && showQuickReplies)
         SizedBox(
           height: 46,
           child: ListView.separated(
@@ -838,7 +838,7 @@ class _ChatScreenState extends State<ChatScreen> {
                             key: const Key('messageInput'),
                             controller: _input,
                             focusNode: _inputFocus,
-                            minLines: centred ? 3 : 1,
+                            minLines: 1,
                             maxLines: 5,
                             textCapitalization: TextCapitalization.sentences,
                             inputFormatters: const [EmoticonFormatter()],
@@ -1309,15 +1309,6 @@ class _ChatScreenState extends State<ChatScreen> {
     final typing = !blocked && messaging.isTyping(id);
     // reactions and replies only while I can write here
     final interactive = !blocked && closed == null && !guestEnded;
-    // a guest's chat before anything's said: the box in the middle, under
-    // whom they're writing to (at the bottom once it's started)
-    final centred = guest != null &&
-        guest.iAmGuest &&
-        msgs.isEmpty &&
-        !typing &&
-        interactive &&
-        !gone &&
-        messaging.isLoaded(id);
 
     Message asMessage(ChatMessage m) => Message(
           id: '${m.id ?? m.clientId}',
@@ -1687,33 +1678,14 @@ class _ChatScreenState extends State<ChatScreen> {
                                   constraints:
                                       BoxConstraints(minHeight: box.maxHeight),
                                   child: Center(
-                                    child: centred
-                                        ? ConstrainedBox(
-                                            constraints: const BoxConstraints(
-                                                maxWidth: 560),
-                                            child: Column(
-                                                key: const Key(
-                                                    'guestCentredBox'),
-                                                mainAxisSize: MainAxisSize.min,
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.stretch,
-                                                children: [
-                                                  GuestIntro(to: p.name),
-                                                  const SizedBox(height: 8),
-                                                  ..._composer(p,
-                                                      anonymous: true,
-                                                      glow: true,
-                                                      centred: true),
-                                                ]),
-                                          )
-                                        : guest != null && guest.iAmGuest
-                                            ? GuestIntro(to: p.name)
-                                            : anonymous != null &&
-                                                    anonymous.iAmAnonymous
-                                                ? AnonymousIntro(
-                                                    anonymous: anonymous,
-                                                    to: p.name)
-                                                : ChatIntro(profile: p),
+                                    child: guest != null && guest.iAmGuest
+                                        ? GuestIntro(to: p.name)
+                                        : anonymous != null &&
+                                                anonymous.iAmAnonymous
+                                            ? AnonymousIntro(
+                                                anonymous: anonymous,
+                                                to: p.name)
+                                            : ChatIntro(profile: p),
                                   ),
                                 ),
                               ),
@@ -2095,11 +2067,13 @@ class _ChatScreenState extends State<ChatScreen> {
                       onDelete: () => _guestMenu(id, 'delete'))
             else if (closed != null)
               AnonymousClosedBar(message: closed)
-            else if (!centred)
+            else
               ..._composer(p,
                   anonymous: anonymous != null,
                   // a guest's empty chat: the box draws the eye
-                  glow: guest != null && guest.iAmGuest && msgs.isEmpty),
+                  glow: guest != null && guest.iAmGuest && msgs.isEmpty,
+                  // a guest: no quick replies
+                  showQuickReplies: guest == null || !guest.iAmGuest),
           ]),
         ),
       ),

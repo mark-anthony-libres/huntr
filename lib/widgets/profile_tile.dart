@@ -142,7 +142,8 @@ class ProfileTile extends StatelessWidget {
                                 size: compact ? 16 : 20,
                                 color: HuntrColors.orange),
                           ),
-                        if (profile.isNew)
+                        // (an unread count says more than NEW: one badge)
+                        if (profile.isNew && unread == 0)
                           NewBadge(
                               key: Key('newBadge-${profile.id}'),
                               small: compact),
