@@ -790,11 +790,11 @@ class _ChatScreenState extends State<ChatScreen> {
                                 ),
                                 const SizedBox(width: 6),
                               ],
-                              // GIFs and stickers: their own button on wide screens, and in
-                              // anonymous chats (which have no + menu); on a phone in a
-                              // direct chat they're in the + menu
+                              // GIFs and stickers: their own button on wide screens; on
+                              // a phone in the + menu (an anonymous chat's own + below)
                               if (_conversationId != null &&
-                                  (anonymous || wideComposer)) ...[
+                                  !anonymous &&
+                                  wideComposer) ...[
                                 IconButton(
                                   key: const Key('gifButton'),
                                   tooltip: 'GIF or sticker',
@@ -808,20 +808,19 @@ class _ChatScreenState extends State<ChatScreen> {
                                 ),
                                 const SizedBox(width: 6),
                               ],
-                              // an anonymous chat: where I am now, once
+                              // an anonymous chat: GIFs and stickers, and where I am
+                              // now (once), behind one + (the box keeps its room)
                               if (_conversationId != null && anonymous) ...[
                                 IconButton(
-                                  key: const Key('anonymousLocationButton'),
-                                  tooltip: 'Send current location',
+                                  key: const Key('anonymousAttachButton'),
+                                  tooltip: 'GIF, sticker or location',
                                   style: IconButton.styleFrom(
                                     backgroundColor: HuntrColors.surfaceHigh,
                                     minimumSize: const Size(44, 44),
                                   ),
-                                  icon: Icon(Icons.place_outlined,
+                                  icon: Icon(Icons.add_rounded,
                                       color: HuntrColors.orange),
-                                  onPressed: () => showLocationMenu(
-                                      context, _conversationId!, p,
-                                      anonymous: true),
+                                  onPressed: () => _anonymousAttach(p),
                                 ),
                                 const SizedBox(width: 6),
                               ],
@@ -1012,6 +1011,36 @@ class _ChatScreenState extends State<ChatScreen> {
         return;
     }
     if (mounted && navigator.canPop()) navigator.pop();
+  }
+
+  /// An anonymous chat's +: a GIF or sticker, or where I am now (once).
+  Future<void> _anonymousAttach(Profile p) async {
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          ListTile(
+            key: const Key('anonymousAttachGif'),
+            leading: Icon(Icons.gif_box_outlined, color: HuntrColors.orange),
+            title: const Text('GIF or sticker',
+                style: TextStyle(fontWeight: FontWeight.w700)),
+            onTap: () => Navigator.of(context).pop('gif'),
+          ),
+          ListTile(
+            key: const Key('anonymousAttachLocation'),
+            leading: Icon(Icons.place_outlined, color: HuntrColors.orange),
+            title: const Text('Send current location',
+                style: TextStyle(fontWeight: FontWeight.w700)),
+            onTap: () => Navigator.of(context).pop('location'),
+          ),
+          const SizedBox(height: 8),
+        ]),
+      ),
+    );
+    if (!mounted || choice == null) return;
+    if (choice == 'gif') return _pickGif(p);
+    await showLocationMenu(context, _conversationId!, p, anonymous: true);
   }
 
   /// Records a voice message: the recording bar takes the box's place.
@@ -1264,6 +1293,15 @@ class _ChatScreenState extends State<ChatScreen> {
     final typing = !blocked && messaging.isTyping(id);
     // reactions and replies only while I can write here
     final interactive = !blocked && closed == null && !guestEnded;
+    // a guest's chat before anything's said: the box in the middle, under
+    // whom they're writing to (at the bottom once it's started)
+    final centred = guest != null &&
+        guest.iAmGuest &&
+        msgs.isEmpty &&
+        !typing &&
+        interactive &&
+        !gone &&
+        messaging.isLoaded(id);
 
     Message asMessage(ChatMessage m) => Message(
           id: '${m.id ?? m.clientId}',
@@ -1400,14 +1438,6 @@ class _ChatScreenState extends State<ChatScreen> {
                                   const SizedBox(width: 6),
                                   const GuestTag(),
                                 ],
-                                if (guest != null && !guestEnded) ...[
-                                  const SizedBox(width: 6),
-                                  TimeLeftChip(
-                                      minutes: guestEndsAt!
-                                              .difference(now)
-                                              .inMinutes +
-                                          1),
-                                ],
                                 // my private note about them (direct chats)
                                 if (anonymous == null &&
                                     !blocked &&
@@ -1417,6 +1447,16 @@ class _ChatScreenState extends State<ChatScreen> {
                               // where I'm anonymous: whom they see
                               if (anonymous != null && anonymous.iAmAnonymous)
                                 Row(children: [
+                                  // a guest chat: the time it has left, first
+                                  // (the name above keeps its room)
+                                  if (guest != null && !guestEnded) ...[
+                                    TimeLeftChip(
+                                        minutes: guestEndsAt!
+                                                .difference(now)
+                                                .inMinutes +
+                                            1),
+                                    const SizedBox(width: 6),
+                                  ],
                                   Icon(Icons.theater_comedy_outlined,
                                       size: 13, color: HuntrColors.orange),
                                   const SizedBox(width: 4),
@@ -1631,14 +1671,32 @@ class _ChatScreenState extends State<ChatScreen> {
                                   constraints:
                                       BoxConstraints(minHeight: box.maxHeight),
                                   child: Center(
-                                    child: guest != null && guest.iAmGuest
-                                        ? GuestIntro(to: p.name)
-                                        : anonymous != null &&
-                                                anonymous.iAmAnonymous
-                                            ? AnonymousIntro(
-                                                anonymous: anonymous,
-                                                to: p.name)
-                                            : ChatIntro(profile: p),
+                                    child: centred
+                                        ? ConstrainedBox(
+                                            constraints: const BoxConstraints(
+                                                maxWidth: 560),
+                                            child: Column(
+                                                key: const Key(
+                                                    'guestCentredBox'),
+                                                mainAxisSize: MainAxisSize.min,
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.stretch,
+                                                children: [
+                                                  GuestIntro(to: p.name),
+                                                  const SizedBox(height: 8),
+                                                  ..._composer(p,
+                                                      anonymous: true,
+                                                      glow: true),
+                                                ]),
+                                          )
+                                        : guest != null && guest.iAmGuest
+                                            ? GuestIntro(to: p.name)
+                                            : anonymous != null &&
+                                                    anonymous.iAmAnonymous
+                                                ? AnonymousIntro(
+                                                    anonymous: anonymous,
+                                                    to: p.name)
+                                                : ChatIntro(profile: p),
                                   ),
                                 ),
                               ),
@@ -2020,7 +2078,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       onDelete: () => _guestMenu(id, 'delete'))
             else if (closed != null)
               AnonymousClosedBar(message: closed)
-            else
+            else if (!centred)
               ..._composer(p,
                   anonymous: anonymous != null,
                   // a guest's empty chat: the box draws the eye

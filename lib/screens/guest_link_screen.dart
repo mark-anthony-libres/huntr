@@ -13,7 +13,6 @@ import '../services/guest_chat_api.dart' show ReadyStoryGroup;
 import '../state/guest_chats_state.dart';
 import '../theme.dart';
 import '../widgets/anonymous_avatar.dart';
-import '../widgets/pill_tabs.dart';
 import '../widgets/photos/viewer_controls.dart' show SwipeAnyDevice;
 import 'guest_story_how_to_screen.dart';
 
@@ -260,7 +259,9 @@ class _GuestLinkScreenState extends State<GuestLinkScreen> {
 
   /// The ready-made cards across the width, swiped for the next (the one
   /// shown is the one shared), and where I am among them.
-  Widget _readyStrip(List<ReadyStoryGroup>? groups) {
+  Widget _readyStrip(List<ReadyStoryGroup>? loaded) {
+    // (a group with no cards shows nothing)
+    final groups = loaded?.where((g) => g.cards.isNotEmpty).toList();
     if (groups == null) {
       return SizedBox(
           height: _cardWidth * 16 / 9,
@@ -468,25 +469,38 @@ class _GuestLinkScreenState extends State<GuestLinkScreen> {
                             _OffNotice(onTurnOn: () => state!.setLinkOn(true)),
                       ),
                     const SizedBox(height: 20),
-                    // my own card (words and background), or a ready-made one
+                    // my own card (words and background), or a ready-made one:
+                    // two small chips (like the groups under them)
                     Center(
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 360),
-                        child: PillTabs(
-                          tabs: const [
-                            PillTab(
-                                key: Key('guestStoryOwnTab'),
-                                icon: Icons.edit_rounded,
-                                label: 'Your own'),
-                            PillTab(
-                                key: Key('guestStoryReadyTab'),
-                                icon: Icons.auto_awesome_rounded,
-                                label: 'Ready-made'),
-                          ],
-                          selected: _readyMade ? 1 : 0,
-                          onChanged: (i) => setState(() => _readyMade = i == 1),
-                        ),
-                      ),
+                      child: Wrap(spacing: 8, children: [
+                        for (final (ready, icon, label, key) in const [
+                          (
+                            false,
+                            Icons.edit_rounded,
+                            'Your own',
+                            'guestStoryOwnTab'
+                          ),
+                          (
+                            true,
+                            Icons.auto_awesome_rounded,
+                            'Ready-made',
+                            'guestStoryReadyTab'
+                          ),
+                        ])
+                          ChoiceChip(
+                            key: Key(key),
+                            avatar: Icon(icon,
+                                size: 16,
+                                color: _readyMade == ready
+                                    ? Colors.black
+                                    : HuntrColors.muted),
+                            label: Text(label),
+                            selected: _readyMade == ready,
+                            showCheckmark: false,
+                            onSelected: (_) =>
+                                setState(() => _readyMade = ready),
+                          ),
+                      ]),
                     ),
                     const SizedBox(height: 20),
                     if (_readyMade)
