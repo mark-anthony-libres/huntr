@@ -27,6 +27,7 @@ import '../widgets/chat/time_divider.dart';
 import '../widgets/chat/typing_bubble.dart';
 import '../widgets/me/section_states.dart';
 import '../flows/chat_attachments.dart';
+import '../flows/my_profile_photos.dart';
 import '../flows/open_person_profile.dart';
 import '../widgets/chat/gif_bubble.dart';
 import '../widgets/chat/story_reply_label.dart';
@@ -136,13 +137,9 @@ class _ChatScreenState extends State<ChatScreen> {
   /// My profile photos (for my pin on shared locations), if Me hasn't
   /// loaded them yet.
   Future<void> _loadMyPhotos() async {
-    final app = _app;
-    final photos = ServicesScope.photosOf(context);
-    final token = app.sessionToken;
-    if (app.profilePhotos.isNotEmpty || photos == null || token == null) return;
+    if (_app.profilePhotos.isNotEmpty) return;
     try {
-      final list = await photos.fetchMine(token);
-      app.setProfilePhotos(list.photos, maxPhotos: list.maxPhotos);
+      await loadMyProfilePhotos(context);
     } catch (error) {
       debugPrint('My photos could not be loaded: $error');
     }

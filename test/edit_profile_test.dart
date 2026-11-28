@@ -84,7 +84,7 @@ Future<AppState> _openEditProfile(WidgetTester tester, _FakeProfiles profiles,
   await tester.tap(find.text('Me'));
   await tester.pumpAndSettle();
   beforeEdit?.call();
-  await tester.tap(find.byTooltip('Edit profile'));
+  await tester.tap(find.byKey(const Key('editProfile')));
   await tester.pumpAndSettle();
   return state;
 }

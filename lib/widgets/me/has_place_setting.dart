@@ -5,7 +5,7 @@ import '../../services/services_scope.dart';
 import '../../state/app_state.dart';
 import 'settings_group.dart';
 
-/// "I have a place": shows "Has a place" on my profile and Explore card,
+/// "I have a place" (a row for a [SettingsGroup]): shows "Has a place" on my profile and Explore card,
 /// and lets people find me with Explore's "Has a place" filter. Saved on the
 /// backend; the switch moves back if the save fails.
 class HasPlaceSetting extends StatefulWidget {
@@ -43,19 +43,17 @@ class _HasPlaceSettingState extends State<HasPlaceSetting> {
   @override
   Widget build(BuildContext context) {
     final app = AppScope.of(context);
-    return SettingsGroup(children: [
-      SettingsRow(
-        icon: Icons.home_rounded,
-        title: app.myHasPlace ? 'I have a place' : "I don't have a place",
-        subtitle: app.myHasPlace
-            ? 'Your profile shows that you have a place'
-            : 'Turn on if you have a place',
-        trailing: Switch(
-          key: const Key('hasPlaceSwitch'),
-          value: app.myHasPlace,
-          onChanged: _saving ? null : _save,
-        ),
+    return SettingsRow(
+      icon: Icons.home_rounded,
+      title: 'I have a place',
+      subtitle: app.myHasPlace
+          ? 'Shown on your profile'
+          : 'Turn on if you have a place',
+      trailing: Switch(
+        key: const Key('hasPlaceSwitch'),
+        value: app.myHasPlace,
+        onChanged: _saving ? null : _save,
       ),
-    ]);
+    );
   }
 }

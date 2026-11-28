@@ -34,6 +34,9 @@ class _FakePhotos extends PhotoService {
   final int max = 6;
   late List<ProfilePhoto> photos;
   Object? failLoadWith;
+
+  /// How many loads fail with [failLoadWith] before one works.
+  int failedLoads = 1;
   Object? failRemoveWith;
   PickedPhoto? toPick;
   final List<String> calls = [];
@@ -46,7 +49,7 @@ class _FakePhotos extends PhotoService {
     calls.add('list');
     final failure = failLoadWith;
     if (failure != null) {
-      failLoadWith = null;
+      if (--failedLoads <= 0) failLoadWith = null;
       throw failure;
     }
     return _list;
@@ -109,6 +112,9 @@ Future<AppState> _openMe(WidgetTester tester, _FakePhotos photos,
   await _settle(tester, decodes: cache != null);
   await tester.tap(find.text('Me'));
   await _settle(tester, decodes: cache != null);
+  // the photos are managed in Edit profile
+  await tester.tap(find.byKey(const Key('editProfile')));
+  await _settle(tester, decodes: cache != null);
   return state;
 }
 
@@ -143,9 +149,11 @@ void main() {
     });
 
     testWidgets('a failed load can be retried', (tester) async {
+      // fails on Me and again in Edit profile; Try again works
       final photos = _FakePhotos(1)
         ..failLoadWith =
-            const BackendException('Could not reach the Huntr server.');
+            const BackendException('Could not reach the Huntr server.')
+        ..failedLoads = 2;
       await _openMe(tester, photos);
       expect(find.text('Could not reach the Huntr server.'), findsOneWidget);
       await tester.tap(find.byKey(const Key('profilePhotosRetry')));
@@ -153,14 +161,27 @@ void main() {
       expect(find.text('PROFILE PHOTOS · 1/6'), findsOneWidget);
     });
 
-    test('any picture goes to the server; empty or too large ones don\'t',
-        () {
+    test('any picture goes to the server; empty or too large ones don\'t', () {
       // a GIF, and a HEIC (iPhone) photo's start: the backend decides
-      const heic = [0, 0, 0, 24, 0x66, 0x74, 0x79, 0x70, 0x68, 0x65, 0x69, 0x63];
+      const heic = [
+        0,
+        0,
+        0,
+        24,
+        0x66,
+        0x74,
+        0x79,
+        0x70,
+        0x68,
+        0x65,
+        0x69,
+        0x63
+      ];
       expect(checkPickedPhoto(_gifBytes, maxBytes: 1000), isNull);
       expect(checkPickedPhoto(heic, maxBytes: 1000), isNull);
       expect(checkPickedPhoto(const [], maxBytes: 1000), 'The file is empty.');
-      expect(checkPickedPhoto(List.filled(3 * 1024 * 1024, 1), maxBytes: 1 << 20),
+      expect(
+          checkPickedPhoto(List.filled(3 * 1024 * 1024, 1), maxBytes: 1 << 20),
           'The photo is too large. The maximum is 1 MB.');
     });
   });

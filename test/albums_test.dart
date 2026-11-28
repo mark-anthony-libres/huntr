@@ -141,6 +141,8 @@ Future<void> _openMe(WidgetTester tester, _Setup setup) async {
   await _settle(tester);
   await tester.tap(find.text('Me'));
   await _settle(tester);
+  await tester.tap(find.byKey(const Key('openPrivateAlbums')));
+  await _settle(tester);
 }
 
 Future<void> _openAlbum(WidgetTester tester, String name) async {

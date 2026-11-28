@@ -69,42 +69,77 @@ class ProfilePhotoGrid extends StatelessWidget {
   /// Photos being removed: their remove button shows a spinner.
   final Set<int> removing;
 
+  static const _gap = 10.0;
+  static const _aspect = 0.82;
+
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) => GridView.count(
-        // at least 3 columns; more on wide screens, so tiles stay a sensible size
-        crossAxisCount: (constraints.maxWidth / 180).floor().clamp(3, 6),
+    return LayoutBuilder(builder: (context, constraints) {
+      // at least 3 columns; more on wide screens, so tiles stay a sensible size
+      final columns = (constraints.maxWidth / 180).floor().clamp(3, 6);
+      final tiles = _tiles();
+      if (columns == 3) return _mainFirst(constraints.maxWidth, tiles);
+      return GridView.count(
+        crossAxisCount: columns,
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
-        mainAxisSpacing: 10,
-        crossAxisSpacing: 10,
-        childAspectRatio: 0.82,
-        children: [
-          for (final (index, photo) in photos.indexed)
-            ReorderableTile(
-              key: Key('reorderProfilePhoto-${photo.id}'),
-              index: index,
-              onMove: onMove,
-              enabled: !removing.contains(photo.id),
-              child: _PhotoTile(
-                photo: photo,
-                onTap: () => onOpen(photo),
-                onRemove: () => onRemove(photo),
-                removing: removing.contains(photo.id),
-              ),
-            ),
-          if (uploading)
-            const _UploadingTile()
-          else if (canAdd)
-            AddPhotoTile(
-                key: const Key('addProfilePhoto'),
-                label: 'Add photo',
-                onTap: onAdd),
-        ],
-      ),
-    );
+        mainAxisSpacing: _gap,
+        crossAxisSpacing: _gap,
+        childAspectRatio: _aspect,
+        children: tiles,
+      );
+    });
   }
+
+  /// Phones: the main photo big (two columns and two rows), the next two
+  /// beside it, the rest three to a row.
+  Widget _mainFirst(double width, List<Widget> tiles) {
+    final unit = (width - 2 * _gap) / 3;
+    final height = unit / _aspect;
+    Widget cell(int i, double w, double h) => SizedBox(
+        width: w, height: h, child: i < tiles.length ? tiles[i] : null);
+    Widget small(int i) => cell(i, unit, height);
+    return Column(children: [
+      Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        cell(0, unit * 2 + _gap, height * 2 + _gap),
+        const SizedBox(width: _gap),
+        Column(children: [small(1), const SizedBox(height: _gap), small(2)]),
+      ]),
+      for (var i = 3; i < tiles.length; i += 3) ...[
+        const SizedBox(height: _gap),
+        Row(children: [
+          small(i),
+          const SizedBox(width: _gap),
+          small(i + 1),
+          const SizedBox(width: _gap),
+          small(i + 2),
+        ]),
+      ],
+    ]);
+  }
+
+  List<Widget> _tiles() => [
+        for (final (index, photo) in photos.indexed)
+          ReorderableTile(
+            key: Key('reorderProfilePhoto-${photo.id}'),
+            index: index,
+            onMove: onMove,
+            enabled: !removing.contains(photo.id),
+            child: _PhotoTile(
+              photo: photo,
+              onTap: () => onOpen(photo),
+              onRemove: () => onRemove(photo),
+              removing: removing.contains(photo.id),
+            ),
+          ),
+        if (uploading)
+          const _UploadingTile()
+        else if (canAdd)
+          AddPhotoTile(
+              key: const Key('addProfilePhoto'),
+              label: 'Add photo',
+              onTap: onAdd),
+      ];
 }
 
 class _PhotoTile extends StatelessWidget {
