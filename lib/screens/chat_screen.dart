@@ -689,8 +689,10 @@ class _ChatScreenState extends State<ChatScreen> {
 
   /// Quick replies (while the box is empty) and the message box.
   /// The message box; [anonymous]: text and GIFs only (no attachments).
+  /// [centred]: a guest's empty chat, the box in the middle: bigger, no
+  /// quick replies.
   List<Widget> _composer(Profile p,
-      {bool anonymous = false, bool glow = false}) {
+      {bool anonymous = false, bool glow = false, bool centred = false}) {
     // a voice message (direct and anonymous chats); on a phone its mic
     // sits inside the empty box, elsewhere beside it
     final canRecord = _conversationId != null;
@@ -708,7 +710,7 @@ class _ChatScreenState extends State<ChatScreen> {
         )
       // ---- quick replies keep the first message low-effort ----
       // (not while recording a voice message)
-      else if (_input.text.isEmpty && !_recordingVoice)
+      else if (_input.text.isEmpty && !_recordingVoice && !centred)
         SizedBox(
           height: 46,
           child: ListView.separated(
@@ -836,7 +838,7 @@ class _ChatScreenState extends State<ChatScreen> {
                             key: const Key('messageInput'),
                             controller: _input,
                             focusNode: _inputFocus,
-                            minLines: 1,
+                            minLines: centred ? 3 : 1,
                             maxLines: 5,
                             textCapitalization: TextCapitalization.sentences,
                             inputFormatters: const [EmoticonFormatter()],
@@ -908,21 +910,35 @@ class _ChatScreenState extends State<ChatScreen> {
   List<Widget> _guestActions(int id, bool ended) {
     final side = widget.guestSide;
     if (side != null) {
+      // one ⋯ (the name and the line under it keep their room)
       return [
-        IconButton(
-          key: const Key('guestInfo'),
-          tooltip: 'How it works',
-          icon: const Icon(Icons.info_outline_rounded),
-          onPressed: side.onInfo,
+        PopupMenuButton<String>(
+          key: const Key('guestMenu'),
+          tooltip: 'More',
+          icon: const Icon(Icons.more_vert_rounded),
+          onSelected: (choice) =>
+              choice == 'end' ? side.onEnd() : side.onInfo(),
+          itemBuilder: (_) => [
+            const PopupMenuItem(
+                key: Key('guestInfo'),
+                value: 'info',
+                child: Row(children: [
+                  Icon(Icons.info_outline_rounded),
+                  SizedBox(width: 12),
+                  Text('How it works'),
+                ])),
+            if (!ended)
+              const PopupMenuItem(
+                  key: Key('guestEndChat'),
+                  value: 'end',
+                  child: Row(children: [
+                    Icon(Icons.close_rounded, color: Color(0xFFFF8A80)),
+                    SizedBox(width: 12),
+                    Text('End chat',
+                        style: TextStyle(color: Color(0xFFFF8A80))),
+                  ])),
+          ],
         ),
-        if (!ended)
-          TextButton(
-            key: const Key('guestEndChat'),
-            style:
-                TextButton.styleFrom(foregroundColor: const Color(0xFFFF8A80)),
-            onPressed: side.onEnd,
-            child: const Text('End'),
-          ),
       ];
     }
     return [
@@ -1686,7 +1702,8 @@ class _ChatScreenState extends State<ChatScreen> {
                                                   const SizedBox(height: 8),
                                                   ..._composer(p,
                                                       anonymous: true,
-                                                      glow: true),
+                                                      glow: true,
+                                                      centred: true),
                                                 ]),
                                           )
                                         : guest != null && guest.iAmGuest

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../models/models.dart';
+import '../state/messaging_state.dart';
 import '../theme.dart';
+import 'chats/chat_row_frame.dart' show UnreadCountPill;
 import 'roam/roaming.dart';
 import 'verified_badge.dart';
 import 'avatar.dart';
@@ -45,19 +47,25 @@ class ProfileTile extends StatelessWidget {
     // when they need them, so they show in full
     final long = profile.name.characters.length > 12;
     final nameSize = compact ? (long ? 12.5 : 13.5) : (long ? 16.0 : 18.0);
+    // messages from them I haven't read (our direct chat): the tile in the
+    // theme's accent, with how many
+    final unread = _unreadFrom(context);
+    final edge = unread > 0
+        ? BorderSide(color: HuntrColors.orange, width: 2)
+        : BorderSide(color: Colors.white.withValues(alpha: 0.10));
     return Semantics(
       button: true,
       label:
-          '${profile.nameAndAge}, ${profile.roaming != null ? 'roaming' : profile.distanceLabel}${profile.online ? ', online' : ''}${profile.isNew ? ', new' : ''}',
+          '${profile.nameAndAge}, ${profile.roaming != null ? 'roaming' : profile.distanceLabel}${profile.online ? ', online' : ''}${profile.isNew ? ', new' : ''}${unread > 0 ? ', $unread unread' : ''}',
       child: Material(
         color: HuntrColors.surface,
         clipBehavior: Clip.antiAlias,
         // the wall (3 or 4 across): square corners
         shape: layout.wall
-            ? Border.all(color: Colors.white.withValues(alpha: 0.10))
+            ? Border.fromBorderSide(edge)
             : RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(18),
-                side: BorderSide(color: Colors.white.withValues(alpha: 0.10)),
+                side: edge,
               ),
         child: InkWell(
           onTap: onTap,
@@ -115,6 +123,13 @@ class ProfileTile extends StatelessWidget {
                       ),
                       const SizedBox(width: 4),
                       Row(mainAxisSize: MainAxisSize.min, children: [
+                        if (unread > 0)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 4),
+                            child: UnreadCountPill(
+                                key: Key('tileUnread-${profile.id}'),
+                                count: unread),
+                          ),
                         if (favorite)
                           Container(
                             margin: const EdgeInsets.only(right: 4),
@@ -528,5 +543,18 @@ class _TileName extends StatelessWidget {
       overflow: TextOverflow.ellipsis,
       style: base,
     );
+  }
+}
+
+/// How many of [ProfileTile]'s person's messages to me (our direct chat)
+/// I haven't read; 0 without chats loaded.
+extension on ProfileTile {
+  int _unreadFrom(BuildContext context) {
+    final id = profile.backendId;
+    if (id == null) return 0;
+    for (final c in MessagingScope.of(context)?.conversations ?? const []) {
+      if (c.other.backendId == id) return c.unreadCount;
+    }
+    return 0;
   }
 }
