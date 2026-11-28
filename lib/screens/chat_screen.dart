@@ -1327,7 +1327,12 @@ class _ChatScreenState extends State<ChatScreen> {
     final onClose = widget.onClose;
     final page = Scaffold(
       appBar: AppBar(
-        titleSpacing: 0,
+        // no Back (e.g. a guest's page, the first screen): room at the side
+        titleSpacing:
+            onClose == null && !(ModalRoute.of(context)?.canPop ?? false)
+                ? 16
+                : 0,
+        actionsPadding: const EdgeInsets.only(right: 8),
         leading: onClose == null
             ? null
             : IconButton(
