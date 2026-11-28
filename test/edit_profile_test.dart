@@ -198,7 +198,8 @@ void main() {
     expect(find.text('Profile saved'), findsOneWidget);
     expect(state.myName, 'Mark');
     expect(state.myAge, 28);
-    expect(find.text('Mark, 28'), findsOneWidget);
+    expect(find.text('Mark'), findsOneWidget); // the name, then its age
+    expect(find.text(', 28'), findsOneWidget);
     expect(find.text('Coffee and long walks.'), findsOneWidget);
   });
 

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart' show PointerDeviceKind;
 
 import '../../models/models.dart';
 import '../../theme.dart';
@@ -67,6 +68,12 @@ class _MeProfileCardState extends State<MeProfileCard> {
   void _show(int index) => _pages.animateToPage(index,
       duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
 
+  /// The next (1) or previous (-1) photo, if there is one.
+  void _step(int by) {
+    final next = _page + by;
+    if (next >= 0 && next < widget.photos.length) _show(next);
+  }
+
   @override
   Widget build(BuildContext context) {
     final photos = widget.photos;
@@ -86,12 +93,22 @@ class _MeProfileCardState extends State<MeProfileCard> {
             if (photos.isEmpty)
               widget.placeholder
             else
-              PageView.builder(
-                key: const Key('mePhotos'),
-                controller: _pages,
-                itemCount: photos.length,
-                onPageChanged: (page) => setState(() => _page = page),
-                itemBuilder: (_, i) => CachedPhotoImage(photos[i]),
+              // swipe, drag with a mouse, or tap the left or right side
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTapUp: (tap) =>
+                    _step(tap.localPosition.dx < box.maxWidth / 2 ? -1 : 1),
+                child: ScrollConfiguration(
+                  behavior: ScrollConfiguration.of(context)
+                      .copyWith(dragDevices: PointerDeviceKind.values.toSet()),
+                  child: PageView.builder(
+                    key: const Key('mePhotos'),
+                    controller: _pages,
+                    itemCount: photos.length,
+                    onPageChanged: (page) => setState(() => _page = page),
+                    itemBuilder: (_, i) => CachedPhotoImage(photos[i]),
+                  ),
+                ),
               ),
             Positioned(
               left: 0,
@@ -105,6 +122,24 @@ class _MeProfileCardState extends State<MeProfileCard> {
                 onPreview: widget.onPreview,
               ),
             ),
+            if (_page > 0)
+              Align(
+                alignment: const Alignment(-1, -0.2),
+                child: _Arrow(
+                    key: const Key('mePhotoPrevious'),
+                    icon: Icons.chevron_left_rounded,
+                    tooltip: 'Previous photo',
+                    onTap: () => _step(-1)),
+              ),
+            if (_page < photos.length - 1)
+              Align(
+                alignment: const Alignment(1, -0.2),
+                child: _Arrow(
+                    key: const Key('mePhotoNext'),
+                    icon: Icons.chevron_right_rounded,
+                    tooltip: 'Next photo',
+                    onTap: () => _step(1)),
+              ),
             if (photos.length > 1)
               Positioned(
                 top: 12,
@@ -146,29 +181,43 @@ class _NameAndActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            HuntrColors.night.withValues(alpha: 0),
-            HuntrColors.night.withValues(alpha: 0.95),
-          ],
+    // the shade lets swipes through to the photos; only the text and
+    // buttons take touches
+    return Stack(children: [
+      Positioned.fill(
+        child: IgnorePointer(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  HuntrColors.night.withValues(alpha: 0),
+                  HuntrColors.night.withValues(alpha: 0.95),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
-      child: Padding(
+      Padding(
         padding: const EdgeInsets.fromLTRB(16, 56, 16, 16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('$name, $age',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.white)),
+            // a long name shortens; the age always shows
+            DefaultTextStyle.merge(
+              style: const TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.white),
+              child: Row(children: [
+                Flexible(
+                    child: Text(name,
+                        maxLines: 1, overflow: TextOverflow.ellipsis)),
+                Text(', $age'),
+              ]),
+            ),
             const SizedBox(height: 6),
             if (bio.isEmpty)
               OutlinedButton.icon(
@@ -245,6 +294,36 @@ class _NameAndActions extends StatelessWidget {
             ]),
           ],
         ),
+      ),
+    ]);
+  }
+}
+
+/// A round arrow on the side of the photo.
+class _Arrow extends StatelessWidget {
+  const _Arrow(
+      {super.key,
+      required this.icon,
+      required this.tooltip,
+      required this.onTap});
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: IconButton(
+        tooltip: tooltip,
+        onPressed: onTap,
+        style: IconButton.styleFrom(
+          backgroundColor: HuntrColors.night.withValues(alpha: 0.55),
+          foregroundColor: Colors.white,
+          minimumSize: const Size(40, 40),
+        ),
+        icon: Icon(icon, size: 26),
       ),
     );
   }
