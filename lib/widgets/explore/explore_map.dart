@@ -650,15 +650,19 @@ class _FaceMarker extends StatelessWidget {
   final double size;
 
   @override
-  Widget build(BuildContext context) => DecoratedBox(
+  Widget build(BuildContext context) => Container(
         key: const Key('mapFace'),
+        width: size,
+        height: size,
+        // the photo inside the ring, so it never covers it
+        padding: const EdgeInsets.all(2.5),
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           // the theme's accent around their photo (a story's ring inside it)
-          border: Border.all(color: HuntrColors.orange, width: 2),
+          color: HuntrColors.orange,
           boxShadow: const [BoxShadow(color: Colors.black54, blurRadius: 6)],
         ),
-        child: Avatar(profile: profile, size: size, animateStory: false),
+        child: Avatar(profile: profile, size: size - 5, animateStory: false),
       );
 }
 
