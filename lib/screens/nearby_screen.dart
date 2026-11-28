@@ -451,8 +451,8 @@ class NearbyScreenState extends State<NearbyScreen> with ThreadListActions {
 }
 
 /// The Threads tab: its title (like the other tabs'), then [NearbyScreen].
-/// Scrolling the feed makes the header smaller: the description hides and
-/// the title, bell and my animal shrink; back at the top it's full again.
+/// Scrolling the feed makes the header smaller: the title, bell and my
+/// animal shrink; back at the top it's full again.
 class ThreadsTab extends StatefulWidget {
   const ThreadsTab({super.key});
 
@@ -534,24 +534,6 @@ class _ThreadsTabState extends State<ThreadsTab> {
                                           fontWeight: FontWeight.w800,
                                           fontSize: lerpDouble(full, 22, t),
                                           color: Colors.white)),
-                                ),
-                                // the description folds away
-                                ClipRect(
-                                  child: Align(
-                                    alignment: Alignment.topLeft,
-                                    heightFactor: 1 - t,
-                                    child: Opacity(
-                                      opacity: 1 - t,
-                                      child: const Padding(
-                                        padding: EdgeInsets.only(top: 2),
-                                        child: Text(
-                                            'Anonymous posts from people around you',
-                                            key: Key('threadsDescription'),
-                                            style: TextStyle(
-                                                color: HuntrColors.muted)),
-                                      ),
-                                    ),
-                                  ),
                                 ),
                               ]),
                         ),

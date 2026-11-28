@@ -363,9 +363,12 @@ class _PlaceCard extends StatelessWidget {
     final p = place;
     final far = _far;
     final ready = p != null && !naming && !saving;
+    // a narrow phone: the distance under the name, the buttons one above
+    // the other (each label on one line)
+    final narrow = MediaQuery.sizeOf(context).width < 400;
     return Container(
-      padding: EdgeInsets.fromLTRB(
-          20, 18, 20, 16 + MediaQuery.paddingOf(context).bottom),
+      padding: EdgeInsets.fromLTRB(narrow ? 16 : 20, 18, narrow ? 16 : 20,
+          16 + MediaQuery.paddingOf(context).bottom),
       decoration: const BoxDecoration(
         color: HuntrColors.surface,
         borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
@@ -451,12 +454,21 @@ class _PlaceCard extends StatelessWidget {
                                     style: const TextStyle(
                                         color: HuntrColors.muted,
                                         fontSize: 13.5)),
+                              if (narrow && far != null) ...[
+                                const SizedBox(height: 4),
+                                Text(far,
+                                    key: const Key('roamDistance'),
+                                    style: TextStyle(
+                                        color: HuntrColors.orange,
+                                        fontSize: 12.5,
+                                        fontWeight: FontWeight.w700)),
+                              ],
                             ],
                           ),
                   ),
                 ),
-                // how far from me
-                if (far != null && p != null && !naming) ...[
+                // how far from me (narrow: under the name)
+                if (!narrow && far != null && p != null && !naming) ...[
                   const SizedBox(width: 10),
                   Container(
                     key: const Key('roamDistance'),
@@ -473,39 +485,47 @@ class _PlaceCard extends StatelessWidget {
                 ],
               ]),
               const SizedBox(height: 16),
-              Row(children: [
-                // roaming: Stop roaming, beside Roam here
-                if (roaming) ...[
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      key: const Key('roamHome'),
-                      onPressed: saving ? null : onHome,
-                      style: OutlinedButton.styleFrom(
-                        minimumSize: const Size.fromHeight(52),
-                        side: const BorderSide(color: HuntrColors.border),
+              Flex(
+                direction: narrow ? Axis.vertical : Axis.horizontal,
+                // narrow: Roam here on top, Stop roaming under it
+                verticalDirection:
+                    narrow ? VerticalDirection.up : VerticalDirection.down,
+                children: [
+                  // roaming: Stop roaming, beside (or under) Roam here
+                  if (roaming) ...[
+                    _flexible(
+                      narrow,
+                      OutlinedButton.icon(
+                        key: const Key('roamHome'),
+                        onPressed: saving ? null : onHome,
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size.fromHeight(52),
+                          side: const BorderSide(color: HuntrColors.border),
+                        ),
+                        icon: const Icon(Icons.my_location_rounded, size: 18),
+                        label: const Text('Stop roaming'),
                       ),
-                      icon: const Icon(Icons.my_location_rounded, size: 18),
-                      label: const Text('Stop roaming'),
+                    ),
+                    const SizedBox(width: 10, height: 10),
+                  ],
+                  _flexible(
+                    narrow,
+                    FilledButton.icon(
+                      key: const Key('roamHere'),
+                      onPressed: ready ? onRoam : null,
+                      style: FilledButton.styleFrom(
+                          minimumSize: const Size.fromHeight(52)),
+                      icon: saving
+                          ? const SizedBox.square(
+                              dimension: 18,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2.5, color: Colors.black))
+                          : const Icon(roamIcon, size: 18),
+                      label: const Text('Roam here'),
                     ),
                   ),
-                  const SizedBox(width: 10),
                 ],
-                Expanded(
-                  child: FilledButton.icon(
-                    key: const Key('roamHere'),
-                    onPressed: ready ? onRoam : null,
-                    style: FilledButton.styleFrom(
-                        minimumSize: const Size.fromHeight(52)),
-                    icon: saving
-                        ? const SizedBox.square(
-                            dimension: 18,
-                            child: CircularProgressIndicator(
-                                strokeWidth: 2.5, color: Colors.black))
-                        : const Icon(roamIcon, size: 18),
-                    label: const Text('Roam here'),
-                  ),
-                ),
-              ]),
+              ),
             ],
           ),
         ),
@@ -513,6 +533,10 @@ class _PlaceCard extends StatelessWidget {
     );
   }
 }
+
+/// Side by side, each takes half; one above the other, the full width.
+Widget _flexible(bool narrow, Widget button) =>
+    narrow ? button : Expanded(child: button);
 
 /// The pin in the middle of the map: up a little while the map moves (its
 /// shadow stays on the spot, smaller), down on it when it stops.

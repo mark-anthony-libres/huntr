@@ -654,10 +654,8 @@ class _FaceMarker extends StatelessWidget {
         key: const Key('mapFace'),
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          // the theme's accent around their photo (a story draws its own ring)
-          border: profile.hasStory
-              ? null
-              : Border.all(color: HuntrColors.orange, width: 2),
+          // the theme's accent around their photo (a story's ring inside it)
+          border: Border.all(color: HuntrColors.orange, width: 2),
           boxShadow: const [BoxShadow(color: Colors.black54, blurRadius: 6)],
         ),
         child: Avatar(profile: profile, size: size, animateStory: false),

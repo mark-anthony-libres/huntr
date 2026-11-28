@@ -87,16 +87,13 @@ class _HuntrTileLayerState extends State<HuntrTileLayer> {
           tiles.url.contains('{r}') && RetinaMode.isHighDensity(context),
       userAgentPackageName: 'com.marklibres.huntr',
       maxNativeZoom: tiles.maxNativeZoom,
+      // greys: each image itself (so nothing around the map can skip it)
+      tileBuilder: tiles.grey ? (context, tile, _) => greyMap(tile) : null,
     );
     return Stack(children: [
       // drawn on its own: what changes on top (markers) never makes the
       // images draw again; one colour filter for all of them
-      RepaintBoundary(
-          child: tiles.night
-              ? nightMap(layer)
-              : tiles.grey
-                  ? greyMap(layer)
-                  : layer),
+      RepaintBoundary(child: tiles.night ? nightMap(layer) : layer),
       if (widget.credits && tiles.attributions.isNotEmpty)
         RichAttributionWidget(
           alignment: widget.creditsAt,
